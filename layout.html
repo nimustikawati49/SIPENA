@@ -1,0 +1,32 @@
+<div class="card">
+  <div class="brand">
+    <div class="logo">SP</div>
+    <div>
+      <div class="title">SIPENA</div>
+      <div class="subtitle">Sistem Informasi Penilaian dan Administrasi Guru</div>
+    </div>
+  </div>
+
+  <div id="sp-loading">
+    <div class="spinner"></div>
+    <div class="msg" style="text-align:center;">Memeriksa akun Anda&hellip;</div>
+  </div>
+
+  <div id="sp-authenticated" class="hidden">
+    <div class="status-row"><span class="label">Email</span><span class="value" id="sp-email">-</span></div>
+    <div class="status-row"><span class="label">Role</span><span class="value" id="sp-role">-</span></div>
+    <div class="status-row hidden" id="sp-row-guru"><span class="label">Guru ID</span><span class="value" id="sp-guru-id">-</span></div>
+    <div class="status-row hidden" id="sp-row-sekolah"><span class="label">Sekolah ID</span><span class="value" id="sp-sekolah-id">-</span></div>
+    <div class="msg">Fase 1: verifikasi login &amp; resolusi role. Modul dashboard, nilai, dan lainnya menyusul di fase berikutnya.</div>
+  </div>
+
+  <div id="sp-unregistered" class="hidden">
+    <span class="badge danger">Akses ditolak</span>
+    <div class="msg danger" id="sp-unregistered-msg">Akun belum terdaftar. Hubungi Superadmin.</div>
+  </div>
+
+  <div id="sp-error" class="hidden">
+    <span class="badge danger">Gagal memuat</span>
+    <div class="msg danger" id="sp-error-msg">Terjadi kesalahan saat memuat SIPENA.</div>
+  </div>
+</div>

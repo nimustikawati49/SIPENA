@@ -1,0 +1,44 @@
+<script>
+(function () {
+  function show(id) {
+    ['sp-loading', 'sp-authenticated', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
+      document.getElementById(elId).classList.toggle('hidden', elId !== id);
+    });
+  }
+
+  function renderAuth(auth) {
+    if (!auth || !auth.role) {
+      document.getElementById('sp-unregistered-msg').textContent =
+        (auth && auth.message) || 'Akun belum terdaftar. Hubungi Superadmin.';
+      show('sp-unregistered');
+      return;
+    }
+
+    document.getElementById('sp-email').textContent = auth.email || '-';
+    document.getElementById('sp-role').textContent = auth.role;
+
+    if (auth.role === 'GURU') {
+      document.getElementById('sp-row-guru').classList.remove('hidden');
+      document.getElementById('sp-row-sekolah').classList.remove('hidden');
+      document.getElementById('sp-guru-id').textContent = auth.guruId || '-';
+      document.getElementById('sp-sekolah-id').textContent = auth.sekolahId || '-';
+    }
+
+    window.SIPENA = window.SIPENA || {};
+    window.SIPENA.auth = auth; // hanya untuk keperluan UI, tidak pernah dikirim balik sebagai identitas tepercaya
+    show('sp-authenticated');
+  }
+
+  function bootApp() {
+    google.script.run
+      .withSuccessHandler(renderAuth)
+      .withFailureHandler(function (err) {
+        document.getElementById('sp-error-msg').textContent = err && err.message ? err.message : String(err);
+        show('sp-error');
+      })
+      .getAuth();
+  }
+
+  document.addEventListener('DOMContentLoaded', bootApp);
+})();
+</script>
