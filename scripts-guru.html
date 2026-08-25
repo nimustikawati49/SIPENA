@@ -2,14 +2,30 @@
 function GuruApp_init() {
   document.body.classList.add('sp-app-mode');
   document.getElementById('sp-guru-app').classList.remove('hidden');
-  document.getElementById('sp-guru-email').textContent = (window.SIPENA.auth && window.SIPENA.auth.email) || '-';
+
+  document.querySelectorAll('#sp-guru-tabs .sp-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () { GuruApp_showTab_(btn.getAttribute('data-tab')); });
+  });
 
   GuruApp_buildContent_();
   GuruApp_load_();
 }
 
+function GuruApp_showTab_(tabId) {
+  document.querySelectorAll('#sp-guru-tabs .sp-tab').forEach(function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+  });
+  // Selector dibatasi ke ANAK LANGSUNG .sp-panels (bukan ".sp-panel" umum)
+  // supaya tidak ikut menimpa sub-tab di dalam panel Nilai yang juga
+  // memakai class .sp-panel untuk Input/Rekap.
+  document.querySelectorAll('#sp-guru-app > .sp-panels > .sp-panel').forEach(function (p) {
+    p.classList.toggle('active', p.id === 'sp-guru-panel-' + tabId);
+  });
+  if (tabId === 'nilai' && window.NilaiApp_init) window.NilaiApp_init();
+}
+
 function GuruApp_buildContent_() {
-  document.getElementById('sp-guru-content').innerHTML =
+  document.getElementById('sp-guru-panel-dashboard').innerHTML =
     '<div id="sp-guru-profil-card"></div>' +
     '<div id="sp-guru-profil-grid"></div>' +
 

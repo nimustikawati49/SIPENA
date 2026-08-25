@@ -1,0 +1,205 @@
+<script>
+var NilaiApp = { initialized: false, penugasan: [], currentContext: null };
+
+function NilaiApp_init() {
+  if (NilaiApp.initialized) return;
+  NilaiApp.initialized = true;
+  document.getElementById('sp-guru-panel-nilai').innerHTML = NilaiApp_markup_();
+  NilaiApp_wire_();
+  NilaiApp_loadPenugasan_();
+}
+
+function NilaiApp_markup_() {
+  return '' +
+    '<div class="sp-tabs" id="sp-nilai-subtabs" style="border-bottom:none;margin-bottom:16px;">' +
+    '  <button class="sp-tab active" data-subtab="input">Input Nilai</button>' +
+    '  <button class="sp-tab" data-subtab="rekap">Rekap Nilai</button>' +
+    '</div>' +
+
+    '<div class="sp-panel active" id="sp-nilai-sub-input">' +
+    '  <div class="sp-form" id="sp-nilai-filter">' +
+    '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Periode)</label><select id="sp-nilai-penugasan" style="min-width:280px;" required></select></div>' +
+    '    <div class="sp-field"><label>Jenis Nilai</label><select id="sp-nilai-jenis" required>' +
+    '      <option value="">Pilih</option><option value="TUGAS">Tugas</option><option value="UH">Ulangan Harian</option>' +
+    '      <option value="PTS">PTS</option><option value="SAS">SAS</option><option value="ASAT">ASAT</option><option value="LAINNYA">Lainnya</option>' +
+    '    </select></div>' +
+    '    <button type="button" class="sp-btn" onclick="NilaiApp_loadGrades_()">Tampilkan</button>' +
+    '  </div>' +
+
+    '  <div id="sp-nilai-settings-box" class="hidden" style="margin-bottom:16px;">' +
+    '    <button type="button" class="sp-btn secondary" onclick="NilaiApp_toggleSettings_()">Atur KKM &amp; Rentang Katrol</button>' +
+    '    <form class="sp-form hidden" id="sp-nilai-settings-form" style="margin-top:10px;">' +
+    '      <div class="sp-field"><label>KKM</label><input name="kkm" type="number" min="0" max="100" required></div>' +
+    '      <div class="sp-field"><label>Nilai Min Katrol</label><input name="nilai_min_target" type="number" min="0" max="100" required></div>' +
+    '      <div class="sp-field"><label>Nilai Max Katrol</label><input name="nilai_max_target" type="number" min="0" max="100" required></div>' +
+    '      <button class="sp-btn" type="submit">Simpan Pengaturan</button>' +
+    '    </form>' +
+    '  </div>' +
+
+    '  <div id="sp-nilai-table"></div>' +
+    '  <button type="button" class="sp-btn hidden" id="sp-nilai-save-btn" style="margin-top:14px;" onclick="NilaiApp_saveGrades_()">Simpan Semua Nilai</button>' +
+    '  <div id="sp-nilai-riwayat-box" style="margin-top:20px;"></div>' +
+    '</div>' +
+
+    '<div class="sp-panel" id="sp-nilai-sub-rekap">' +
+    '  <div class="sp-form" id="sp-rekap-filter">' +
+    '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Periode)</label><select id="sp-rekap-penugasan" style="min-width:280px;" required></select></div>' +
+    '    <button type="button" class="sp-btn" onclick="NilaiApp_loadRecap_()">Tampilkan Rekap</button>' +
+    '  </div>' +
+    '  <div id="sp-rekap-table"></div>' +
+    '</div>';
+}
+
+function NilaiApp_wire_() {
+  document.querySelectorAll('#sp-nilai-subtabs .sp-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#sp-nilai-subtabs .sp-tab').forEach(function (b) { b.classList.toggle('active', b === btn); });
+      var sub = btn.getAttribute('data-subtab');
+      document.getElementById('sp-nilai-sub-input').classList.toggle('active', sub === 'input');
+      document.getElementById('sp-nilai-sub-rekap').classList.toggle('active', sub === 'rekap');
+    });
+  });
+
+  document.getElementById('sp-nilai-settings-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var ctx = NilaiApp.currentContext;
+    if (!ctx) return;
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('saveMyGradeSettings', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, f.kkm.value, f.nilai_min_target.value, f.nilai_max_target.value], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Pengaturan KKM & katrol disimpan.'); NilaiApp_loadGrades_(); }
+    });
+  });
+}
+
+function NilaiApp_toggleSettings_() {
+  document.getElementById('sp-nilai-settings-form').classList.toggle('hidden');
+}
+
+function NilaiApp_loadPenugasan_() {
+  runServer('getMyDashboard', [], {
+    onSuccess: function (dash) {
+      NilaiApp.penugasan = (dash.penugasan || []).filter(function (p) { return String(p.status).toUpperCase() === 'AKTIF'; });
+      var options = '<option value="">Pilih...</option>' + NilaiApp.penugasan.map(function (p, i) {
+        return '<option value="' + i + '">' + p.nama_mapel + ' — ' + p.nama_kelas + ' — ' + p.semester + '</option>';
+      }).join('');
+      document.getElementById('sp-nilai-penugasan').innerHTML = options;
+      document.getElementById('sp-rekap-penugasan').innerHTML = options;
+    }
+  });
+}
+
+function NilaiApp_selectedPenugasan_(selectId) {
+  var idx = document.getElementById(selectId).value;
+  if (idx === '') return null;
+  return NilaiApp.penugasan[Number(idx)];
+}
+
+function NilaiApp_loadGrades_() {
+  var p = NilaiApp_selectedPenugasan_('sp-nilai-penugasan');
+  var jenis = document.getElementById('sp-nilai-jenis').value;
+  if (!p) { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
+  if (!jenis) { SIPENA_toast('Pilih jenis nilai dulu.', 'error'); return; }
+
+  NilaiApp.currentContext = { kelasId: p.kelas_id, mapelId: p.mapel_id, tahunAjaranId: p.tahun_ajaran_id, semester: p.semester, jenisNilai: jenis };
+  document.getElementById('sp-nilai-riwayat-box').innerHTML = '';
+
+  runServer('getMyGradeSheet', [p.kelas_id, p.mapel_id, p.tahun_ajaran_id, p.semester, jenis], {
+    onSuccess: function (res) {
+      document.getElementById('sp-nilai-settings-box').classList.remove('hidden');
+      var f = document.getElementById('sp-nilai-settings-form');
+      f.kkm.value = res.settings.kkm;
+      f.nilai_min_target.value = res.settings.nilai_min_target;
+      f.nilai_max_target.value = res.settings.nilai_max_target;
+      NilaiApp_renderGradeTable_(res.students);
+      document.getElementById('sp-nilai-save-btn').classList.toggle('hidden', res.students.length === 0);
+    }
+  });
+}
+
+function NilaiApp_renderGradeTable_(students) {
+  var el = document.getElementById('sp-nilai-table');
+  if (!students.length) { el.innerHTML = '<div class="sp-empty">Belum ada siswa aktif di kelas ini. Hubungi Superadmin untuk mengelola roster.</div>'; return; }
+
+  var rows = students.map(function (s) {
+    var pindahanNote = s.sumber_nilai === 'SEKOLAH_ASAL' ? ' <span class="msg" style="margin:0;">(dari sekolah asal)</span>' : '';
+    return '<tr>' +
+      '<td>' + (s.nis || '-') + '</td>' +
+      '<td>' + s.nama_lengkap + pindahanNote + '</td>' +
+      '<td><input type="number" min="0" max="100" step="0.01" class="sp-nilai-input" data-siswa="' + s.siswa_id + '" value="' + (s.nilai_murni !== '' ? s.nilai_murni : '') + '" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);"></td>' +
+      '<td>' + (s.nilai_katrol !== '' ? s.nilai_katrol : '-') + '</td>' +
+      '<td>' + (s.nilai_id ? '<button type="button" class="sp-btn secondary" onclick="NilaiApp_showHistory_(\'' + s.nilai_id + '\')">Riwayat</button>' : '-') + '</td>' +
+      '</tr>';
+  }).join('');
+
+  el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+    '<th>NIS</th><th>Nama</th><th>Nilai Murni</th><th>Nilai Katrol</th><th>Riwayat</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="msg">Kosongkan kolom nilai untuk siswa yang belum memiliki nilai jenis ini — jangan diisi 0.</div>';
+}
+
+function NilaiApp_saveGrades_() {
+  var ctx = NilaiApp.currentContext;
+  if (!ctx) return;
+  var entries = Array.prototype.slice.call(document.querySelectorAll('.sp-nilai-input')).map(function (input) {
+    return { siswa_id: input.getAttribute('data-siswa'), nilai_murni: input.value };
+  });
+  var btn = document.getElementById('sp-nilai-save-btn');
+  runServer('saveMyGrades', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, ctx.jenisNilai, entries], {
+    loadingEl: btn,
+    onSuccess: function (res) {
+      SIPENA_toast(res.saved + ' nilai tersimpan & katrol dihitung ulang.');
+      NilaiApp_loadGrades_();
+    }
+  });
+}
+
+function NilaiApp_showHistory_(nilaiId) {
+  runServer('getMyGradeHistory', [nilaiId], {
+    onSuccess: function (rows) {
+      var el = document.getElementById('sp-nilai-riwayat-box');
+      if (!rows.length) { el.innerHTML = '<div class="sp-section-title" style="font-size:13px;">Riwayat Perubahan</div><div class="sp-empty">Belum pernah diubah.</div>'; return; }
+      var body = rows.map(function (r) {
+        return '<tr><td>' + new Date(r.updated_at).toLocaleString('id-ID') + '</td><td>' + r.nilai_sebelum + ' → ' + r.nilai_sesudah + '</td><td>' + r.updated_by + '</td></tr>';
+      }).join('');
+      el.innerHTML = '<div class="sp-section-title" style="font-size:13px;">Riwayat Perubahan</div>' +
+        '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Waktu</th><th>Perubahan</th><th>Oleh</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  });
+}
+
+function NilaiApp_loadRecap_() {
+  var p = NilaiApp_selectedPenugasan_('sp-rekap-penugasan');
+  if (!p) { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
+  runServer('getMyGradeRecap', [p.kelas_id, p.mapel_id, p.tahun_ajaran_id, p.semester], {
+    onSuccess: function (rows) { NilaiApp_renderRecap_(rows); }
+  });
+}
+
+function NilaiApp_renderRecap_(rows) {
+  var el = document.getElementById('sp-rekap-table');
+  if (!rows.length) { el.innerHTML = '<div class="sp-empty">Belum ada siswa di kelas ini.</div>'; return; }
+
+  var jenisSet = {};
+  rows.forEach(function (r) { r.nilai.forEach(function (n) { jenisSet[n.jenis_nilai] = true; }); });
+  var jenisList = Object.keys(jenisSet);
+  if (!jenisList.length) { el.innerHTML = '<div class="sp-empty">Belum ada nilai yang diinput untuk kelas/mapel/periode ini.</div>'; return; }
+
+  var thead = '<tr><th>NIS</th><th>Nama</th>' + jenisList.map(function (j) { return '<th>' + j + '</th>'; }).join('') + '</tr>';
+  var tbody = rows.map(function (r) {
+    var byJenis = {};
+    r.nilai.forEach(function (n) { byJenis[n.jenis_nilai] = n; });
+    var cells = jenisList.map(function (j) {
+      var n = byJenis[j];
+      if (!n) return '<td>-</td>';
+      return '<td>' + n.nilai_murni + (n.nilai_katrol !== '' ? ' / ' + n.nilai_katrol : '') + '</td>';
+    }).join('');
+    return '<tr><td>' + (r.nis || '-') + '</td><td>' + r.nama_lengkap + '</td>' + cells + '</tr>';
+  }).join('');
+
+  el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>' +
+    '<div class="msg">Format sel: nilai murni / nilai katrol.</div>';
+}
+</script>
