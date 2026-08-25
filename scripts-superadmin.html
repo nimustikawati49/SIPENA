@@ -1,6 +1,6 @@
 <script>
 var SuperAdmin = {
-  schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: [], students: [], schedules: []
+  schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: [], students: [], schedules: [], kktp: []
 };
 
 var SP_TINGKAT_OPTIONS_ = {
@@ -97,6 +97,7 @@ function SuperAdmin_loadAll() {
   runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
   runServer('adminGetStudents', [], { onSuccess: function (rows) { SuperAdmin.students = rows; SuperAdmin_renderSiswa(); } });
   runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
+  runServer('adminGetKktpList', [{}], { onSuccess: function (rows) { SuperAdmin.kktp = rows; SuperAdmin_renderKktp_(); } });
   SuperAdmin_loadJadwalRequests_();
   SuperAdmin_loadSyncQueue_();
 }
@@ -219,6 +220,7 @@ function SuperAdmin_buildPanels() {
     SuperAdmin_panelKenaikanKelas_() +
     SuperAdmin_panelJadwal_() +
     SuperAdmin_panelSiswa_() +
+    SuperAdmin_panelKktp_() +
     SuperAdmin_panelAuditLog_();
 
   SuperAdmin_wireSekolah_();
@@ -231,6 +233,7 @@ function SuperAdmin_buildPanels() {
   SuperAdmin_wireKenaikanKelas_();
   SuperAdmin_wireJadwal_();
   SuperAdmin_wireSiswa_();
+  SuperAdmin_wireKktp_();
 }
 
 /* ---------- Sekolah ---------- */
@@ -1712,5 +1715,234 @@ function SuperAdmin_renderAuditLog_(rows) {
     { key: 'email', label: 'Email' }, { key: 'action', label: 'Aksi' }, { key: 'module', label: 'Modul' },
     { key: 'record_id', label: 'Record' }, { key: 'description', label: 'Detail' }
   ], rows, 'Belum ada aktivitas tercatat.');
+}
+
+/* ---------- KKTP ---------- */
+
+/**
+ * SuperAdmin_kktpDefaultIntervalsFor_(kktp)
+ * Salinan identik SuperAdmin_kktpDefaultIntervalsFor_ di Kktp.gs — cuma dipakai
+ * untuk mengisi form dengan interval awal saat Superadmin klik "Isi
+ * Interval Default", bukan sumber kebenaran (server tetap validasi ulang
+ * saat simpan).
+ */
+function SuperAdmin_kktpDefaultIntervalsFor_(kktp) {
+  return {
+    interval_1_min: 0, interval_1_max: kktp - 1, interval_1_label: 'Belum Mencapai',
+    interval_2_min: kktp, interval_2_max: kktp + 9, interval_2_label: 'Mencapai',
+    interval_3_min: kktp + 10, interval_3_max: kktp + 19, interval_3_label: 'Baik',
+    interval_4_min: kktp + 20, interval_4_max: 100, interval_4_label: 'Sangat Baik'
+  };
+}
+
+function SuperAdmin_panelKktp_() {
+  var intervalRows = [1, 2, 3, 4].map(function (i) {
+    return '<div class="sp-form" style="margin-bottom:6px;padding:10px;">' +
+      '<div class="sp-field"><label>Interval ' + i + ' Min</label><input name="interval_' + i + '_min" type="number" min="0" max="100" required></div>' +
+      '<div class="sp-field"><label>Interval ' + i + ' Max</label><input name="interval_' + i + '_max" type="number" min="0" max="100" required></div>' +
+      '<div class="sp-field"><label>Label</label><input name="interval_' + i + '_label" required></div>' +
+      '</div>';
+  }).join('');
+
+  return '' +
+    '<div class="sp-panel" id="sp-panel-kktp">' +
+    '  <div class="sp-section-title">Tambah / Ubah KKTP</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">KKTP menentukan kategori (Belum Mencapai/Mencapai/Baik/Sangat Baik) dan status ketercapaian Nilai Akhir siswa. Kosongkan Sekolah/Tahun Ajaran/Semester/Mapel untuk berlaku lebih luas (default per jenjang+tingkat) — isi untuk membuat aturan lebih khusus (prioritas: mapel khusus &gt; sekolah+tingkat &gt; default sistem).</div>' +
+    '  <form class="sp-form" id="sp-form-kktp">' +
+    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang" id="sp-kktp-jenjang" required>' +
+    '      <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
+    '    </select></div>' +
+    '    <div class="sp-field"><label>Tingkat</label><select name="tingkat" id="sp-kktp-tingkat" required><option value="">Pilih jenjang dulu</option></select></div>' +
+    '    <div class="sp-field"><label>Sekolah (opsional)</label><select name="sekolah_id" data-source="sekolah"></select></div>' +
+    '    <div class="sp-field"><label>Tahun Ajaran (opsional)</label><select name="tahun_ajaran_id" data-source="tahunajaran"></select></div>' +
+    '    <div class="sp-field"><label>Semester (opsional)</label><select name="semester"><option value="">Semua</option><option value="GANJIL">Ganjil</option><option value="GENAP">Genap</option></select></div>' +
+    '    <div class="sp-field"><label>Mapel (opsional)</label><select name="mapel_id" data-source="mapel"></select></div>' +
+    '    <div class="sp-field"><label>Nilai KKTP</label><input name="nilai_kktp" id="sp-kktp-nilai" type="number" min="0" max="100" required></div>' +
+    '    <button type="button" class="sp-btn secondary" onclick="SuperAdmin_fillKktpDefaultIntervals_()">Isi Interval Default</button>' +
+    '    <button class="sp-btn" type="submit" style="flex-basis:100%;">Simpan KKTP</button>' +
+    SuperAdmin_cancelEditButton_() +
+    '  </form>' +
+    intervalRows +
+    '  <div class="sp-section-title">Daftar KKTP</div>' +
+    '  <div class="sp-form" id="sp-kktp-filter">' +
+    '    <div class="sp-field"><label>Sekolah</label><select id="sp-kktp-filter-sekolah" data-source="sekolah"></select></div>' +
+    '    <div class="sp-field"><label>Jenjang</label><select id="sp-kktp-filter-jenjang"><option value="">Semua</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
+    '    <button type="button" class="sp-btn secondary" onclick="SuperAdmin_renderKktp_()">Filter</button>' +
+    '  </div>' +
+    '  <div id="sp-table-kktp"></div>' +
+
+    '  <div class="sp-section-title">Salin KKTP</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Salin satu baris KKTP ke tingkat lain dan/atau tahun ajaran lain — tetap lewat preview sebelum disimpan.</div>' +
+    '  <div class="sp-form">' +
+    '    <div class="sp-field"><label>Sumber</label><select id="sp-kktp-copy-source" style="min-width:280px;"></select></div>' +
+    '    <div class="sp-field"><label>Tahun Ajaran Tujuan (kosongkan = sama)</label><select id="sp-kktp-copy-tahun" data-source="tahunajaran"></select></div>' +
+    '  </div>' +
+    '  <div id="sp-kktp-copy-tingkat" style="margin-bottom:10px;"></div>' +
+    '  <button type="button" class="sp-btn secondary" onclick="SuperAdmin_previewCopyKktp_()">Preview Salin</button>' +
+    '  <div id="sp-kktp-copy-preview" class="hidden" style="margin-top:14px;"></div>' +
+    '</div>';
+}
+
+function SuperAdmin_wireKktp_() {
+  document.getElementById('sp-kktp-jenjang').addEventListener('change', function (e) {
+    SuperAdmin_fillTingkatOptions_(document.getElementById('sp-kktp-tingkat'), e.target.value);
+  });
+
+  document.getElementById('sp-form-kktp').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { jenjang: f.jenjang.value, tingkat: f.tingkat.value, sekolah_id: f.sekolah_id.value, tahun_ajaran_id: f.tahun_ajaran_id.value, semester: f.semester.value, mapel_id: f.mapel_id.value, nilai_kktp: f.nilai_kktp.value };
+    [1, 2, 3, 4].forEach(function (i) {
+      data['interval_' + i + '_min'] = f['interval_' + i + '_min'].value;
+      data['interval_' + i + '_max'] = f['interval_' + i + '_max'].value;
+      data['interval_' + i + '_label'] = f['interval_' + i + '_label'].value;
+    });
+    if (f.dataset.editId) data.kktp_id = f.dataset.editId;
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('adminSaveKktp', [data], {
+      loadingEl: btn,
+      onSuccess: function () {
+        SIPENA_toast('KKTP disimpan.');
+        SuperAdmin_clearFormEditMode_(f);
+        runServer('adminGetKktpList', [{}], { onSuccess: function (rows) { SuperAdmin.kktp = rows; SuperAdmin_renderKktp_(); } });
+      }
+    });
+  });
+}
+
+function SuperAdmin_fillTingkatOptions_(sel, jenjang) {
+  var opts = SP_TINGKAT_OPTIONS_[jenjang] || [];
+  sel.innerHTML = '<option value="">Pilih</option>' + opts.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+}
+
+function SuperAdmin_fillKktpDefaultIntervals_() {
+  var f = document.getElementById('sp-form-kktp');
+  var kktp = Number(f.nilai_kktp.value);
+  if (isNaN(kktp) || kktp < 0 || kktp > 100) { SIPENA_toast('Isi Nilai KKTP dulu (0-100).', 'error'); return; }
+  var d = SuperAdmin_kktpDefaultIntervalsFor_(kktp);
+  Object.keys(d).forEach(function (k) { if (f[k]) f[k].value = d[k]; });
+}
+
+function SuperAdmin_editKktp_(kktpId) {
+  var k = SuperAdmin.kktp.filter(function (r) { return r.kktp_id === kktpId; })[0];
+  if (!k) return;
+  var f = document.getElementById('sp-form-kktp');
+  SuperAdmin_fillTingkatOptions_(document.getElementById('sp-kktp-tingkat'), k.jenjang);
+  f.jenjang.value = k.jenjang || '';
+  f.tingkat.value = String(k.tingkat || '');
+  f.sekolah_id.value = k.sekolah_id || '';
+  f.tahun_ajaran_id.value = k.tahun_ajaran_id || '';
+  f.semester.value = k.semester || '';
+  f.mapel_id.value = k.mapel_id || '';
+  f.nilai_kktp.value = k.nilai_kktp;
+  [1, 2, 3, 4].forEach(function (i) {
+    f['interval_' + i + '_min'].value = k['interval_' + i + '_min'];
+    f['interval_' + i + '_max'].value = k['interval_' + i + '_max'];
+    f['interval_' + i + '_label'].value = k['interval_' + i + '_label'];
+  });
+  SuperAdmin_setFormEditMode_(f, kktpId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function SuperAdmin_toggleKktpStatus_(kktpId) {
+  runServer('adminToggleKktpStatus', [kktpId], {
+    onSuccess: function () {
+      SIPENA_toast('Status KKTP diperbarui.');
+      runServer('adminGetKktpList', [{}], { onSuccess: function (rows) { SuperAdmin.kktp = rows; SuperAdmin_renderKktp_(); } });
+    }
+  });
+}
+
+function SuperAdmin_kktpScopeLabel_(k) {
+  var bits = [k.jenjang + ' ' + k.tingkat];
+  if (k.sekolah_id) bits.push(SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', k.sekolah_id, 'nama_sekolah'));
+  else bits.push('Semua Sekolah');
+  if (k.mapel_id) bits.push(SuperAdmin_labelFromId_(SuperAdmin.subjects, 'mapel_id', k.mapel_id, 'nama_mapel'));
+  if (k.tahun_ajaran_id) bits.push(SuperAdmin_labelFromId_(SuperAdmin.academicYears, 'tahun_ajaran_id', k.tahun_ajaran_id, 'label'));
+  if (k.semester) bits.push(k.semester);
+  return bits.join(' · ');
+}
+
+function SuperAdmin_renderKktp_() {
+  var sekolahFilter = document.getElementById('sp-kktp-filter-sekolah') ? document.getElementById('sp-kktp-filter-sekolah').value : '';
+  var jenjangFilter = document.getElementById('sp-kktp-filter-jenjang') ? document.getElementById('sp-kktp-filter-jenjang').value : '';
+  var rows = SuperAdmin.kktp.filter(function (r) {
+    if (sekolahFilter && r.sekolah_id && r.sekolah_id !== sekolahFilter) return false;
+    if (jenjangFilter && r.jenjang !== jenjangFilter) return false;
+    return true;
+  });
+
+  SIPENA_table_('sp-table-kktp', [
+    { label: 'Cakupan', render: SuperAdmin_kktpScopeLabel_ },
+    { key: 'nilai_kktp', label: 'KKTP' },
+    { label: 'Interval', render: function (r) {
+        return [1, 2, 3, 4].map(function (i) { return r['interval_' + i + '_min'] + '-' + r['interval_' + i + '_max'] + ' ' + r['interval_' + i + '_label']; }).join(' | ');
+      } },
+    { label: 'Status', render: function (r) { return '<span class="badge ' + (String(r.status).toUpperCase() === 'AKTIF' ? 'ok' : 'danger') + '">' + r.status + '</span>'; } },
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editKktp_(\'' + r.kktp_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_toggleKktpStatus_(\'' + r.kktp_id + '\')">' + (String(r.status).toUpperCase() === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan') + '</button>';
+      } }
+  ], rows, 'Belum ada data KKTP.');
+
+  var sourceSel = document.getElementById('sp-kktp-copy-source');
+  if (sourceSel) {
+    var cur = sourceSel.value;
+    sourceSel.innerHTML = '<option value="">Pilih baris sumber</option>' + SuperAdmin.kktp.map(function (r) {
+      return '<option value="' + r.kktp_id + '">' + SuperAdmin_kktpScopeLabel_(r) + ' (KKTP ' + r.nilai_kktp + ')</option>';
+    }).join('');
+    sourceSel.value = cur;
+    sourceSel.onchange = SuperAdmin_renderKktpCopyTingkat_;
+  }
+}
+
+function SuperAdmin_renderKktpCopyTingkat_() {
+  var sourceId = document.getElementById('sp-kktp-copy-source').value;
+  var box = document.getElementById('sp-kktp-copy-tingkat');
+  var source = SuperAdmin.kktp.filter(function (r) { return r.kktp_id === sourceId; })[0];
+  if (!source) { box.innerHTML = ''; return; }
+  var opts = (SP_TINGKAT_OPTIONS_[source.jenjang] || []).filter(function (t) { return t !== String(source.tingkat); });
+  box.innerHTML = '<div class="msg" style="margin:0 0 6px;">Salin ke tingkat:</div>' +
+    opts.map(function (t) {
+      return '<label style="margin-right:14px;"><input type="checkbox" value="' + t + '" class="sp-kktp-copy-target"> ' + source.jenjang + ' ' + t + '</label>';
+    }).join('');
+}
+
+function SuperAdmin_previewCopyKktp_() {
+  var sourceId = document.getElementById('sp-kktp-copy-source').value;
+  if (!sourceId) { SIPENA_toast('Pilih baris sumber dulu.', 'error'); return; }
+  var tahunTujuan = document.getElementById('sp-kktp-copy-tahun').value;
+  var targetTingkat = Array.prototype.slice.call(document.querySelectorAll('.sp-kktp-copy-target:checked')).map(function (c) { return c.value; });
+  if (!targetTingkat.length) { SIPENA_toast('Pilih minimal satu tingkat tujuan.', 'error'); return; }
+
+  var targets = targetTingkat.map(function (t) {
+    var target = { tingkat: t };
+    if (tahunTujuan) target.tahun_ajaran_id = tahunTujuan;
+    return target;
+  });
+
+  runServer('adminPreviewCopyKktp', [sourceId, targets], {
+    onSuccess: function (preview) {
+      window.SuperAdmin._kktpCopyCtx = { sourceId: sourceId, targets: targets };
+      var el = document.getElementById('sp-kktp-copy-preview');
+      el.classList.remove('hidden');
+      el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Tujuan</th><th>KKTP</th></tr></thead><tbody>' +
+        preview.map(function (p) { return '<tr><td>' + SuperAdmin_kktpScopeLabel_(p) + '</td><td>' + p.nilai_kktp + '</td></tr>'; }).join('') +
+        '</tbody></table></div>' +
+        '<button type="button" class="sp-btn" style="margin-top:10px;" onclick="SuperAdmin_executeCopyKktp_()">Konfirmasi Salin</button>';
+    }
+  });
+}
+
+function SuperAdmin_executeCopyKktp_() {
+  var ctx = window.SuperAdmin._kktpCopyCtx;
+  if (!ctx) return;
+  runServer('adminExecuteCopyKktp', [ctx.sourceId, ctx.targets], {
+    onSuccess: function (res) {
+      SIPENA_toast(res.created + ' KKTP berhasil disalin.');
+      document.getElementById('sp-kktp-copy-preview').classList.add('hidden');
+      runServer('adminGetKktpList', [{}], { onSuccess: function (rows) { SuperAdmin.kktp = rows; SuperAdmin_renderKktp_(); } });
+    }
+  });
 }
 </script>

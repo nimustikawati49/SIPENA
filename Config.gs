@@ -78,6 +78,19 @@ const CONFIG_CENTRAL_SCHEMA_ = {
 const CONFIG_BOBOT_NILAI_SHEET_ = 'PENGATURAN_BOBOT_NILAI';
 const CONFIG_BOBOT_NILAI_HEADERS_ = ['sekolah_id', 'bobot_harian', 'bobot_pts', 'bobot_akhir_semester', 'mode_perhitungan', 'decimal_places', 'updated_at', 'updated_by'];
 
+// Sama alasan seperti CONFIG_BOBOT_NILAI_SHEET_ di atas — MASTER_KKTP dan
+// KATROL_TARGET_CONFIG murni domain Superadmin, dibuat lazy hanya lewat
+// Config_ensureCentralSheet_ dari fungsi admin* (Kktp.gs/Katrol.gs).
+const CONFIG_KKTP_SHEET_ = 'MASTER_KKTP';
+const CONFIG_KKTP_HEADERS_ = ['kktp_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenjang', 'tingkat', 'mapel_id', 'nilai_kktp',
+  'interval_1_min', 'interval_1_max', 'interval_1_label', 'interval_2_min', 'interval_2_max', 'interval_2_label',
+  'interval_3_min', 'interval_3_max', 'interval_3_label', 'interval_4_min', 'interval_4_max', 'interval_4_label',
+  'status', 'created_at', 'updated_at'];
+
+const CONFIG_KATROL_TARGET_SHEET_ = 'KATROL_TARGET_CONFIG';
+const CONFIG_KATROL_TARGET_HEADERS_ = ['config_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenjang', 'tingkat', 'mapel_id',
+  'target_min', 'target_max', 'pembulatan', 'status', 'updated_at', 'updated_by'];
+
 // Kolom "kode" yang HARUS selalu tersimpan sebagai teks, bukan angka —
 // Google Sheets otomatis membuang nol di depan (mis. "001" jadi 1) untuk
 // sel berformat default begitu isinya terlihat seperti angka. NPSN, NIP,
@@ -102,8 +115,9 @@ const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
   NILAI: ['nilai_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenis_nilai', 'sumber_nilai', 'nilai_murni', 'nilai_katrol', 'asal_sekolah', 'tanggal_input', 'keterangan'],
   RIWAYAT_NILAI: ['riwayat_id', 'nilai_id', 'nilai_sebelum', 'nilai_sesudah', 'updated_by', 'updated_at'],
   JADWAL: ['jadwal_id', 'mapel_id', 'nama_mapel', 'kelas_id', 'nama_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'tahun_ajaran_id', 'semester', 'status'],
-  PENGATURAN: ['kelas_id', 'mapel_id', 'tahun_ajaran_id', 'semester', 'kkm', 'nilai_min_target', 'nilai_max_target'],
-  NILAI_AKHIR: ['nilai_akhir_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'rata_rata_harian', 'nilai_akhir_murni', 'nilai_akhir_katrol', 'status_nilai', 'updated_at'],
+  PENGATURAN: ['kelas_id', 'mapel_id', 'tahun_ajaran_id', 'semester', 'kkm', 'nilai_min_target', 'nilai_max_target', 'sumber_nilai_rapor'],
+  NILAI_AKHIR: ['nilai_akhir_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'rata_rata_harian', 'nilai_akhir_murni', 'nilai_akhir_katrol', 'status_nilai', 'nilai_kktp', 'kategori', 'status_ketercapaian', 'updated_at'],
+  KATROL_HISTORY: ['katrol_id', 'guru_id', 'sekolah_id', 'mapel_id', 'kelas_id', 'tahun_ajaran_id', 'semester', 'source_min', 'source_max', 'target_min', 'target_max', 'jumlah_siswa', 'created_by', 'created_at'],
   LOG: ['timestamp', 'aksi', 'keterangan']
 };
 
@@ -231,15 +245,43 @@ function Config_ensureTextFormatColumns_() {
  * gagal → buat sekali, sesudahnya selalu ada (tidak perlu flag versi
  * seperti migrasi central, karena cek keberadaan sheet sendiri sudah
  * murah dan idempoten).
+ *
+ * Kalau sheet-nya SUDAH ada (kasus paling umum), cuma pastikan kolom
+ * header-nya lengkap (Config_ensureGuruSheetColumns_) — operasi tulis
+ * SEL biasa di baris 1, bukan insertSheet, jadi aman dipanggil dari
+ * konteks eksekusi GURU (beda risiko dengan membuat sheet baru — lihat
+ * catatan di Config_ensureCentralSheet_ soal insertSheet yang pernah
+ * ditolak izin Drive untuk akun guru).
  */
 function Config_ensureGuruSheet_(ss, sheetName) {
   let sh = ss.getSheetByName(sheetName);
-  if (sh) return sh;
+  if (sh) return Config_ensureGuruSheetColumns_(sh, sheetName);
   const headers = CONFIG_GURU_OPERATIONAL_SCHEMA_[sheetName];
   sh = ss.insertSheet(sheetName);
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   sh.setFrozenRows(1);
   sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  return sh;
+}
+
+/**
+ * Config_ensureGuruSheetColumns_(sh, sheetName)
+ * Tambah kolom yang HILANG di akhir header (tidak pernah menghapus/
+ * menggeser kolom lama) — dipakai untuk sheet operasional guru yang
+ * SUDAH ADA tapi skemanya bertambah kolom di rilis berikutnya (mis.
+ * NILAI_AKHIR dapat kolom nilai_kktp/kategori/status_ketercapaian,
+ * PENGATURAN dapat kolom sumber_nilai_rapor). Cuma menulis sel header,
+ * bukan insertSheet — aman dari konteks eksekusi guru mana pun.
+ */
+function Config_ensureGuruSheetColumns_(sh, sheetName) {
+  const headers = CONFIG_GURU_OPERATIONAL_SCHEMA_[sheetName];
+  const lastCol = sh.getLastColumn();
+  const header = lastCol ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); }) : [];
+  const missing = headers.filter(function (col) { return header.indexOf(col) === -1; });
+  if (missing.length) {
+    sh.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+    sh.getRange(1, lastCol + 1, 1, missing.length).setFontWeight('bold');
+  }
   return sh;
 }
 

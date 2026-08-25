@@ -198,3 +198,32 @@ function Utils_updateRowByHeader_(sh, rowNum, patch) {
     sh.getRange(rowNum, col + 1).setValue(patch[key]);
   });
 }
+
+/**
+ * Utils_pickMostSpecificScopedRow_(rows, context)
+ * Dipakai KKTP (Kktp.gs) dan Katrol (Katrol.gs) — keduanya butuh cari
+ * baris konfigurasi paling spesifik dari daftar baris yang boleh punya
+ * sekolah_id/tahun_ajaran_id/semester/mapel_id KOSONG (berarti "berlaku
+ * lebih luas/wildcard"). Kandidat difilter dulu (tiap field wildcard
+ * harus kosong ATAU sama persis dengan context), lalu dipilih yang
+ * paling spesifik: mapel_id terisi paling menentukan (bobot terbesar),
+ * lalu sekolah_id, tahun_ajaran_id, semester — sesuai urutan prioritas
+ * "mapel khusus > sekolah/tingkat > default sistem" di kedua modul.
+ * `rows` HARUS sudah difilter jenjang+tingkat oleh pemanggil (dua field
+ * itu tidak pernah wildcard, beda perlakuannya dari 4 field di sini).
+ */
+function Utils_pickMostSpecificScopedRow_(rows, context) {
+  const candidates = (rows || []).filter(function (r) {
+    return (!r.sekolah_id || r.sekolah_id === context.sekolahId) &&
+      (!r.tahun_ajaran_id || r.tahun_ajaran_id === context.tahunAjaranId) &&
+      (!r.semester || r.semester === context.semester) &&
+      (!r.mapel_id || r.mapel_id === context.mapelId);
+  });
+  if (!candidates.length) return null;
+
+  function score(r) {
+    return (r.mapel_id ? 8 : 0) + (r.sekolah_id ? 4 : 0) + (r.tahun_ajaran_id ? 2 : 0) + (r.semester ? 1 : 0);
+  }
+  candidates.sort(function (a, b) { return score(b) - score(a); });
+  return candidates[0];
+}

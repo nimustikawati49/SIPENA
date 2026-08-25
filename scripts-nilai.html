@@ -151,7 +151,7 @@ function NilaiApp_renderGradeTable_() {
   var cols = NilaiApp_gradeColumns_();
   var thead = '<tr><th class="sp-sticky-col sp-sticky-col-1">No</th><th class="sp-sticky-col sp-sticky-col-2">NIS</th><th class="sp-sticky-col sp-sticky-col-3">Nama</th>' +
     cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') +
-    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th></tr>';
+    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th></tr>';
 
   var rows = students.map(function (s, i) {
     var pindahanNote = s.dari_sekolah_asal ? ' <span class="msg" style="margin:0;">(dari sekolah asal)</span>' : '';
@@ -168,6 +168,9 @@ function NilaiApp_renderGradeTable_() {
       '<td id="sp-nilai-rata-' + s.siswa_id + '">' + NilaiApp_fmt_(s.rata_rata_harian) + '</td>' +
       '<td id="sp-nilai-akhir-' + s.siswa_id + '">' + NilaiApp_fmt_(s.nilai_akhir_murni) + '</td>' +
       '<td id="sp-nilai-status-' + s.siswa_id + '">' + NilaiApp_statusBadge_(s.status_nilai) + '</td>' +
+      '<td>' + (s.nilai_kktp !== '' ? s.nilai_kktp : '-') + '</td>' +
+      '<td>' + (s.kategori || '-') + '</td>' +
+      '<td>' + NilaiApp_ketercapaianBadge_(s.status_ketercapaian) + '</td>' +
       '</tr>';
   }).join('');
 
@@ -189,6 +192,12 @@ function NilaiApp_fmt_(v) {
 function NilaiApp_statusBadge_(status) {
   if (status === 'LENGKAP') return '<span class="badge ok">Lengkap</span>';
   return '<span class="badge danger">Belum Lengkap</span>';
+}
+
+function NilaiApp_ketercapaianBadge_(status) {
+  if (status === 'TERCAPAI') return '<span class="badge ok">Tercapai</span>';
+  if (status === 'BELUM_TERCAPAI') return '<span class="badge danger">Belum Tercapai</span>';
+  return '-';
 }
 
 /**
@@ -342,7 +351,7 @@ function NilaiApp_renderRecap_(rows) {
     '<div style="margin:0 0 16px;color:#555;">Kelas ' + p.nama_kelas + ' &middot; ' + p.semester + '</div>';
 
   var thead = '<tr><th>NIS</th><th>Nama</th>' + jenisList.map(function (j) { return '<th>' + j + '</th>'; }).join('') +
-    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th></tr>';
+    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th></tr>';
   var tbody = rows.map(function (r) {
     var byJenis = {};
     r.nilai.forEach(function (n) { byJenis[n.jenis_nilai] = n; });
@@ -355,7 +364,10 @@ function NilaiApp_renderRecap_(rows) {
     return '<tr><td>' + (r.nis || '-') + '</td><td>' + r.nama_lengkap + '</td>' + cells +
       '<td>' + (r.rata_rata_harian !== '' ? r.rata_rata_harian : '-') + '</td>' +
       '<td>' + akhirCell + '</td>' +
-      '<td>' + NilaiApp_statusBadge_(r.status_nilai) + '</td></tr>';
+      '<td>' + NilaiApp_statusBadge_(r.status_nilai) + '</td>' +
+      '<td>' + (r.nilai_kktp !== '' ? r.nilai_kktp : '-') + '</td>' +
+      '<td>' + (r.kategori || '-') + '</td>' +
+      '<td>' + NilaiApp_ketercapaianBadge_(r.status_ketercapaian) + '</td></tr>';
   }).join('');
 
   el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>' +

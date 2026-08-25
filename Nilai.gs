@@ -39,16 +39,16 @@ function Nilai_getAssessmentLabel_(semester) {
 
 /**
  * Nilai_ensureNilaiAkhirSheet_(ss)
- * Sheet NILAI_AKHIR sudah ada untuk guru yang diprovisi setelah modul ini
- * dirilis, dan untuk guru lama setelah Superadmin menjalankan
- * adminMigrateNilaiAkhirSheets() (Diag.gs) sekali. Kalau BELUM ada dan
- * gagal dibuat di sini (mis. akun guru tidak punya izin Drive untuk
- * insertSheet di file yang dimiliki Superadmin — beda dari sekadar
- * baca/tulis sel), lempar pesan jelas alih-alih exception mentah Google.
+ * Config_ensureGuruSheet_ SELALU dipanggil (bukan cuma kalau sheet belum
+ * ada) supaya kolom baru yang ditambahkan ke skema NILAI_AKHIR di rilis
+ * berikutnya (mis. nilai_kktp/kategori/status_ketercapaian) ikut
+ * ditambahkan ke sheet guru yang SUDAH punya NILAI_AKHIR dari rilis
+ * sebelumnya — itu operasi tulis SEL biasa (Config_ensureGuruSheetColumns_),
+ * aman dari konteks guru. try/catch di sini murni untuk jalur
+ * insertSheet (sheet yang BENAR-BENAR belum ada), yang bisa ditolak izin
+ * Drive untuk akun guru — lempar pesan jelas alih-alih exception mentah.
  */
 function Nilai_ensureNilaiAkhirSheet_(ss) {
-  const existing = ss.getSheetByName('NILAI_AKHIR');
-  if (existing) return existing;
   try {
     return Config_ensureGuruSheet_(ss, 'NILAI_AKHIR');
   } catch (e) {
@@ -201,6 +201,9 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
     wide.nilai_akhir_murni = akhir && akhir.nilai_akhir_murni !== '' ? akhir.nilai_akhir_murni : '';
     wide.nilai_akhir_katrol = akhir && akhir.nilai_akhir_katrol !== '' ? akhir.nilai_akhir_katrol : '';
     wide.status_nilai = akhir ? akhir.status_nilai : 'BELUM_LENGKAP';
+    wide.nilai_kktp = akhir && akhir.nilai_kktp !== '' ? akhir.nilai_kktp : '';
+    wide.kategori = akhir ? akhir.kategori : '';
+    wide.status_ketercapaian = akhir ? akhir.status_ketercapaian : '';
     return wide;
   });
 
@@ -342,6 +345,10 @@ function saveMyGradeSheetBatch(kelasId, mapelId, tahunAjaranId, semester, rows) 
   }
 
   const bobotConfig = Nilai_getBobotConfig_(auth.sekolahId);
+  const kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
+  const kktpConfig = kelasInfo
+    ? Nilai_getKktpConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId)
+    : null;
   const akhirSh = ss.getSheetByName('NILAI_AKHIR');
   const akhirHeader = akhirSh.getRange(1, 1, 1, akhirSh.getLastColumn()).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); });
   const akhirIdx = Utils_headerIndex_(akhirHeader);
@@ -381,6 +388,15 @@ function saveMyGradeSheetBatch(kelasId, mapelId, tahunAjaranId, semester, rows) 
     rowArr[akhirIdx.rata_rata_harian] = rataHarian;
     rowArr[akhirIdx.nilai_akhir_murni] = finalResult.nilai;
     rowArr[akhirIdx.status_nilai] = finalResult.status;
+
+    // Snapshot KKTP/kategori/status ketercapaian pada SAAT penilaian ini
+    // disimpan — tidak berubah sendiri kalau Superadmin mengubah KKTP di
+    // masa depan, hanya berubah kalau guru menyimpan ulang nilai siswa
+    // ini (lihat catatan blueprint §1.5).
+    const kategoriResult = kktpConfig ? Kktp_categorize_(finalResult.nilai, kktpConfig) : { nilai_kktp: '', kategori: '', status_ketercapaian: '' };
+    rowArr[akhirIdx.nilai_kktp] = kategoriResult.nilai_kktp;
+    rowArr[akhirIdx.kategori] = kategoriResult.kategori;
+    rowArr[akhirIdx.status_ketercapaian] = kategoriResult.status_ketercapaian;
     rowArr[akhirIdx.updated_at] = now;
   });
 
@@ -478,11 +494,14 @@ function exportMyGradeRecapUrl(kelasId, mapelId, tahunAjaranId, semester) {
     row.push(r.rata_rata_harian !== '' ? r.rata_rata_harian : '-');
     row.push(r.nilai_akhir_murni !== '' ? (r.nilai_akhir_murni + (r.nilai_akhir_katrol !== '' ? ' / ' + r.nilai_akhir_katrol : '')) : '-');
     row.push(r.status_nilai === 'LENGKAP' ? 'Lengkap' : 'Belum Lengkap');
+    row.push(r.nilai_kktp !== '' ? r.nilai_kktp : '-');
+    row.push(r.kategori || '-');
+    row.push(r.status_ketercapaian === 'TERCAPAI' ? 'Tercapai' : (r.status_ketercapaian === 'BELUM_TERCAPAI' ? 'Belum Tercapai' : '-'));
     return row;
   });
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  const url = Utils_writeExportSheetAndGetUrl_(ss, '_EXPORT_REKAP', ['NIS', 'Nama'].concat(jenisList, ['Rata-rata Harian', 'Nilai Akhir', 'Status']), dataRows);
+  const url = Utils_writeExportSheetAndGetUrl_(ss, '_EXPORT_REKAP', ['NIS', 'Nama'].concat(jenisList, ['Rata-rata Harian', 'Nilai Akhir', 'Status', 'KKTP', 'Kategori', 'Ketercapaian']), dataRows);
   return { export_url: url };
 }
 
@@ -522,7 +541,10 @@ function getMyGradeRecap(kelasId, mapelId, tahunAjaranId, semester) {
       rata_rata_harian: akhir ? akhir.rata_rata_harian : '',
       nilai_akhir_murni: akhir ? akhir.nilai_akhir_murni : '',
       nilai_akhir_katrol: akhir ? akhir.nilai_akhir_katrol : '',
-      status_nilai: akhir ? akhir.status_nilai : 'BELUM_LENGKAP'
+      status_nilai: akhir ? akhir.status_nilai : 'BELUM_LENGKAP',
+      nilai_kktp: akhir ? akhir.nilai_kktp : '',
+      kategori: akhir ? akhir.kategori : '',
+      status_ketercapaian: akhir ? akhir.status_ketercapaian : ''
     };
   });
 }
