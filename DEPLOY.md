@@ -1,61 +1,59 @@
 # Deploy SIPENA (Phase 1)
 
-Kode sudah disiapkan lokal. Langkah ini dijalankan dari komputer Anda sendiri
-(butuh login akun Google Workspace sekolah, bukan lewat Claude).
+## Status: sudah dideploy
 
-## 1. Install clasp (sekali saja)
+- **URL aplikasi**: https://script.google.com/macros/s/AKfycbw8BIsTrdImoU9I1ueyGOzajTwFvHAD8tKMaWrrIG24cE6d9n2aMimKBJDqNltPKe5R/exec
+- Apps Script project: dibuat via `clasp create-script --type standalone --title "SIPENA"`
+- Deployment id: `AKfycbw8BIsTrdImoU9I1ueyGOzajTwFvHAD8tKMaWrrIG24cE6d9n2aMimKBJDqNltPKe5R` (versi 1, deskripsi "Phase 1 - skeleton auth")
+- Login pemilik: `nimustikawati49@guru.smp.belajar.id` (otomatis jadi Superadmin pertama, lihat `CONFIG_SUPERADMIN_BOOTSTRAP_EMAIL` di `Config.gs`)
+
+**Yang masih perlu Anda lakukan manual** (butuh akses ke Settings repo GitHub,
+tidak bisa dari clasp/CLI):
+1. Buka URL di atas, login dengan email Anda, dan konfirmasi kartu SIPENA
+   muncul dengan role **SUPERADMIN**.
+2. (Opsional) Aktifkan GitHub Pages: repo **Settings > Pages > Source:
+   branch `main`, folder `/docs`** — supaya `docs/index.html` (redirect ke
+   URL di atas) bisa diakses lewat `https://nimustikawati49.github.io/SIPENA/`.
+
+---
+
+## Referensi: langkah dari nol (untuk redeploy / project baru)
+
+Dijalankan dari folder `sipena/` di komputer yang sudah `clasp login`.
 
 ```
-npm install -g @google/clasp
-clasp login
+clasp create-script --type standalone --title "SIPENA"
 ```
-
-Login pakai akun Google yang akan jadi pemilik project Apps Script (akun
-Workspace sekolah Anda — email ini otomatis jadi Superadmin pertama, lihat
-`CONFIG_SUPERADMIN_BOOTSTRAP_EMAIL` di `Config.gs`).
-
-## 2. Buat project Apps Script baru
-
-Dari folder `sipena/`:
+> Catatan: clasp v3 tidak punya `--type webapp` (itu bukan tipe container,
+> cuma konfigurasi deployment) — pakai `standalone`, lalu web app diatur
+> lewat `appsscript.json` (`webapp.executeAs`/`webapp.access`, sudah diisi)
+> dan langkah deploy di bawah. Perintah ini **menimpa** `appsscript.json`
+> lokal dengan manifest default kosong — cek dan kembalikan isinya sebelum
+> push kalau itu terjadi lagi.
 
 ```
-clasp create --type webapp --title "SIPENA"
+clasp push --force
+clasp create-deployment --description "deskripsi versi ini"
+clasp list-deployments
 ```
 
-Ini membuat `.clasp.json` (sengaja di-gitignore, isinya scriptId unik akun
-Anda) dan project Apps Script baru yang kosong.
+URL web app = `https://script.google.com/macros/s/<deploymentId>/exec`
+(ambil `<deploymentId>` dari `list-deployments`, baris yang punya versi
+angka — bukan `@HEAD`).
 
-## 3. Push kode
+## Verifikasi
+
+Buka URL `/exec` — harus muncul kartu SIPENA menampilkan email Anda dan
+role **SUPERADMIN** untuk login pertama. Kalau login dengan email lain yang
+belum terdaftar di `MASTER_GURU`, harus muncul pesan "Akun belum terdaftar.
+Hubungi Superadmin."
+
+Setelah ini terverifikasi, Phase 2 (master data: sekolah, guru, mapel,
+kelas, penugasan) bisa mulai.
+
+## Redeploy setelah ubah kode
 
 ```
 clasp push
+clasp create-deployment --deploymentId <deploymentId-yang-sudah-ada> --description "update"
 ```
-
-## 4. Deploy sebagai Web App
-
-```
-clasp deploy --description "Phase 1 - skeleton auth"
-```
-
-Atau lewat UI: buka `clasp open`, lalu **Deploy > New deployment > Web app**
-— pastikan **Execute as: User accessing the web app**, **Who has access:
-Anyone** (sudah diset di `appsscript.json`, tinggal konfirmasi).
-
-Salin URL `.../exec` yang muncul.
-
-## 5. (Opsional) Update redirect GitHub Pages
-
-Ganti `REPLACE_WITH_EXEC_URL` di `docs/index.html` (2 tempat) dengan URL
-`/exec` dari langkah 4, lalu commit+push. Setelah itu aktifkan GitHub Pages
-di repo Settings > Pages > Source: `main` branch, folder `/docs`.
-
-## 6. Verifikasi
-
-Buka URL `/exec` — harus muncul kartu SIPENA menampilkan email Anda dan
-role **SUPERADMIN** (bootstrap otomatis untuk login pertama). Kalau login
-dengan email lain yang belum terdaftar, harus muncul pesan "Akun belum
-terdaftar. Hubungi Superadmin."
-
-Setelah ini terverifikasi, Phase 2 (master data: sekolah, guru, mapel,
-kelas, penugasan) bisa mulai — lihat blueprint di riwayat percakapan atau
-minta saya rangkum ulang.
