@@ -54,13 +54,7 @@ function SuperAdmin_loadAll() {
 
 /* ================= helper umum ================= */
 
-function SuperAdmin_el_(html) {
-  var t = document.createElement('template');
-  t.innerHTML = html.trim();
-  return t.content.firstChild;
-}
-
-function SuperAdmin_table_(containerId, columns, rows, emptyText) {
+function SIPENA_table_(containerId, columns, rows, emptyText) {
   var el = document.getElementById(containerId);
   if (!rows || !rows.length) {
     el.innerHTML = '<div class="sp-empty">' + (emptyText || 'Belum ada data.') + '</div>';
@@ -214,7 +208,7 @@ function SuperAdmin_editSchool_(sekolahId) {
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderSekolah() {
-  SuperAdmin_table_('sp-table-sekolah', [
+  SIPENA_table_('sp-table-sekolah', [
     { key: 'sekolah_id', label: 'ID' }, { key: 'npsn', label: 'NPSN' },
     { key: 'nama_sekolah', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
     { label: 'Aksi', render: function (r) {
@@ -310,7 +304,7 @@ function SuperAdmin_editTeacher_(guruId) {
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderGuru() {
-  SuperAdmin_table_('sp-table-guru', [
+  SIPENA_table_('sp-table-guru', [
     { key: 'guru_id', label: 'ID' }, { key: 'email', label: 'Email' }, { key: 'nama_lengkap', label: 'Nama' },
     { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
     { key: 'jabatan', label: 'Jabatan' }, { key: 'status', label: 'Status' },
@@ -392,7 +386,7 @@ function SuperAdmin_editSubject_(mapelId) {
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderMapel() {
-  SuperAdmin_table_('sp-table-mapel', [
+  SIPENA_table_('sp-table-mapel', [
     { key: 'mapel_id', label: 'ID' }, { key: 'kode_mapel', label: 'Kode' },
     { key: 'nama_mapel', label: 'Nama' },
     { label: 'Jenjang', render: function (r) { return r.jenjang ? String(r.jenjang).split(',').join(', ') : 'Semua'; } },
@@ -489,7 +483,7 @@ function SuperAdmin_editClass_(kelasId) {
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderKelas() {
-  SuperAdmin_table_('sp-table-kelas', [
+  SIPENA_table_('sp-table-kelas', [
     { key: 'kelas_id', label: 'ID' },
     { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
     { key: 'nama_kelas', label: 'Nama Kelas' }, { key: 'tingkat', label: 'Tingkat' },
@@ -558,7 +552,7 @@ function SuperAdmin_wireTahunAjaran_() {
   });
 }
 function SuperAdmin_renderTahunAjaran() {
-  SuperAdmin_table_('sp-table-ta', [
+  SIPENA_table_('sp-table-ta', [
     { key: 'tahun_ajaran_id', label: 'ID' }, { key: 'label', label: 'Label' },
     { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' },
     { label: 'Aksi', render: function (r) {
@@ -796,7 +790,7 @@ function SuperAdmin_confirmRombelBatch_() {
 }
 
 function SuperAdmin_renderPenugasan() {
-  SuperAdmin_table_('sp-table-penugasan', [
+  SIPENA_table_('sp-table-penugasan', [
     { key: 'assignment_id', label: 'ID' }, { key: 'nama_guru', label: 'Guru' },
     { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' },
     { label: 'Tahun Ajaran', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.academicYears, 'tahun_ajaran_id', r.tahun_ajaran_id, 'label'); } },

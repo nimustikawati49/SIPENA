@@ -129,6 +129,9 @@ function SIPENA_pendingEnd_() {
     if (auth.role === 'SUPERADMIN' && window.SuperAdmin_init) {
       window.SuperAdmin_init();
     }
+    if (auth.role === 'GURU' && window.GuruApp_init) {
+      window.GuruApp_init();
+    }
   }
 
   function bootApp() {

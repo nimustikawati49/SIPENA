@@ -14,6 +14,7 @@ function Sync_teacherData_(guruId) {
     Sync_updateProfil_(ss, guru);
     Sync_rewriteMapel_(ss, guruId);
     Sync_rewritePenugasanAndKelas_(ss, guruId);
+    Dashboard_invalidateCache_(guruId);
   } catch (e) {
     Utils_logError_('SYNC_TEACHER_DATA_' + guruId, e);
   }

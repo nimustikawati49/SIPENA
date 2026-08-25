@@ -1,0 +1,84 @@
+<script>
+function GuruApp_init() {
+  document.body.classList.add('sp-app-mode');
+  document.getElementById('sp-guru-app').classList.remove('hidden');
+  document.getElementById('sp-guru-email').textContent = (window.SIPENA.auth && window.SIPENA.auth.email) || '-';
+
+  GuruApp_buildContent_();
+  GuruApp_load_();
+}
+
+function GuruApp_buildContent_() {
+  document.getElementById('sp-guru-content').innerHTML =
+    '<div class="sp-section-title">Profil</div>' +
+    '<div id="sp-guru-profil-view" class="sp-form" style="flex-direction:column;align-items:stretch;max-width:420px;margin-bottom:24px;"></div>' +
+
+    '<div class="sp-section-title">Ringkasan</div>' +
+    '<div id="sp-guru-stats" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:28px;"></div>' +
+
+    '<div class="sp-section-title">Mata Pelajaran Saya</div>' +
+    '<div id="sp-guru-table-mapel" style="margin-bottom:24px;"></div>' +
+
+    '<div class="sp-section-title">Penugasan Mengajar Saya</div>' +
+    '<div id="sp-guru-table-penugasan" style="margin-bottom:24px;"></div>' +
+
+    '<div class="sp-section-title">Edit Profil</div>' +
+    '<div class="msg" style="margin:-6px 0 10px;">Nama, NIP, NUPTK, jabatan, dan sekolah dikelola Superadmin — di sini Anda hanya bisa ubah kontak/foto/tanda tangan.</div>' +
+    '<form class="sp-form" id="sp-form-guru-profil">' +
+    '  <div class="sp-field"><label>No. HP</label><input name="no_hp"></div>' +
+    '  <div class="sp-field"><label>URL Foto</label><input name="foto_url" placeholder="https://..."></div>' +
+    '  <div class="sp-field"><label>URL Tanda Tangan</label><input name="ttd_url" placeholder="https://..."></div>' +
+    '  <button class="sp-btn" type="submit">Simpan</button>' +
+    '</form>';
+
+  document.getElementById('sp-form-guru-profil').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { no_hp: f.no_hp.value, foto_url: f.foto_url.value, ttd_url: f.ttd_url.value };
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('updateMyProfile', [data], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Profil diperbarui.'); GuruApp_load_(); }
+    });
+  });
+}
+
+function GuruApp_load_() {
+  runServer('getMyDashboard', [], { onSuccess: GuruApp_render_ });
+}
+
+function GuruApp_render_(dash) {
+  var p = dash.profil || {};
+
+  document.getElementById('sp-guru-profil-view').innerHTML =
+    '<div class="status-row"><span class="label">Nama</span><span class="value">' + (p.nama_lengkap || '-') + '</span></div>' +
+    '<div class="status-row"><span class="label">NIP</span><span class="value">' + (p.nip || '-') + '</span></div>' +
+    '<div class="status-row"><span class="label">NUPTK</span><span class="value">' + (p.nuptk || '-') + '</span></div>' +
+    '<div class="status-row"><span class="label">Jabatan</span><span class="value">' + (p.jabatan || '-') + '</span></div>' +
+    '<div class="status-row"><span class="label">Sekolah</span><span class="value">' + (dash.nama_sekolah || '-') + '</span></div>';
+
+  document.getElementById('sp-guru-stats').innerHTML =
+    GuruApp_statTile_('Mata Pelajaran', dash.ringkasan.jumlah_mapel) +
+    GuruApp_statTile_('Kelas', dash.ringkasan.jumlah_kelas) +
+    GuruApp_statTile_('Penugasan Aktif', dash.ringkasan.jumlah_penugasan_aktif);
+
+  SIPENA_table_('sp-guru-table-mapel',
+    [{ key: 'nama_mapel', label: 'Mapel' }, { key: 'kode_mapel', label: 'Kode' }],
+    dash.mapel, 'Belum ada mata pelajaran yang diampu — hubungi Superadmin.');
+
+  SIPENA_table_('sp-guru-table-penugasan',
+    [{ key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' }, { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' }],
+    dash.penugasan, 'Belum ada penugasan mengajar — hubungi Superadmin.');
+
+  var f = document.getElementById('sp-form-guru-profil');
+  f.no_hp.value = p.no_hp || '';
+  f.foto_url.value = p.foto_url || '';
+  f.ttd_url.value = p.ttd_url || '';
+}
+
+function GuruApp_statTile_(label, value) {
+  return '<div class="sp-form" style="flex-direction:column;align-items:flex-start;min-width:140px;padding:14px 18px;">' +
+    '<div style="font-size:26px;font-weight:700;color:var(--brand);">' + value + '</div>' +
+    '<div style="font-size:12px;color:var(--text-muted);">' + label + '</div></div>';
+}
+</script>
