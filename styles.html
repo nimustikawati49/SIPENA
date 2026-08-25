@@ -48,9 +48,6 @@
     display: flex; flex-direction: column;
   }
   .sp-sidebar-brand{ display: flex; align-items: center; gap: 10px; padding: 20px; border-bottom: 1px solid var(--border); }
-  .sp-sidebar-footer{ padding: 16px 20px; border-top: 1px solid var(--border); }
-  .sp-sidebar-footer .sp-profile-info{ text-align: left; }
-  .sp-sidebar-footer .sp-profile-meta{ justify-content: flex-start; }
 
   .sp-main{ flex: 1; min-width: 0; padding: 28px 32px 60px; max-width: 1100px; }
 
@@ -68,10 +65,33 @@
   /* ---- Kartu profil ringkas (chip) ---- */
   .sp-profile-chip{ display: flex; align-items: center; gap: 10px; }
   .sp-avatar{
-    width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+    width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
     background: linear-gradient(135deg, var(--brand), #7c74ff); color: var(--brand-fg);
     display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;
   }
+  .sp-avatar img{ width: 100%; height: 100%; object-fit: cover; }
+
+  /* ---- Widget profil collapsible di pojok kanan atas ---- */
+  .sp-corner-profile{ position: fixed; top: 16px; right: 20px; z-index: 55; }
+  .sp-corner-trigger{
+    display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--border); cursor: pointer;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+  }
+  .sp-corner-caret{ font-size: 10px; color: var(--text-muted); transition: transform .15s ease; }
+  .sp-corner-trigger.open .sp-corner-caret{ transform: rotate(180deg); }
+  .sp-corner-panel{
+    position: absolute; top: calc(100% + 8px); right: 0; width: 320px; max-width: calc(100vw - 40px);
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px;
+    box-shadow: 0 10px 34px rgba(0,0,0,.18);
+  }
+  .sp-avatar-upload{ display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .sp-avatar-upload .sp-avatar{ width: 54px; height: 54px; font-size: 18px; }
+  .sp-upload-label{
+    display: inline-block; cursor: pointer; padding: 7px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: transparent; color: var(--text); font-size: 12.5px; font-weight: 600;
+  }
+  .sp-upload-label:hover{ background: var(--bg); }
   .sp-profile-info{ text-align: right; line-height: 1.4; }
   .sp-profile-name{ font-weight: 700; font-size: 13px; }
   .sp-profile-meta{ font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
@@ -164,10 +184,11 @@
     .sp-sidebar-brand{ border-bottom: none; padding: 14px 16px; }
     .sp-nav{ flex-direction: row; flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px; flex: 1 1 100%; order: 3; }
     .sp-nav .sp-tab{ width: auto; white-space: nowrap; }
-    .sp-sidebar-footer{ border-top: none; padding: 10px 16px; margin-left: auto; }
     .sp-main{ padding: 20px 16px 40px; max-width: none; }
   }
   @media (max-width: 640px){
+    .sp-corner-profile{ top: 10px; right: 10px; }
+    .sp-corner-trigger .sp-profile-info{ display: none; }
     .sp-form{ padding: 12px; gap: 8px; }
     .sp-field{ flex: 1 1 100%; }
     .sp-field input, .sp-field select{ width: 100%; min-width: 0; }

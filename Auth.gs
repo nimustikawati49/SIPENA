@@ -53,7 +53,8 @@ function Auth_resolve_(email) {
       email: email,
       role: 'SUPERADMIN',
       nama: superadmin.nama || email,
-      status: superadmin.status || 'active'
+      status: superadmin.status || 'active',
+      fotoUrl: superadmin.foto_url || ''
     };
   }
 
@@ -121,6 +122,44 @@ function Auth_findSekolahNama_(sekolahId) {
     if (rows[i].sekolah_id === sekolahId) return rows[i].nama_sekolah || '';
   }
   return '';
+}
+
+/**
+ * updateMySuperadminProfile(nama) / uploadSuperadminPhoto(...)
+ * SUPERADMIN mengedit profilnya SENDIRI (dicari by email dari sesi,
+ * tidak pernah dari parameter client) — nama tampilan & foto. Superadmin
+ * tidak punya NIP/NUPTK/No.HP di skema (itu properti guru), jadi
+ * memang tidak ada field itu untuk role ini.
+ */
+function updateMySuperadminProfile(nama) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  nama = String(nama || '').trim();
+  if (!nama) throw new Error('Nama wajib diisi.');
+
+  const sh = Config_getSheet_('MASTER_SUPERADMIN');
+  const rows = Utils_sheetToObjects_(sh);
+  const row = rows.filter(function (r) { return String(r.email).toLowerCase() === auth.email; })[0];
+  if (!row) throw new Error('Data Superadmin tidak ditemukan.');
+
+  Utils_updateRowByHeader_(sh, row._row, { nama: nama });
+  Auth_invalidateCache_(auth.email);
+  AuditLog_write_(auth, 'UPDATE_SUPERADMIN_PROFILE', 'Profil', auth.email, nama);
+  return { ok: true };
+}
+
+function uploadSuperadminPhoto(base64Data, mimeType, fileName) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const url = Utils_saveUploadedFile_('SIPENA_Foto_Profil', base64Data, mimeType, fileName);
+
+  const sh = Config_getSheet_('MASTER_SUPERADMIN');
+  const rows = Utils_sheetToObjects_(sh);
+  const row = rows.filter(function (r) { return String(r.email).toLowerCase() === auth.email; })[0];
+  if (!row) throw new Error('Data Superadmin tidak ditemukan.');
+
+  Utils_updateRowByHeader_(sh, row._row, { foto_url: url });
+  Auth_invalidateCache_(auth.email);
+  AuditLog_write_(auth, 'UPDATE_SUPERADMIN_PHOTO', 'Profil', auth.email, url);
+  return { url: url };
 }
 
 function Auth_findResourceMap_(guruId) {

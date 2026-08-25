@@ -109,6 +109,59 @@ function SIPENA_initials_(name) {
   return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
 }
 
+/**
+ * SIPENA_avatarHtml_(fotoUrl, name)
+ * Isi untuk div.sp-avatar — foto asli kalau ada, inisial nama kalau
+ * belum ada foto. Dipakai di chip/panel pojok kanan atas & kartu profil.
+ */
+function SIPENA_avatarHtml_(fotoUrl, name) {
+  if (fotoUrl) return '<img src="' + fotoUrl + '" alt="">';
+  return SIPENA_initials_(name);
+}
+
+/**
+ * SIPENA_readFileAsBase64_(file, maxKb, callback)
+ * FileReader murni client-side (bukan download, jadi tidak kena batasan
+ * iframe sandbox yang sempat menggagalkan fitur export — lihat catatan
+ * di Utils_writeExportSheetAndGetUrl_). callback(base64, mimeType, fileName).
+ */
+function SIPENA_readFileAsBase64_(file, maxKb, callback) {
+  if (file.size > maxKb * 1024) {
+    SIPENA_toast('Ukuran file terlalu besar (maks ' + maxKb + ' KB).', 'error');
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function (e) {
+    var base64 = String(e.target.result).split(',')[1];
+    callback(base64, file.type, file.name);
+  };
+  reader.onerror = function () { SIPENA_toast('Gagal membaca file.', 'error'); };
+  reader.readAsDataURL(file);
+}
+
+/**
+ * SIPENA_toggleCornerPanel_(triggerId, panelId)
+ * Buka/tutup panel pojok kanan atas + tutup otomatis kalau klik di luar.
+ */
+function SIPENA_toggleCornerPanel_(triggerId, panelId) {
+  var trigger = document.getElementById(triggerId);
+  var panel = document.getElementById(panelId);
+  var willOpen = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !willOpen);
+  trigger.classList.toggle('open', willOpen);
+  if (willOpen) {
+    setTimeout(function () {
+      document.addEventListener('click', function closeOnOutside(e) {
+        if (!panel.contains(e.target) && !trigger.contains(e.target)) {
+          panel.classList.add('hidden');
+          trigger.classList.remove('open');
+          document.removeEventListener('click', closeOnOutside);
+        }
+      });
+    }, 0);
+  }
+}
+
 (function () {
   function show(id) {
     ['sp-loading', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
@@ -133,14 +186,16 @@ function SIPENA_initials_(name) {
     if (auth.role === 'SUPERADMIN' && window.SuperAdmin_init) {
       document.getElementById('sp-auth-card').classList.add('hidden');
       document.getElementById('sp-admin-name').textContent = auth.nama || auth.email;
-      document.getElementById('sp-admin-avatar').textContent = SIPENA_initials_(auth.nama || auth.email);
+      document.getElementById('sp-corner-admin-avatar').innerHTML = SIPENA_avatarHtml_(auth.fotoUrl, auth.nama || auth.email);
+      document.getElementById('sp-corner-admin-avatar-big').innerHTML = SIPENA_avatarHtml_(auth.fotoUrl, auth.nama || auth.email);
+      document.getElementById('sp-form-corner-admin').nama.value = auth.nama || '';
       window.SuperAdmin_init();
       return;
     }
     if (auth.role === 'GURU' && window.GuruApp_init) {
       document.getElementById('sp-auth-card').classList.add('hidden');
       document.getElementById('sp-guru-name').textContent = auth.namaLengkap || auth.email;
-      document.getElementById('sp-guru-avatar').textContent = SIPENA_initials_(auth.namaLengkap || auth.email);
+      document.getElementById('sp-corner-guru-avatar').textContent = SIPENA_initials_(auth.namaLengkap || auth.email);
       var metaBits = ['<span class="sp-role-badge role-guru">Guru</span>'];
       if (auth.jabatan) metaBits.push(auth.jabatan);
       if (auth.namaSekolah) metaBits.push(auth.namaSekolah);

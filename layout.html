@@ -46,15 +46,27 @@
       <button class="sp-tab" data-tab="auditlog">Audit Log</button>
     </div>
 
-    <div class="sp-sidebar-footer">
-      <button class="sp-btn secondary" id="sp-btn-open-db" type="button" style="width:100%;margin-bottom:12px;">Buka Database Pusat</button>
-      <div class="sp-profile-chip">
-        <div class="sp-avatar" id="sp-admin-avatar">SA</div>
-        <div class="sp-profile-info">
-          <div class="sp-profile-name" id="sp-admin-name">Superadmin</div>
-          <div class="sp-profile-meta"><span class="sp-role-badge role-superadmin">Superadmin</span></div>
-        </div>
+  </div>
+
+  <div class="sp-corner-profile" id="sp-corner-admin">
+    <button type="button" class="sp-corner-trigger" id="sp-corner-admin-trigger" onclick="SuperAdmin_toggleCorner_()">
+      <div class="sp-avatar" id="sp-corner-admin-avatar">SA</div>
+      <div class="sp-profile-info">
+        <div class="sp-profile-name" id="sp-admin-name">Superadmin</div>
+        <div class="sp-profile-meta"><span class="sp-role-badge role-superadmin">Superadmin</span></div>
       </div>
+      <span class="sp-corner-caret">&#9662;</span>
+    </button>
+    <div class="sp-corner-panel hidden" id="sp-corner-admin-panel">
+      <button type="button" class="sp-btn secondary" id="sp-btn-open-db" style="width:100%;margin-bottom:14px;">Buka Database Pusat</button>
+      <div class="sp-avatar-upload">
+        <div class="sp-avatar" id="sp-corner-admin-avatar-big">SA</div>
+        <label class="sp-upload-label">Ganti Foto<input type="file" accept="image/*" id="sp-corner-admin-foto" class="hidden"></label>
+      </div>
+      <form id="sp-form-corner-admin">
+        <div class="sp-field" style="width:100%;margin-bottom:10px;"><label>Nama</label><input name="nama" style="width:100%;" required></div>
+        <button class="sp-btn" type="submit" style="width:100%;">Simpan</button>
+      </form>
     </div>
   </div>
 
@@ -81,14 +93,29 @@
       <button class="sp-tab" data-tab="jadwal">Jadwal</button>
     </div>
 
-    <div class="sp-sidebar-footer">
-      <div class="sp-profile-chip">
-        <div class="sp-avatar" id="sp-guru-avatar">-</div>
-        <div class="sp-profile-info">
-          <div class="sp-profile-name" id="sp-guru-name">-</div>
-          <div class="sp-profile-meta" id="sp-guru-meta"><span class="sp-role-badge role-guru">Guru</span></div>
-        </div>
+  </div>
+
+  <div class="sp-corner-profile" id="sp-corner-guru">
+    <button type="button" class="sp-corner-trigger" id="sp-corner-guru-trigger" onclick="GuruApp_toggleCorner_()">
+      <div class="sp-avatar" id="sp-corner-guru-avatar">-</div>
+      <div class="sp-profile-info">
+        <div class="sp-profile-name" id="sp-guru-name">-</div>
+        <div class="sp-profile-meta" id="sp-guru-meta"><span class="sp-role-badge role-guru">Guru</span></div>
       </div>
+      <span class="sp-corner-caret">&#9662;</span>
+    </button>
+    <div class="sp-corner-panel hidden" id="sp-corner-guru-panel">
+      <div class="sp-avatar-upload">
+        <div class="sp-avatar" id="sp-corner-guru-avatar-big">-</div>
+        <label class="sp-upload-label">Ganti Foto<input type="file" accept="image/*" id="sp-corner-guru-foto" class="hidden"></label>
+      </div>
+      <div class="msg" style="margin:0 0 10px;">Nama/NIP/NUPTK dikelola Superadmin.</div>
+      <div class="sp-detail-grid" id="sp-corner-guru-readonly" style="grid-template-columns:1fr 1fr;padding:12px;margin-bottom:12px;gap:10px;"></div>
+      <form id="sp-form-corner-guru">
+        <div class="sp-field" style="width:100%;margin-bottom:10px;"><label>No. HP</label><input name="no_hp" style="width:100%;"></div>
+        <label class="sp-upload-label" style="display:block;text-align:center;margin-bottom:10px;">Unggah Tanda Tangan<input type="file" accept="image/*" id="sp-corner-guru-ttd" class="hidden"></label>
+        <button class="sp-btn" type="submit" style="width:100%;">Simpan No. HP</button>
+      </form>
     </div>
   </div>
 

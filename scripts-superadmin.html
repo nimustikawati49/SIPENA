@@ -33,6 +33,44 @@ function SuperAdmin_init() {
       }
     });
   });
+
+  SuperAdmin_wireCorner_();
+}
+
+/* ---------- Widget profil pojok kanan atas ---------- */
+function SuperAdmin_toggleCorner_() {
+  SIPENA_toggleCornerPanel_('sp-corner-admin-trigger', 'sp-corner-admin-panel');
+}
+
+function SuperAdmin_wireCorner_() {
+  document.getElementById('sp-corner-admin-foto').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    SIPENA_readFileAsBase64_(file, 1500, function (base64, mimeType, fileName) {
+      runServer('uploadSuperadminPhoto', [base64, mimeType, fileName], {
+        onSuccess: function (res) {
+          SIPENA_toast('Foto diperbarui.');
+          var html = '<img src="' + res.url + '" alt="">';
+          document.getElementById('sp-corner-admin-avatar').innerHTML = html;
+          document.getElementById('sp-corner-admin-avatar-big').innerHTML = html;
+          if (window.SIPENA.auth) window.SIPENA.auth.fotoUrl = res.url;
+        }
+      });
+    });
+  });
+
+  document.getElementById('sp-form-corner-admin').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('updateMySuperadminProfile', [f.nama.value], {
+      loadingEl: btn,
+      onSuccess: function () {
+        SIPENA_toast('Nama diperbarui.');
+        document.getElementById('sp-admin-name').textContent = f.nama.value;
+      }
+    });
+  });
 }
 
 function SuperAdmin_showTab(tabId) {

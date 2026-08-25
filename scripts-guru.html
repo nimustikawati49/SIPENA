@@ -10,6 +10,7 @@ function GuruApp_init() {
   });
 
   GuruApp_buildContent_();
+  GuruApp_wireCorner_();
   GuruApp_load_();
 }
 
@@ -40,25 +41,53 @@ function GuruApp_buildContent_() {
 
     '<div class="sp-section-title">Ringkasan Nilai</div>' +
     '<div class="msg" style="margin:-6px 0 10px;">Persentase siswa yang sudah lengkap nilainya, dihitung dari jenis nilai yang sudah mulai Anda isi per kelas/mapel. Klik "Detail" untuk lihat siapa saja yang belum, dan nilai jenis apa yang masih kosong.</div>' +
-    '<div id="sp-guru-nilai-completion" style="margin-bottom:28px;"></div>' +
+    '<div id="sp-guru-nilai-completion" style="margin-bottom:28px;"></div>';
+}
 
-    '<div class="sp-section-title">Edit Profil</div>' +
-    '<div class="msg" style="margin:-6px 0 10px;">Nama, NIP, NUPTK, jabatan, dan sekolah dikelola Superadmin — di sini Anda hanya bisa ubah kontak/foto/tanda tangan.</div>' +
-    '<form class="sp-form" id="sp-form-guru-profil">' +
-    '  <div class="sp-field"><label>No. HP</label><input name="no_hp"></div>' +
-    '  <div class="sp-field"><label>URL Foto</label><input name="foto_url" placeholder="https://..."></div>' +
-    '  <div class="sp-field"><label>URL Tanda Tangan</label><input name="ttd_url" placeholder="https://..."></div>' +
-    '  <button class="sp-btn" type="submit">Simpan</button>' +
-    '</form>';
+/**
+ * GuruApp_toggleCorner_() / GuruApp_wireCorner_()
+ * Widget profil pojok kanan atas — menggantikan form "Edit Profil" lama
+ * di body dashboard. Nama/NIP/NUPTK tetap read-only (dikelola Superadmin,
+ * aturan integritas data dari awal sesi ini) — hanya foto, tanda tangan,
+ * dan No. HP yang bisa diubah guru sendiri di sini.
+ */
+function GuruApp_toggleCorner_() {
+  SIPENA_toggleCornerPanel_('sp-corner-guru-trigger', 'sp-corner-guru-panel');
+}
 
-  document.getElementById('sp-form-guru-profil').addEventListener('submit', function (e) {
+function GuruApp_wireCorner_() {
+  document.getElementById('sp-corner-guru-foto').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    SIPENA_readFileAsBase64_(file, 1500, function (base64, mimeType, fileName) {
+      runServer('uploadMyPhoto', [base64, mimeType, fileName], {
+        onSuccess: function (res) {
+          SIPENA_toast('Foto diperbarui.');
+          var html = SIPENA_avatarHtml_(res.url, '');
+          document.getElementById('sp-corner-guru-avatar').innerHTML = html;
+          document.getElementById('sp-corner-guru-avatar-big').innerHTML = html;
+        }
+      });
+    });
+  });
+
+  document.getElementById('sp-corner-guru-ttd').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    SIPENA_readFileAsBase64_(file, 1500, function (base64, mimeType, fileName) {
+      runServer('uploadMySignature', [base64, mimeType, fileName], {
+        onSuccess: function () { SIPENA_toast('Tanda tangan diperbarui.'); }
+      });
+    });
+  });
+
+  document.getElementById('sp-form-corner-guru').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
-    var data = { no_hp: f.no_hp.value, foto_url: f.foto_url.value, ttd_url: f.ttd_url.value };
     var btn = f.querySelector('button[type="submit"]');
-    runServer('updateMyProfile', [data], {
+    runServer('updateMyProfile', [{ no_hp: f.no_hp.value }], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('Profil diperbarui.'); GuruApp_load_(); }
+      onSuccess: function () { SIPENA_toast('No. HP diperbarui.'); }
     });
   });
 }
@@ -101,10 +130,12 @@ function GuruApp_render_(dash) {
     GuruApp_statTile_('Total Siswa', dash.ringkasan.jumlah_siswa) +
     GuruApp_statTile_('Penugasan Aktif', dash.ringkasan.jumlah_penugasan_aktif);
 
-  var f = document.getElementById('sp-form-guru-profil');
-  f.no_hp.value = p.no_hp || '';
-  f.foto_url.value = p.foto_url || '';
-  f.ttd_url.value = p.ttd_url || '';
+  var avatarHtml = SIPENA_avatarHtml_(p.foto_url, p.nama_lengkap);
+  document.getElementById('sp-corner-guru-avatar').innerHTML = avatarHtml;
+  document.getElementById('sp-corner-guru-avatar-big').innerHTML = avatarHtml;
+  document.getElementById('sp-corner-guru-readonly').innerHTML =
+    GuruApp_detailItem_('NIP', p.nip) + GuruApp_detailItem_('NUPTK', p.nuptk);
+  document.getElementById('sp-form-corner-guru').no_hp.value = p.no_hp || '';
 }
 
 function GuruApp_hariLabel_(hari) {

@@ -86,6 +86,38 @@ function updateMyProfile(data) {
   return { ok: true };
 }
 
+/**
+ * uploadMyPhoto(base64Data, mimeType, fileName) / uploadMySignature(...)
+ * Sama seperti updateMyProfile — HANYA field non-kritis (foto/tanda
+ * tangan), disimpan ke Drive guru sendiri (Utils_saveUploadedFile_) lalu
+ * URL-nya ditulis ke PROFIL. Dipisah dari updateMyProfile supaya upload
+ * foto langsung tersimpan begitu dipilih, tanpa perlu klik "Simpan"
+ * terpisah untuk field lain.
+ */
+function uploadMyPhoto(base64Data, mimeType, fileName) {
+  const auth = Security_requireRole_(['GURU']);
+  const url = Utils_saveUploadedFile_('SIPENA_Foto_Profil', base64Data, mimeType, fileName);
+  Dashboard_patchProfilField_(auth, 'foto_url', url);
+  return { url: url };
+}
+
+function uploadMySignature(base64Data, mimeType, fileName) {
+  const auth = Security_requireRole_(['GURU']);
+  const url = Utils_saveUploadedFile_('SIPENA_Tanda_Tangan', base64Data, mimeType, fileName);
+  Dashboard_patchProfilField_(auth, 'ttd_url', url);
+  return { url: url };
+}
+
+function Dashboard_patchProfilField_(auth, field, value) {
+  const ss = Config_getGuruSpreadsheet_(auth.guruId);
+  const sh = ss.getSheetByName('PROFIL');
+  if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
+  const patch = {}; patch[field] = value; patch.updated_at = new Date();
+  Utils_updateRowByHeader_(sh, 2, patch);
+  Dashboard_invalidateCache_(auth.guruId);
+  AuditLog_write_(auth, 'UPDATE_PROFILE', 'Profil', auth.guruId, field + '=' + value);
+}
+
 function Dashboard_cacheKey_(guruId) {
   return 'DASH_ALL_' + guruId;
 }

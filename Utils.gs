@@ -83,6 +83,34 @@ function Utils_writeExportSheetAndGetUrl_(ss, sheetName, headerRow, dataRows) {
   return ss.getUrl().replace(/edit$/, 'export?format=xlsx&gid=' + sh.getSheetId());
 }
 
+/**
+ * Utils_saveUploadedFile_(folderName, base64Data, mimeType, fileName, maxKb)
+ * Simpan file yang diunggah (foto profil/tanda tangan) ke Drive milik
+ * USER YANG SEDANG MENGAKSES (executeAs: USER_ACCESSING — jadi guru
+ * upload ke Drive guru itu sendiri, Superadmin ke Drive Superadmin,
+ * bukan numpuk di satu akun), lalu bagikan "siapa saja yang punya
+ * link boleh lihat" supaya bisa ditampilkan sebagai <img src> di UI
+ * tanpa perlu autentikasi ulang. Mengembalikan URL langsung-bisa-dilihat.
+ */
+function Utils_saveUploadedFile_(folderName, base64Data, mimeType, fileName, maxKb) {
+  const limitKb = maxKb || 1500;
+  const approxKb = Math.ceil((base64Data || '').length * 0.75 / 1024);
+  if (approxKb > limitKb) throw new Error('Ukuran file terlalu besar (maks ' + limitKb + ' KB). Pilih foto yang lebih kecil.');
+
+  const bytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(bytes, mimeType, fileName || 'upload');
+  const folder = Utils_getOrCreateFolder_(folderName);
+  const file = folder.createFile(blob);
+  try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
+  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+}
+
+function Utils_getOrCreateFolder_(name) {
+  const iter = DriveApp.getFoldersByName(name);
+  if (iter.hasNext()) return iter.next();
+  return DriveApp.createFolder(name);
+}
+
 function Utils_logError_(context, err) {
   try {
     const ss = Config_getCentralSpreadsheet_();

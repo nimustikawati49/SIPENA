@@ -44,7 +44,7 @@ function Config_getCentralSpreadsheet_() {
 const CONFIG_SUPERADMIN_BOOTSTRAP_EMAIL = 'nimustikawati49@guru.smp.belajar.id';
 
 const CONFIG_CENTRAL_SCHEMA_ = {
-  MASTER_SUPERADMIN: ['email', 'nama', 'status', 'created_at'],
+  MASTER_SUPERADMIN: ['email', 'nama', 'status', 'foto_url', 'created_at'],
   MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
   RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at'],
   MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'status', 'created_at', 'updated_at'],
@@ -148,7 +148,39 @@ function Config_ensureCentralSchema_() {
 function Config_getSheet_(name) {
   Config_ensureCentralSchema_();
   Config_ensureTextFormatColumns_();
+  Config_ensureColumnsMigration_();
   return Config_getCentralSpreadsheet_().getSheetByName(name);
+}
+
+/**
+ * Config_ensureColumnsMigration_()
+ * Sheet yang SUDAH ADA tidak otomatis dapat kolom baru walau
+ * CONFIG_CENTRAL_SCHEMA_ diperbarui (Config_ensureCentralSchema_ cuma
+ * membuat sheet yang belum ada). Fungsi ini menambah kolom yang HILANG
+ * di akhir sheet (tidak pernah menghapus/menggeser kolom lama) — dipakai
+ * pertama kali untuk menambah foto_url ke MASTER_SUPERADMIN yang sudah
+ * ada sejak Phase 1. Bump nama property (_V1 -> _V2) tiap kali skema
+ * central bertambah kolom baru di masa depan, sama seperti pola
+ * Config_ensureTextFormatColumns_.
+ */
+function Config_ensureColumnsMigration_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('COLUMNS_MIGRATION_V1')) return;
+
+  const ss = Config_getCentralSpreadsheet_();
+  Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh) return;
+    const lastCol = sh.getLastColumn();
+    const header = lastCol ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); }) : [];
+    const missing = CONFIG_CENTRAL_SCHEMA_[sheetName].filter(function (col) { return header.indexOf(col) === -1; });
+    if (missing.length) {
+      sh.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+      sh.getRange(1, lastCol + 1, 1, missing.length).setFontWeight('bold');
+    }
+  });
+
+  props.setProperty('COLUMNS_MIGRATION_V1', '1');
 }
 
 /**
