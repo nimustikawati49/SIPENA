@@ -27,6 +27,12 @@ function adminCreateSchool(data) {
     kecamatan: data.kecamatan || '',
     kabupaten: data.kabupaten || '',
     provinsi: data.provinsi || '',
+    kode_pos: data.kode_pos || '',
+    email: data.email || '',
+    telepon: data.telepon || '',
+    website: data.website || '',
+    nama_instansi: data.nama_instansi || '',
+    nama_dinas: data.nama_dinas || '',
     status: 'AKTIF',
     created_at: new Date(),
     updated_at: new Date()
@@ -73,7 +79,7 @@ function adminUpdateSchool(sekolahId, data) {
   if (rowNum === -1) throw new Error('Sekolah tidak ditemukan.');
 
   const patch = {};
-  ['npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'status'].forEach(function (k) {
+  ['npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'nama_instansi', 'nama_dinas', 'status'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
   patch.updated_at = new Date();
@@ -81,6 +87,30 @@ function adminUpdateSchool(sekolahId, data) {
 
   AuditLog_write_(auth, 'UPDATE_SCHOOL', 'Sekolah', sekolahId, JSON.stringify(patch));
   return { ok: true };
+}
+
+/**
+ * adminUploadSchoolLogo(sekolahId, jenis, base64Data, mimeType, fileName)
+ * jenis: 'sekolah' | 'pemerintah'. Sama pola Utils_saveUploadedFile_ yang
+ * sudah dipakai foto profil/tanda tangan — file tersimpan di Drive
+ * Superadmin yang mengunggah (executeAs USER_ACCESSING), dibagikan
+ * "siapa saja yang punya link boleh lihat" supaya bisa langsung dipakai
+ * sebagai <img src> di kop cetak.
+ */
+function adminUploadSchoolLogo(sekolahId, jenis, base64Data, mimeType, fileName) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  if (['sekolah', 'pemerintah'].indexOf(jenis) === -1) throw new Error('Jenis logo tidak valid.');
+  const sh = Config_getSheet_('MASTER_SEKOLAH');
+  const rowNum = Utils_findRowById_(sh, 'sekolah_id', sekolahId);
+  if (rowNum === -1) throw new Error('Sekolah tidak ditemukan.');
+
+  const url = Utils_saveUploadedFile_('SIPENA_Logo_Sekolah', base64Data, mimeType, fileName, 800);
+  const field = jenis === 'sekolah' ? 'logo_sekolah_url' : 'logo_pemerintah_url';
+  const patch = {}; patch[field] = url; patch.updated_at = new Date();
+  Utils_updateRowByHeader_(sh, rowNum, patch);
+
+  AuditLog_write_(auth, 'UPDATE_SCHOOL_LOGO', 'Sekolah', sekolahId, field);
+  return { url: url };
 }
 
 /**

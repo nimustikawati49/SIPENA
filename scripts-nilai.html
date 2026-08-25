@@ -25,6 +25,7 @@ function NilaiApp_markup_() {
     '<div class="sp-tabs" id="sp-nilai-subtabs" style="border-bottom:none;margin-bottom:16px;">' +
     '  <button class="sp-tab active" data-subtab="input">Input Nilai</button>' +
     '  <button class="sp-tab" data-subtab="rekap">Rekap Nilai</button>' +
+    '  <button class="sp-tab" data-subtab="cetak">Cetak Nilai</button>' +
     '</div>' +
 
     '<div class="sp-panel active" id="sp-nilai-sub-input">' +
@@ -80,7 +81,9 @@ function NilaiApp_markup_() {
     '  </div>' +
     '  <div id="sp-rekap-print-head" class="sp-print-only hidden"></div>' +
     '  <div id="sp-rekap-table"></div>' +
-    '</div>';
+    '</div>' +
+
+    '<div class="sp-panel" id="sp-nilai-sub-cetak">' + PrintApp_markup_() + '</div>';
 }
 
 function NilaiApp_wire_() {
@@ -90,6 +93,8 @@ function NilaiApp_wire_() {
       var sub = btn.getAttribute('data-subtab');
       document.getElementById('sp-nilai-sub-input').classList.toggle('active', sub === 'input');
       document.getElementById('sp-nilai-sub-rekap').classList.toggle('active', sub === 'rekap');
+      document.getElementById('sp-nilai-sub-cetak').classList.toggle('active', sub === 'cetak');
+      if (sub === 'cetak' && window.PrintApp_onShow_) window.PrintApp_onShow_();
     });
   });
 
@@ -106,6 +111,8 @@ function NilaiApp_wire_() {
   });
 
   document.getElementById('sp-katrol-form').addEventListener('submit', function (e) { e.preventDefault(); KatrolApp_preview_(); });
+
+  PrintApp_wire_();
 }
 
 function NilaiApp_toggleSettings_() {

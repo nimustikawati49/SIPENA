@@ -203,7 +203,7 @@
   .sp-toast-ok{ background: var(--ok); }
   .sp-toast-error{ background: var(--danger); }
 
-  /* ===== Cetak (Phase 7) ===== */
+  /* ===== Cetak (Phase 7) — rekap sederhana ===== */
   .sp-print-only{ display: none; }
   @media print {
     body.sp-printing .sp-sidebar,
@@ -214,6 +214,42 @@
     body.sp-printing .sp-main{ max-width: none; padding: 0; }
     body.sp-printing table.sp-table{ font-size: 11px; }
     body.sp-printing{ background: #fff; color: #000; }
+  }
+
+  /* ===== Modul Cetak Daftar Nilai — halaman penuh kop/judul/tabel/ttd ===== */
+  .sp-print-page{
+    background: #fff; color: #000; margin: 0 auto; padding: 14mm 12mm; box-sizing: border-box;
+    font-family: "Times New Roman", Times, serif; font-size: 12px; line-height: 1.35; box-shadow: 0 6px 24px rgba(0,0,0,.35);
+  }
+  .sp-print-kop{ display: flex; align-items: center; gap: 12px; }
+  .sp-print-logo{ width: 70px; height: 70px; flex-shrink: 0; object-fit: contain; }
+  .sp-print-kop-text{ flex: 1; text-align: center; }
+  .sp-print-kop-text > div{ font-size: 12.5px; font-weight: 700; text-transform: uppercase; }
+  .sp-print-kop-sekolah{ font-size: 16px !important; }
+  .sp-print-kop-small{ font-size: 10.5px !important; font-weight: 400 !important; text-transform: none !important; }
+  .sp-print-kop-rule{ border-bottom: 3px solid #000; margin: 4px 0 10px; }
+  .sp-print-title{ text-align: center; font-weight: 700; font-size: 13px; margin-bottom: 10px; text-transform: uppercase; }
+  .sp-print-identity{ margin-bottom: 10px; }
+  .sp-print-identity div{ display: flex; gap: 6px; }
+  .sp-print-identity span{ display: inline-block; min-width: 110px; font-weight: 700; }
+  table.sp-print-table{ width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  table.sp-print-table th, table.sp-print-table td{ border: 1px solid #000; padding: 4px 6px; text-align: center; }
+  table.sp-print-table td.sp-print-col-nama{ text-align: left; }
+  table.sp-print-table th{ font-weight: 700; background: #eee; }
+  table.sp-print-table.sp-print-dense th, table.sp-print-table.sp-print-dense td{ font-size: 10px; padding: 3px 4px; }
+  .sp-print-signature{ margin-left: auto; width: 260px; text-align: center; }
+  .sp-print-signature-name{ font-weight: 700; text-decoration: underline; margin-top: 4px; }
+  .sp-print-ttd-space{ height: 60px; }
+  .sp-print-ttd-img{ max-height: 60px; max-width: 160px; margin: 4px auto; display: block; }
+
+  @media print {
+    body.sp-printing-page *{ visibility: hidden; }
+    body.sp-printing-page #sp-print-page-container, body.sp-printing-page #sp-print-page-container *{ visibility: visible; }
+    body.sp-printing-page #sp-print-page-container{ position: absolute; left: 0; top: 0; width: 100%; }
+    body.sp-printing-page .sp-print-page{ box-shadow: none; margin: 0; width: auto !important; min-height: 0 !important; }
+    body.sp-printing-page thead{ display: table-header-group; }
+    body.sp-printing-page tr{ page-break-inside: avoid; }
+    body.sp-printing-page{ background: #fff; }
   }
 
   /* ===== Responsive: sidebar jadi bar horizontal di layar sempit ===== */

@@ -47,7 +47,7 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   MASTER_SUPERADMIN: ['email', 'nama', 'status', 'foto_url', 'created_at'],
   MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
   RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at'],
-  MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'status', 'created_at', 'updated_at'],
+  MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'nama_instansi', 'nama_dinas', 'logo_sekolah_url', 'logo_pemerintah_url', 'status', 'created_at', 'updated_at'],
   MASTER_MAPEL: ['mapel_id', 'kode_mapel', 'nama_mapel', 'jenjang', 'status'],
   MASTER_KELAS: ['kelas_id', 'sekolah_id', 'tingkat', 'nama_kelas', 'jenjang', 'program_keahlian', 'konsentrasi_keahlian', 'status'],
   GURU_MAPEL: ['guru_mapel_id', 'guru_id', 'mapel_id', 'sekolah_id', 'tahun_ajaran_id', 'status'],
@@ -97,7 +97,7 @@ const CONFIG_KATROL_TARGET_HEADERS_ = ['config_id', 'sekolah_id', 'tahun_ajaran_
 // NUPTK, dan kode mapel di Indonesia lazim berawalan nol, jadi ini bukan
 // isu kosmetik. Lihat Config_ensureTextFormatColumns_.
 const CONFIG_TEXT_FORMAT_COLUMNS_ = {
-  MASTER_SEKOLAH: ['npsn'],
+  MASTER_SEKOLAH: ['npsn', 'kode_pos'],
   MASTER_GURU: ['nip', 'nuptk'],
   MASTER_MAPEL: ['kode_mapel'],
   MASTER_KELAS: ['tingkat'],
@@ -189,13 +189,17 @@ function Config_getSheet_(name) {
  * membuat sheet yang belum ada). Fungsi ini menambah kolom yang HILANG
  * di akhir sheet (tidak pernah menghapus/menggeser kolom lama) — dipakai
  * pertama kali untuk menambah foto_url ke MASTER_SUPERADMIN yang sudah
- * ada sejak Phase 1. Bump nama property (_V1 -> _V2) tiap kali skema
- * central bertambah kolom baru di masa depan, sama seperti pola
- * Config_ensureTextFormatColumns_.
+ * ada sejak Phase 1, lalu (V2) kolom kop cetak (kode_pos/email/telepon/
+ * website/nama_instansi/nama_dinas/logo_sekolah_url/logo_pemerintah_url)
+ * ke MASTER_SEKOLAH untuk modul Cetak Daftar Nilai. Bump nama property
+ * (_V2 -> _V3) tiap kali skema central bertambah kolom baru di masa
+ * depan, sama seperti pola Config_ensureTextFormatColumns_. Ini murni
+ * TULIS SEL header (bukan insertSheet), aman dipanggil dari eksekusi
+ * siapa pun termasuk guru.
  */
 function Config_ensureColumnsMigration_() {
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('COLUMNS_MIGRATION_V1')) return;
+  if (props.getProperty('COLUMNS_MIGRATION_V2')) return;
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
@@ -210,7 +214,7 @@ function Config_ensureColumnsMigration_() {
     }
   });
 
-  props.setProperty('COLUMNS_MIGRATION_V1', '1');
+  props.setProperty('COLUMNS_MIGRATION_V2', '1');
 }
 
 /**
@@ -219,12 +223,12 @@ function Config_ensureColumnsMigration_() {
  * CONFIG_TEXT_FORMAT_COLUMNS_) sekali saja, ditandai lewat Script
  * Property (bukan CacheService yang kedaluwarsa) supaya tidak perlu buka
  * spreadsheet & scan header di setiap request setelah yang pertama.
- * Bump nama property (_V1 -> _V2) kalau nanti menambah kolom baru ke
+ * Bump nama property (_V2 -> _V3) kalau nanti menambah kolom baru ke
  * daftar itu, supaya migrasi jalan ulang untuk kolom yang baru saja.
  */
 function Config_ensureTextFormatColumns_() {
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('TEXT_FORMAT_APPLIED_V2')) return;
+  if (props.getProperty('TEXT_FORMAT_APPLIED_V3')) return;
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_TEXT_FORMAT_COLUMNS_).forEach(function (sheetName) {
@@ -233,7 +237,7 @@ function Config_ensureTextFormatColumns_() {
     Config_applyTextFormat_(sh, CONFIG_TEXT_FORMAT_COLUMNS_[sheetName]);
   });
 
-  props.setProperty('TEXT_FORMAT_APPLIED_V2', '1');
+  props.setProperty('TEXT_FORMAT_APPLIED_V3', '1');
 }
 
 /**

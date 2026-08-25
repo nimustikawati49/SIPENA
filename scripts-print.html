@@ -1,0 +1,323 @@
+<script>
+/**
+ * PrintApp — Cetak Daftar Nilai. Satu data fetch (getMyPrintData) dipakai
+ * untuk PREVIEW dan CETAK sekaligus (sama markup/CSS, cuma beda konteks
+ * layar vs @media print) — tidak pernah baca ulang Sheet saat guru ganti
+ * pilihan kolom/kertas, itu murni re-render klien dari data yang sudah ada.
+ */
+var PrintApp = { data: null, penugasan: null };
+
+var PRINT_COLUMN_GROUPS_ = [
+  { title: 'Identitas Siswa', cols: [
+    { key: 'no', label: 'No' }, { key: 'nis', label: 'NIS' }, { key: 'nisn', label: 'NISN' },
+    { key: 'nama', label: 'Nama Siswa' }, { key: 'gender', label: 'L/P' }
+  ] },
+  { title: 'Nilai Tugas', cols: [
+    { key: 'tgs1', label: 'TGS 1' }, { key: 'tgs2', label: 'TGS 2' }, { key: 'tgs3', label: 'TGS 3' }
+  ] },
+  { title: 'Nilai Ulangan Harian', cols: [
+    { key: 'uh1', label: 'UH 1' }, { key: 'uh2', label: 'UH 2' }, { key: 'uh3', label: 'UH 3' }
+  ] },
+  { title: 'Penilaian Semester', cols: [
+    { key: 'pts', label: 'PTS' }, { key: 'asasAsat', label: null } // label diisi dinamis (ASAS/ASAT)
+  ] },
+  { title: 'Hasil Perhitungan', cols: [
+    { key: 'rataHarian', label: 'Rata-rata Harian' }, { key: 'nilaiAkhirMurni', label: 'Nilai Akhir (Murni)' },
+    { key: 'nilaiAkhirKatrol', label: 'Nilai Akhir (Katrol)' }, { key: 'kktp', label: 'KKTP' },
+    { key: 'kategori', label: 'Kategori' }, { key: 'statusKetercapaian', label: 'Status Ketercapaian' }
+  ] },
+  { title: 'Lainnya', cols: [
+    { key: 'nilaiPindahan', label: 'Nilai Pindahan (Rapor Sekolah Asal)' }
+  ] }
+];
+
+var PRINT_PRESETS_ = {
+  lengkap: ['no', 'nis', 'nama', 'gender', 'tgs1', 'tgs2', 'tgs3', 'uh1', 'uh2', 'uh3', 'pts', 'asasAsat', 'rataHarian', 'nilaiAkhirMurni'],
+  ringkas: ['no', 'nis', 'nama', 'gender', 'rataHarian', 'pts', 'asasAsat', 'nilaiAkhirMurni'],
+  nilaiAkhir: ['no', 'nis', 'nama', 'nilaiAkhirMurni', 'nilaiAkhirKatrol', 'kktp', 'kategori', 'statusKetercapaian']
+};
+
+function PrintApp_markup_() {
+  var groupsHtml = PRINT_COLUMN_GROUPS_.map(function (g) {
+    return '<div style="margin-bottom:10px;">' +
+      '<div style="font-weight:700;font-size:12.5px;color:var(--text-muted);margin-bottom:4px;">' + g.title + '</div>' +
+      g.cols.map(function (c) {
+        return '<label style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;font-size:13px;">' +
+          '<input type="checkbox" class="sp-print-col" value="' + c.key + '"> <span data-col-label="' + c.key + '">' + (c.label || c.key) + '</span></label>';
+      }).join('') + '</div>';
+  }).join('');
+
+  return '' +
+    '<div id="sp-print-config">' +
+    '  <div class="sp-form" id="sp-print-filter">' +
+    '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Periode)</label><select id="sp-print-penugasan" style="min-width:280px;" required></select></div>' +
+    '  </div>' +
+
+    '  <div class="sp-section-title">Pilih Kolom</div>' +
+    '  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
+    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_applyPreset_(\'lengkap\')">Daftar Nilai Lengkap</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_applyPreset_(\'ringkas\')">Daftar Nilai Ringkas</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_applyPreset_(\'nilaiAkhir\')">Nilai Akhir</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_selectAll_(true)">Pilih Semua</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_selectAll_(false)">Hapus Semua</button>' +
+    '  </div>' +
+    '  <div id="sp-print-columns">' + groupsHtml + '</div>' +
+
+    '  <div class="sp-section-title">Format Cetak</div>' +
+    '  <div class="sp-form">' +
+    '    <div class="sp-field"><label>Ukuran Kertas</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-paper" value="A4" checked> A4 Portrait</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-paper" value="F4"> F4 Portrait</label>' +
+    '    </div>' +
+    '    <div class="sp-field" style="flex:1;min-width:260px;"><label>Judul</label><input id="sp-print-title" style="width:100%;"></div>' +
+    '    <div class="sp-field"><label>Tanggal</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-date-mode" value="CETAK" checked> Tanggal Cetak</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-date-mode" value="TENTUKAN"> Tentukan Tanggal</label>' +
+    '      <input type="date" id="sp-print-date-value" class="hidden" style="margin-top:4px;">' +
+    '    </div>' +
+    '    <div class="sp-field"><label>&nbsp;</label><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="sp-print-show-ttd"> Sertakan tanda tangan digital (jika ada di profil)</label></div>' +
+    '  </div>' +
+
+    '  <button type="button" class="sp-btn" onclick="PrintApp_preview_()">Preview</button>' +
+    '</div>' +
+
+    '<div id="sp-print-preview-wrap" class="hidden">' +
+    '  <div style="display:flex;gap:10px;margin-bottom:14px;">' +
+    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_back_()">&larr; Kembali ke Pengaturan</button>' +
+    '    <button type="button" class="sp-btn" onclick="PrintApp_doPrint_()">Cetak</button>' +
+    '  </div>' +
+    '  <div id="sp-print-scroll" style="overflow-x:auto;background:#525659;padding:24px;border-radius:10px;">' +
+    '    <div id="sp-print-page-container"></div>' +
+    '  </div>' +
+    '</div>';
+}
+
+function PrintApp_onShow_() {
+  var sel = document.getElementById('sp-print-penugasan');
+  var options = '<option value="">Pilih...</option>' + (NilaiApp.penugasan || []).map(function (p, i) {
+    return '<option value="' + i + '">' + p.nama_mapel + ' — ' + p.nama_kelas + ' — ' + p.semester + '</option>';
+  }).join('');
+  sel.innerHTML = options;
+  sel.addEventListener('change', PrintApp_onPenugasanChange_);
+  PrintApp_loadLastPrefs_();
+}
+
+function PrintApp_onPenugasanChange_() {
+  var idx = document.getElementById('sp-print-penugasan').value;
+  var p = idx === '' ? null : NilaiApp.penugasan[Number(idx)];
+  PrintApp.penugasan = p;
+  var label = p ? NilaiApp_assessmentLabel_(p.semester) : 'ASAS/ASAT';
+  document.querySelector('[data-col-label="asasAsat"]').textContent = label;
+  var titleField = document.getElementById('sp-print-title');
+  if (p && !titleField.dataset.userEdited) {
+    titleField.value = 'DAFTAR NILAI AKHIR SEMESTER ' + p.semester;
+  }
+}
+
+function PrintApp_applyPreset_(name) {
+  var keys = PRINT_PRESETS_[name] || [];
+  document.querySelectorAll('.sp-print-col').forEach(function (cb) { cb.checked = keys.indexOf(cb.value) !== -1; });
+}
+
+function PrintApp_selectAll_(checked) {
+  document.querySelectorAll('.sp-print-col').forEach(function (cb) { cb.checked = checked; });
+}
+
+function PrintApp_selectedColumns_() {
+  return Array.prototype.slice.call(document.querySelectorAll('.sp-print-col:checked')).map(function (cb) { return cb.value; });
+}
+
+function PrintApp_wire_() {
+  var titleField = document.getElementById('sp-print-title');
+  titleField.addEventListener('input', function () { titleField.dataset.userEdited = '1'; });
+
+  document.querySelectorAll('input[name="sp-print-date-mode"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      document.getElementById('sp-print-date-value').classList.toggle('hidden', r.value !== 'TENTUKAN' || !r.checked);
+    });
+  });
+}
+
+function PrintApp_buildConfig_() {
+  var paper = document.querySelector('input[name="sp-print-paper"]:checked').value;
+  var dateMode = document.querySelector('input[name="sp-print-date-mode"]:checked').value;
+  var dateValue = dateMode === 'TENTUKAN' ? document.getElementById('sp-print-date-value').value : '';
+  return {
+    paperSize: paper,
+    title: document.getElementById('sp-print-title').value || 'DAFTAR NILAI',
+    selectedColumns: PrintApp_selectedColumns_(),
+    printDateMode: dateMode,
+    printDateValue: dateValue,
+    showSignatureImage: document.getElementById('sp-print-show-ttd').checked
+  };
+}
+
+function PrintApp_loadLastPrefs_() {
+  try {
+    var raw = localStorage.getItem('sipena_print_prefs');
+    if (!raw) return;
+    var prefs = JSON.parse(raw);
+    if (prefs.paperSize) {
+      var r = document.querySelector('input[name="sp-print-paper"][value="' + prefs.paperSize + '"]');
+      if (r) r.checked = true;
+    }
+    if (prefs.selectedColumns) {
+      document.querySelectorAll('.sp-print-col').forEach(function (cb) { cb.checked = prefs.selectedColumns.indexOf(cb.value) !== -1; });
+    }
+    if (prefs.printDateMode) {
+      var dr = document.querySelector('input[name="sp-print-date-mode"][value="' + prefs.printDateMode + '"]');
+      if (dr) { dr.checked = true; dr.dispatchEvent(new Event('change')); }
+    }
+  } catch (e) {}
+}
+
+function PrintApp_savePrefs_(config) {
+  try {
+    localStorage.setItem('sipena_print_prefs', JSON.stringify({
+      paperSize: config.paperSize, selectedColumns: config.selectedColumns, printDateMode: config.printDateMode
+    }));
+  } catch (e) {}
+}
+
+function PrintApp_preview_() {
+  var p = PrintApp.penugasan;
+  if (!p) { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
+  var config = PrintApp_buildConfig_();
+  if (!config.selectedColumns.length) { SIPENA_toast('Silakan pilih minimal satu kolom nilai.', 'error'); return; }
+  if (config.printDateMode === 'TENTUKAN' && !config.printDateValue) { SIPENA_toast('Pilih tanggal cetak dulu.', 'error'); return; }
+
+  PrintApp_savePrefs_(config);
+
+  runServer('getMyPrintData', [p.kelas_id, p.mapel_id, p.tahun_ajaran_id, p.semester], {
+    onSuccess: function (data) {
+      PrintApp.data = data;
+      document.getElementById('sp-print-page-container').innerHTML = PrintApp_renderPage_(data, config);
+      PrintApp_applyPageSize_(config.paperSize);
+      document.getElementById('sp-print-config').classList.add('hidden');
+      document.getElementById('sp-print-preview-wrap').classList.remove('hidden');
+    }
+  });
+}
+
+function PrintApp_back_() {
+  document.getElementById('sp-print-preview-wrap').classList.add('hidden');
+  document.getElementById('sp-print-config').classList.remove('hidden');
+}
+
+function PrintApp_applyPageSize_(paperSize) {
+  var css = paperSize === 'F4' ? '210mm 330mm' : '210mm 297mm';
+  var style = document.getElementById('sp-print-page-style');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'sp-print-page-style';
+    document.head.appendChild(style);
+  }
+  style.textContent = '@page { size: ' + css + ' portrait; margin: 14mm 12mm; } ' +
+    '.sp-print-page{ width: ' + (paperSize === 'F4' ? '210mm' : '210mm') + '; min-height: ' + (paperSize === 'F4' ? '330mm' : '297mm') + '; }';
+}
+
+function PrintApp_doPrint_() {
+  document.body.classList.add('sp-printing', 'sp-printing-page');
+  window.print();
+  document.body.classList.remove('sp-printing', 'sp-printing-page');
+}
+
+function PrintApp_fmtValue_(v) {
+  return (v === '' || v === null || v === undefined) ? '-' : v;
+}
+
+/**
+ * PrintApp_renderPage_(data, config)
+ * Layout mengikuti hasil analisis file Excel referensi user (kop 2 logo +
+ * teks terpusat + garis bawah, judul 2-baris tebal terpusat, identitas
+ * label:nilai rata kiri, tabel bordered header tebal + Nama dapat lebar
+ * dominan, tanda tangan rata kanan tempat-tanggal → jabatan → ruang
+ * kosong/gambar ttd → nama bergaris bawah → NIP) — bukan ditiru
+ * byte-per-byte karena kolom di sini dinamis sesuai pilihan guru.
+ */
+function PrintApp_renderPage_(data, config) {
+  var s = data.sekolah;
+  var kopLines = [s.nama_instansi, s.nama_dinas, s.nama_sekolah].filter(function (t) { return t; });
+  var alamatBits = [s.alamat, s.desa ? 'Desa ' + s.desa : '', s.kecamatan ? 'Kecamatan ' + s.kecamatan : '', s.kabupaten ? 'Kabupaten ' + s.kabupaten : '', s.provinsi].filter(function (t) { return t; }).join(', ');
+  var kontakBits = [s.kode_pos ? 'Kode Pos: ' + s.kode_pos : '', s.email ? 'Email: ' + s.email : '', s.telepon ? 'Telp: ' + s.telepon : ''].filter(function (t) { return t; }).join(' — ');
+
+  var kopHtml = '<div class="sp-print-kop">' +
+    (s.logo_pemerintah_url ? '<img class="sp-print-logo sp-print-logo-left" src="' + s.logo_pemerintah_url + '">' : '<div class="sp-print-logo"></div>') +
+    '<div class="sp-print-kop-text">' +
+    kopLines.map(function (t, i) { return '<div class="' + (i === kopLines.length - 1 ? 'sp-print-kop-sekolah' : '') + '">' + t + '</div>'; }).join('') +
+    (alamatBits ? '<div class="sp-print-kop-small">' + alamatBits + '</div>' : '') +
+    (kontakBits ? '<div class="sp-print-kop-small">' + kontakBits + '</div>' : '') +
+    '</div>' +
+    (s.logo_sekolah_url ? '<img class="sp-print-logo sp-print-logo-right" src="' + s.logo_sekolah_url + '">' : '<div class="sp-print-logo"></div>') +
+    '</div><div class="sp-print-kop-rule"></div>';
+
+  var titleHtml = '<div class="sp-print-title">' +
+    '<div>' + config.title + '</div>' +
+    '<div>TAHUN PELAJARAN ' + (data.tahun_ajaran.label || '-') + '</div>' +
+    '</div>';
+
+  var identityHtml = '<div class="sp-print-identity">' +
+    '<div><span>SEKOLAH</span> : ' + (s.nama_sekolah || '-') + '</div>' +
+    '<div><span>MATA PELAJARAN</span> : ' + (data.mapel.nama_mapel || '-') + '</div>' +
+    '<div><span>KELAS</span> : ' + (data.kelas.nama_kelas || '-') + '</div>' +
+    '</div>';
+
+  var colDefs = {};
+  PRINT_COLUMN_GROUPS_.forEach(function (g) { g.cols.forEach(function (c) { colDefs[c.key] = c; }); });
+  var assessmentLabel = data.assessment_label;
+  var cols = config.selectedColumns.map(function (key) {
+    var label = key === 'asasAsat' ? assessmentLabel : (colDefs[key] ? colDefs[key].label : key);
+    return { key: key, label: label };
+  });
+
+  var manyCols = cols.length > 10;
+  var thead = '<thead><tr>' + cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr></thead>';
+  var tbody = '<tbody>' + data.students.map(function (s2, i) {
+    return '<tr>' + cols.map(function (c) { return '<td class="sp-print-col-' + c.key + '">' + PrintApp_renderCell_(c.key, s2, i, assessmentLabel) + '</td>'; }).join('') + '</tr>';
+  }).join('') + '</tbody>';
+
+  var tableHtml = '<table class="sp-print-table' + (manyCols ? ' sp-print-dense' : '') + '">' + thead + tbody + '</table>';
+
+  var tanggal = config.printDateMode === 'TENTUKAN' && config.printDateValue
+    ? PrintApp_formatDate_(config.printDateValue)
+    : PrintApp_formatDate_(new Date().toISOString().slice(0, 10));
+  var kotaCetak = data.sekolah.kabupaten || data.sekolah.desa || '';
+  var g = data.guru;
+  var nipLabel = g.nip ? 'NIP. ' + g.nip : (g.nuptk ? 'NUPTK. ' + g.nuptk : 'NIP/NUPTK. -');
+
+  var signatureHtml = '<div class="sp-print-signature">' +
+    '<div>' + (kotaCetak ? kotaCetak + ', ' : '') + tanggal + '</div>' +
+    '<div>Guru Mata Pelajaran</div>' +
+    (config.showSignatureImage && g.ttd_url ? '<img class="sp-print-ttd-img" src="' + g.ttd_url + '">' : '<div class="sp-print-ttd-space"></div>') +
+    '<div class="sp-print-signature-name">' + (g.nama_lengkap || '-') + '</div>' +
+    '<div>' + nipLabel + '</div>' +
+    '</div>';
+
+  return '<div class="sp-print-page">' + kopHtml + titleHtml + identityHtml + tableHtml + signatureHtml + '</div>';
+}
+
+function PrintApp_renderCell_(key, s, i, assessmentLabel) {
+  switch (key) {
+    case 'no': return i + 1;
+    case 'nis': return s.nis || '-';
+    case 'nisn': return s.nisn || '-';
+    case 'nama': return s.nama_lengkap;
+    case 'gender': return s.jenis_kelamin || '-';
+    case 'asasAsat': return PrintApp_fmtValue_(s[assessmentLabel.toLowerCase()]);
+    case 'rataHarian': return PrintApp_fmtValue_(s.rata_rata_harian);
+    case 'nilaiAkhirMurni': return PrintApp_fmtValue_(s.nilai_akhir_murni);
+    case 'nilaiAkhirKatrol': return PrintApp_fmtValue_(s.nilai_akhir_katrol);
+    case 'kktp': return PrintApp_fmtValue_(s.nilai_kktp);
+    case 'kategori': return s.kategori || '-';
+    case 'statusKetercapaian': return s.status_ketercapaian === 'TERCAPAI' ? 'Tercapai' : (s.status_ketercapaian === 'BELUM_TERCAPAI' ? 'Belum Tercapai' : '-');
+    case 'nilaiPindahan': return PrintApp_fmtValue_(s.nilai_pindahan);
+    default: return PrintApp_fmtValue_(s[key]);
+  }
+}
+
+function PrintApp_formatDate_(isoDate) {
+  var bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  var d = new Date(isoDate + 'T00:00:00');
+  return d.getDate() + ' ' + bulan[d.getMonth()] + ' ' + d.getFullYear();
+}
+</script>
