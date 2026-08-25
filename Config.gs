@@ -54,6 +54,8 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   PENUGASAN_MENGAJAR: ['assignment_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'status'],
   MASTER_TAHUN_AJARAN: ['tahun_ajaran_id', 'label', 'semester', 'status'],
   SEKOLAH_PERIODE_AKTIF: ['sekolah_id', 'tahun_ajaran_id', 'semester', 'status', 'activated_at', 'activated_by'],
+  MASTER_SISWA: ['siswa_id', 'sekolah_id', 'nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'tanggal_lahir', 'tahun_masuk', 'status', 'created_at', 'updated_at'],
+  RIWAYAT_KELAS: ['riwayat_id', 'siswa_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'kelas_id', 'status', 'tanggal_mulai', 'tanggal_selesai', 'keterangan'],
   AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
 };
 
@@ -66,7 +68,8 @@ const CONFIG_TEXT_FORMAT_COLUMNS_ = {
   MASTER_SEKOLAH: ['npsn'],
   MASTER_GURU: ['nip', 'nuptk'],
   MASTER_MAPEL: ['kode_mapel'],
-  MASTER_KELAS: ['tingkat']
+  MASTER_KELAS: ['tingkat'],
+  MASTER_SISWA: ['nis', 'nisn']
 };
 
 // Sheet yang dibuat di spreadsheet PRIBADI tiap guru saat provisioning
@@ -155,7 +158,7 @@ function Config_getSheet_(name) {
  */
 function Config_ensureTextFormatColumns_() {
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('TEXT_FORMAT_APPLIED_V1')) return;
+  if (props.getProperty('TEXT_FORMAT_APPLIED_V2')) return;
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_TEXT_FORMAT_COLUMNS_).forEach(function (sheetName) {
@@ -164,7 +167,7 @@ function Config_ensureTextFormatColumns_() {
     Config_applyTextFormat_(sh, CONFIG_TEXT_FORMAT_COLUMNS_[sheetName]);
   });
 
-  props.setProperty('TEXT_FORMAT_APPLIED_V1', '1');
+  props.setProperty('TEXT_FORMAT_APPLIED_V2', '1');
 }
 
 function Config_applyTextFormat_(sh, colNames) {

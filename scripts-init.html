@@ -98,9 +98,20 @@ function SIPENA_pendingEnd_() {
   }
 }
 
+/**
+ * SIPENA_initials_(name)
+ * Ambil huruf depan dari sampai 2 kata pertama, untuk avatar bulat —
+ * dipakai di topbar Superadmin & Guru dan kartu profil Guru.
+ */
+function SIPENA_initials_(name) {
+  var parts = String(name || '').trim().split(/\s+/).filter(function (p) { return p; });
+  if (!parts.length) return '?';
+  return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+}
+
 (function () {
   function show(id) {
-    ['sp-loading', 'sp-authenticated', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
+    ['sp-loading', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
       document.getElementById(elId).classList.toggle('hidden', elId !== id);
     });
   }
@@ -113,24 +124,29 @@ function SIPENA_pendingEnd_() {
       return;
     }
 
-    document.getElementById('sp-email').textContent = auth.email || '-';
-    document.getElementById('sp-role').textContent = auth.role;
-
-    if (auth.role === 'GURU') {
-      document.getElementById('sp-row-guru').classList.remove('hidden');
-      document.getElementById('sp-row-sekolah').classList.remove('hidden');
-      document.getElementById('sp-guru-id').textContent = auth.guruId || '-';
-      document.getElementById('sp-sekolah-id').textContent = auth.sekolahId || '-';
-    }
-
     window.SIPENA.auth = auth; // hanya untuk keperluan UI, tidak pernah dikirim balik sebagai identitas tepercaya
-    show('sp-authenticated');
 
+    // Superadmin/Guru punya tampilan aplikasi penuh masing-masing —
+    // kartu login kecil (dipakai untuk loading/unregistered/error) tidak
+    // lagi relevan begitu salah satunya tampil, jadi disembunyikan total
+    // supaya tidak menumpuk di atas panel/dashboard.
     if (auth.role === 'SUPERADMIN' && window.SuperAdmin_init) {
+      document.getElementById('sp-auth-card').classList.add('hidden');
+      document.getElementById('sp-admin-name').textContent = auth.nama || auth.email;
+      document.getElementById('sp-admin-avatar').textContent = SIPENA_initials_(auth.nama || auth.email);
       window.SuperAdmin_init();
+      return;
     }
     if (auth.role === 'GURU' && window.GuruApp_init) {
+      document.getElementById('sp-auth-card').classList.add('hidden');
+      document.getElementById('sp-guru-name').textContent = auth.namaLengkap || auth.email;
+      document.getElementById('sp-guru-avatar').textContent = SIPENA_initials_(auth.namaLengkap || auth.email);
+      var metaBits = ['<span class="sp-role-badge role-guru">Guru</span>'];
+      if (auth.jabatan) metaBits.push(auth.jabatan);
+      if (auth.namaSekolah) metaBits.push(auth.namaSekolah);
+      document.getElementById('sp-guru-meta').innerHTML = metaBits.join(' · ');
       window.GuruApp_init();
+      return;
     }
   }
 

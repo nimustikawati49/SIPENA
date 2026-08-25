@@ -1,4 +1,4 @@
-<div class="card">
+<div class="card" id="sp-auth-card">
   <div class="brand">
     <div class="logo">SP</div>
     <div>
@@ -10,14 +10,6 @@
   <div id="sp-loading">
     <div class="spinner"></div>
     <div class="msg" style="text-align:center;">Memeriksa akun Anda&hellip;</div>
-  </div>
-
-  <div id="sp-authenticated" class="hidden">
-    <div class="status-row"><span class="label">Email</span><span class="value" id="sp-email">-</span></div>
-    <div class="status-row"><span class="label">Role</span><span class="value" id="sp-role">-</span></div>
-    <div class="status-row hidden" id="sp-row-guru"><span class="label">Guru ID</span><span class="value" id="sp-guru-id">-</span></div>
-    <div class="status-row hidden" id="sp-row-sekolah"><span class="label">Sekolah ID</span><span class="value" id="sp-sekolah-id">-</span></div>
-    <div class="msg">Fase 1: verifikasi login &amp; resolusi role. Modul dashboard, nilai, dan lainnya menyusul di fase berikutnya.</div>
   </div>
 
   <div id="sp-unregistered" class="hidden">
@@ -40,9 +32,15 @@
         <div class="subtitle">Panel Superadmin</div>
       </div>
     </div>
-    <div class="sp-topbar-user">
-      <span id="sp-admin-email">-</span>
-      <button class="sp-btn secondary" id="sp-btn-open-db" type="button" style="margin-left:10px;">Buka Database Pusat</button>
+    <div class="sp-topbar-right">
+      <button class="sp-btn secondary" id="sp-btn-open-db" type="button">Buka Database Pusat</button>
+      <div class="sp-profile-chip">
+        <div class="sp-avatar" id="sp-admin-avatar">SA</div>
+        <div class="sp-profile-info">
+          <div class="sp-profile-name" id="sp-admin-name">Superadmin</div>
+          <div class="sp-profile-meta"><span class="sp-role-badge role-superadmin">Superadmin</span></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -51,6 +49,7 @@
     <button class="sp-tab" data-tab="guru">Guru</button>
     <button class="sp-tab" data-tab="mapel">Mata Pelajaran</button>
     <button class="sp-tab" data-tab="kelas">Kelas</button>
+    <button class="sp-tab" data-tab="siswa">Siswa</button>
     <button class="sp-tab" data-tab="tahunajaran">Tahun Ajaran</button>
     <button class="sp-tab" data-tab="penugasan">Penugasan Mengajar</button>
   </div>
@@ -69,7 +68,15 @@
         <div class="subtitle">Dashboard Guru</div>
       </div>
     </div>
-    <div class="sp-topbar-user" id="sp-guru-email">-</div>
+    <div class="sp-topbar-right">
+      <div class="sp-profile-chip">
+        <div class="sp-avatar" id="sp-guru-avatar">-</div>
+        <div class="sp-profile-info">
+          <div class="sp-profile-name" id="sp-guru-name">-</div>
+          <div class="sp-profile-meta" id="sp-guru-meta"><span class="sp-role-badge role-guru">Guru</span></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="sp-guru-content">

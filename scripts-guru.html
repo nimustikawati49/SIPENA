@@ -10,8 +10,8 @@ function GuruApp_init() {
 
 function GuruApp_buildContent_() {
   document.getElementById('sp-guru-content').innerHTML =
-    '<div class="sp-section-title">Profil</div>' +
-    '<div id="sp-guru-profil-view" class="sp-form" style="flex-direction:column;align-items:stretch;max-width:420px;margin-bottom:24px;"></div>' +
+    '<div id="sp-guru-profil-card"></div>' +
+    '<div id="sp-guru-profil-grid"></div>' +
 
     '<div class="sp-section-title">Ringkasan</div>' +
     '<div id="sp-guru-stats" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:28px;"></div>' +
@@ -50,12 +50,24 @@ function GuruApp_load_() {
 function GuruApp_render_(dash) {
   var p = dash.profil || {};
 
-  document.getElementById('sp-guru-profil-view').innerHTML =
-    '<div class="status-row"><span class="label">Nama</span><span class="value">' + (p.nama_lengkap || '-') + '</span></div>' +
-    '<div class="status-row"><span class="label">NIP</span><span class="value">' + (p.nip || '-') + '</span></div>' +
-    '<div class="status-row"><span class="label">NUPTK</span><span class="value">' + (p.nuptk || '-') + '</span></div>' +
-    '<div class="status-row"><span class="label">Jabatan</span><span class="value">' + (p.jabatan || '-') + '</span></div>' +
-    '<div class="status-row"><span class="label">Sekolah</span><span class="value">' + (dash.nama_sekolah || '-') + '</span></div>';
+  document.getElementById('sp-guru-profil-card').innerHTML =
+    '<div class="sp-profile-card">' +
+    '  <div class="sp-avatar">' + SIPENA_initials_(p.nama_lengkap) + '</div>' +
+    '  <div class="sp-profile-info">' +
+    '    <div class="sp-profile-name">' + (p.nama_lengkap || '-') + '</div>' +
+    '    <div class="sp-profile-meta"><span class="sp-role-badge role-guru">Guru</span>' +
+           (p.jabatan ? ' · ' + p.jabatan : '') + (dash.nama_sekolah ? ' · ' + dash.nama_sekolah : '') +
+    '    </div>' +
+    '  </div>' +
+    '</div>';
+
+  document.getElementById('sp-guru-profil-grid').innerHTML =
+    '<div class="sp-detail-grid">' +
+    GuruApp_detailItem_('NIP', p.nip) +
+    GuruApp_detailItem_('NUPTK', p.nuptk) +
+    GuruApp_detailItem_('No. HP', p.no_hp) +
+    GuruApp_detailItem_('Sekolah', dash.nama_sekolah) +
+    '</div>';
 
   document.getElementById('sp-guru-stats').innerHTML =
     GuruApp_statTile_('Mata Pelajaran', dash.ringkasan.jumlah_mapel) +
@@ -74,6 +86,10 @@ function GuruApp_render_(dash) {
   f.no_hp.value = p.no_hp || '';
   f.foto_url.value = p.foto_url || '';
   f.ttd_url.value = p.ttd_url || '';
+}
+
+function GuruApp_detailItem_(label, value) {
+  return '<div class="item"><div class="sp-detail-label">' + label + '</div><div class="sp-detail-value">' + (value || '-') + '</div></div>';
 }
 
 function GuruApp_statTile_(label, value) {

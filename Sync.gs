@@ -14,6 +14,7 @@ function Sync_teacherData_(guruId) {
     Sync_updateProfil_(ss, guru);
     Sync_rewriteMapel_(ss, guruId);
     Sync_rewritePenugasanAndKelas_(ss, guruId);
+    Sync_rewriteSiswa_(ss, guruId);
     Dashboard_invalidateCache_(guruId);
   } catch (e) {
     Utils_logError_('SYNC_TEACHER_DATA_' + guruId, e);
@@ -118,6 +119,47 @@ function Sync_rewritePenugasanAndKelas_(ss, guruId) {
     });
     Sync_clearAndWrite_(kelasSh, rows);
   }
+}
+
+/**
+ * Sync_rewriteSiswa_(ss, guruId)
+ * Roster siswa di sheet SISWA guru = gabungan siswa AKTIF (RIWAYAT_KELAS)
+ * di semua kelas+periode yang guru ini ajar (PENUGASAN_MENGAJAR AKTIF),
+ * dedup per siswa_id — guru yang mengajar kelas yang sama untuk 2 mapel
+ * tidak melihat siswa itu dobel.
+ */
+function Sync_rewriteSiswa_(ss, guruId) {
+  const sh = ss.getSheetByName('SISWA');
+  if (!sh) return;
+
+  const assignments = Utils_sheetToObjects_(Config_getSheet_('PENUGASAN_MENGAJAR')).filter(function (r) {
+    return r.guru_id === guruId && String(r.status).toUpperCase() === 'AKTIF';
+  });
+  if (!assignments.length) { Sync_clearAndWrite_(sh, []); return; }
+
+  const scopeKeys = {};
+  assignments.forEach(function (a) { scopeKeys[[a.kelas_id, a.tahun_ajaran_id, a.semester].join('|')] = true; });
+
+  const riwayat = Utils_sheetToObjects_(Config_getSheet_('RIWAYAT_KELAS')).filter(function (r) {
+    return String(r.status).toUpperCase() === 'AKTIF' && scopeKeys[[r.kelas_id, r.tahun_ajaran_id, r.semester].join('|')];
+  });
+
+  const siswaById = Sync_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_SISWA')), 'siswa_id');
+
+  const seen = {};
+  const rows = [];
+  riwayat.forEach(function (r) {
+    if (seen[r.siswa_id]) return;
+    seen[r.siswa_id] = true;
+    const s = siswaById[r.siswa_id];
+    if (!s) return;
+    rows.push({
+      siswa_id: s.siswa_id, nis: s.nis, nisn: s.nisn, nama_lengkap: s.nama_lengkap,
+      jenis_kelamin: s.jenis_kelamin, kelas_id: r.kelas_id, status: s.status
+    });
+  });
+
+  Sync_clearAndWrite_(sh, rows);
 }
 
 function Sync_indexBy_(rows, key) {

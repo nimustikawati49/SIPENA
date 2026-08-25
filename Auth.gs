@@ -70,6 +70,8 @@ function Auth_resolve_(email) {
       guruId: guru.guru_id,
       sekolahId: guru.sekolah_id,
       namaLengkap: guru.nama_lengkap,
+      jabatan: guru.jabatan,
+      namaSekolah: Auth_findSekolahNama_(guru.sekolah_id),
       spreadsheetId: resourceMap ? resourceMap.spreadsheet_id : ''
     };
   }
@@ -109,6 +111,16 @@ function Auth_findGuru_(email) {
     if (String(rows[i].email || '').toLowerCase().trim() === email) return rows[i];
   }
   return null;
+}
+
+function Auth_findSekolahNama_(sekolahId) {
+  if (!sekolahId) return '';
+  const sh = Config_getSheet_('MASTER_SEKOLAH');
+  const rows = Utils_sheetToObjects_(sh);
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].sekolah_id === sekolahId) return rows[i].nama_sekolah || '';
+  }
+  return '';
 }
 
 function Auth_findResourceMap_(guruId) {
