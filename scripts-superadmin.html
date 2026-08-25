@@ -109,6 +109,30 @@ function SuperAdmin_labelFromId_(list, idKey, id, labelKey) {
   return found ? found[labelKey] : id;
 }
 
+/**
+ * Mode edit dipakai bersama semua form "Tambah X": form yang sama dipakai
+ * ulang untuk edit — tombol submit berubah teks jadi "Update", dan
+ * form.dataset.editId menandai record mana yang sedang diedit (dibaca di
+ * submit handler masing-masing form untuk memilih adminCreateX vs
+ * adminUpdateX).
+ */
+function SuperAdmin_setFormEditMode_(form, id) {
+  form.dataset.editId = id;
+  form.querySelector('button[type="submit"]').textContent = 'Update';
+  var cancelBtn = form.querySelector('.sp-btn-cancel-edit');
+  if (cancelBtn) cancelBtn.classList.remove('hidden');
+}
+function SuperAdmin_clearFormEditMode_(form) {
+  delete form.dataset.editId;
+  form.querySelector('button[type="submit"]').textContent = 'Simpan';
+  var cancelBtn = form.querySelector('.sp-btn-cancel-edit');
+  if (cancelBtn) cancelBtn.classList.add('hidden');
+  form.reset();
+}
+function SuperAdmin_cancelEditButton_() {
+  return '<button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_clearFormEditMode_(this.form)">Batal Edit</button>';
+}
+
 /* ================= bangun markup semua panel ================= */
 
 function SuperAdmin_buildPanels() {
@@ -143,6 +167,7 @@ function SuperAdmin_panelSekolah_() {
     '    <div class="sp-field"><label>Kabupaten</label><input name="kabupaten"></div>' +
     '    <div class="sp-field"><label>Provinsi</label><input name="provinsi"></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
+    SuperAdmin_cancelEditButton_() +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Sekolah</div>' +
     '  <div id="sp-table-sekolah"></div>' +
@@ -153,24 +178,41 @@ function SuperAdmin_wireSekolah_() {
     e.preventDefault();
     var f = e.target;
     var data = { npsn: f.npsn.value, nama_sekolah: f.nama_sekolah.value, jenjang: f.jenjang.value, kabupaten: f.kabupaten.value, provinsi: f.provinsi.value };
-    var btn = f.querySelector('button');
-    runServer('adminCreateSchool', [data], {
+    var btn = f.querySelector('button[type="submit"]');
+    var editId = f.dataset.editId;
+    runServer(editId ? 'adminUpdateSchool' : 'adminCreateSchool', editId ? [editId, data] : [data], {
       loadingEl: btn,
       onSuccess: function () {
-        SIPENA_toast('Sekolah tersimpan.'); f.reset();
+        SIPENA_toast(editId ? 'Sekolah diperbarui.' : 'Sekolah tersimpan.');
+        SuperAdmin_clearFormEditMode_(f);
         runServer('adminGetSchools', [], {
-          onSuccess: function (rows) { console.log('refetch adminGetSchools ->', rows); SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); },
-          onError: function (msg) { console.error('refetch adminGetSchools FAILED:', msg); SIPENA_toast('Tersimpan, tapi gagal muat ulang daftar: ' + msg, 'error'); }
+          onSuccess: function (rows) { SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); },
+          onError: function (msg) { SIPENA_toast('Tersimpan, tapi gagal muat ulang daftar: ' + msg, 'error'); }
         });
       }
     });
   });
 }
+function SuperAdmin_editSchool_(sekolahId) {
+  var s = SuperAdmin.schools.filter(function (r) { return r.sekolah_id === sekolahId; })[0];
+  if (!s) return;
+  var f = document.getElementById('sp-form-sekolah');
+  f.npsn.value = s.npsn || '';
+  f.nama_sekolah.value = s.nama_sekolah || '';
+  f.jenjang.value = s.jenjang || '';
+  f.kabupaten.value = s.kabupaten || '';
+  f.provinsi.value = s.provinsi || '';
+  SuperAdmin_setFormEditMode_(f, sekolahId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 function SuperAdmin_renderSekolah() {
   SuperAdmin_table_('sp-table-sekolah', [
     { key: 'sekolah_id', label: 'ID' }, { key: 'npsn', label: 'NPSN' },
     { key: 'nama_sekolah', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
-    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteSchool_(\'' + r.sekolah_id + '\', \'' + String(r.nama_sekolah).replace(/'/g, "\\'") + '\')">Hapus</button>'; } }
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editSchool_(\'' + r.sekolah_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteSchool_(\'' + r.sekolah_id + '\', \'' + String(r.nama_sekolah).replace(/'/g, "\\'") + '\')">Hapus</button>';
+      } }
   ], SuperAdmin.schools, 'Belum ada sekolah.');
 }
 
@@ -196,7 +238,10 @@ function SuperAdmin_panelGuru_() {
     '    <div class="sp-field"><label>NIP</label><input name="nip"></div>' +
     '    <div class="sp-field"><label>NUPTK</label><input name="nuptk"></div>' +
     '    <div class="sp-field"><label>Jabatan</label><input name="jabatan" value="Guru"></div>' +
+    '    <div class="sp-field"><label>No. HP</label><input name="no_hp"></div>' +
     '    <button class="sp-btn" type="submit">Simpan &amp; Provisi Spreadsheet</button>' +
+    '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditGuru_(this.form)">Batal Edit</button>' +
+    '    <div class="msg hidden" id="sp-guru-edit-note" style="flex-basis:100%;margin:0;">Mode edit: sekolah &amp; email tidak bisa diubah di sini.</div>' +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Guru</div>' +
     '  <div id="sp-table-guru"></div>' +
@@ -206,8 +251,25 @@ function SuperAdmin_wireGuru_() {
   document.getElementById('sp-form-guru').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
-    var data = { sekolah_id: f.sekolah_id.value, email: f.email.value, nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, nuptk: f.nuptk.value, jabatan: f.jabatan.value };
-    var btn = f.querySelector('button');
+    var editId = f.dataset.editId;
+    var btn = f.querySelector('button[type="submit"]');
+
+    if (editId) {
+      var patch = { nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, nuptk: f.nuptk.value, jabatan: f.jabatan.value, no_hp: f.no_hp.value };
+      runServer('adminUpdateTeacher', [editId, patch], {
+        loadingEl: btn,
+        onSuccess: function () {
+          SIPENA_toast('Data guru diperbarui.');
+          SuperAdmin_clearFormEditMode_(f);
+          document.getElementById('sp-guru-edit-note').classList.add('hidden');
+          f.sekolah_id.disabled = false; f.email.disabled = false;
+          runServer('adminGetTeachers', [], { onSuccess: function (rows) { SuperAdmin.teachers = rows; SuperAdmin_renderGuru(); SuperAdmin_refreshSelects(); } });
+        }
+      });
+      return;
+    }
+
+    var data = { sekolah_id: f.sekolah_id.value, email: f.email.value, nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, nuptk: f.nuptk.value, jabatan: f.jabatan.value, no_hp: f.no_hp.value };
     runServer('adminCreateTeacher', [data], {
       loadingEl: btn,
       onSuccess: function (res) {
@@ -218,13 +280,35 @@ function SuperAdmin_wireGuru_() {
     });
   });
 }
+function SuperAdmin_cancelEditGuru_(form) {
+  form.sekolah_id.disabled = false;
+  form.email.disabled = false;
+  document.getElementById('sp-guru-edit-note').classList.add('hidden');
+  SuperAdmin_clearFormEditMode_(form);
+}
+function SuperAdmin_editTeacher_(guruId) {
+  var g = SuperAdmin.teachers.filter(function (r) { return r.guru_id === guruId; })[0];
+  if (!g) return;
+  var f = document.getElementById('sp-form-guru');
+  f.sekolah_id.value = g.sekolah_id || ''; f.sekolah_id.disabled = true;
+  f.email.value = g.email || ''; f.email.disabled = true;
+  f.nama_lengkap.value = g.nama_lengkap || '';
+  f.nip.value = g.nip || '';
+  f.nuptk.value = g.nuptk || '';
+  f.jabatan.value = g.jabatan || '';
+  f.no_hp.value = g.no_hp || '';
+  document.getElementById('sp-guru-edit-note').classList.remove('hidden');
+  SuperAdmin_setFormEditMode_(f, guruId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 function SuperAdmin_renderGuru() {
   SuperAdmin_table_('sp-table-guru', [
     { key: 'guru_id', label: 'ID' }, { key: 'email', label: 'Email' }, { key: 'nama_lengkap', label: 'Nama' },
     { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
     { key: 'jabatan', label: 'Jabatan' }, { key: 'status', label: 'Status' },
     { label: 'Aksi', render: function (r) {
-        return '<button class="sp-btn secondary" onclick="SuperAdmin_reprovision_(\'' + r.guru_id + '\')">Provisi ulang</button> ' +
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editTeacher_(\'' + r.guru_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_reprovision_(\'' + r.guru_id + '\')">Provisi ulang</button> ' +
           '<button class="sp-btn secondary" onclick="SuperAdmin_deleteTeacher_(\'' + r.guru_id + '\', \'' + String(r.nama_lengkap).replace(/'/g, "\\'") + '\')">Hapus</button>';
       } }
   ], SuperAdmin.teachers, 'Belum ada guru.');
@@ -252,6 +336,7 @@ function SuperAdmin_panelMapel_() {
     '    <div class="sp-field"><label>Nama Mapel</label><input name="nama_mapel" required></div>' +
     '    <div class="sp-field"><label>Jenjang</label><select name="jenjang"><option value="">Semua</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
+    SuperAdmin_cancelEditButton_() +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Mata Pelajaran</div>' +
     '  <div id="sp-table-mapel"></div>' +
@@ -262,18 +347,36 @@ function SuperAdmin_wireMapel_() {
     e.preventDefault();
     var f = e.target;
     var data = { kode_mapel: f.kode_mapel.value, nama_mapel: f.nama_mapel.value, jenjang: f.jenjang.value };
-    var btn = f.querySelector('button');
-    runServer('adminCreateSubject', [data], {
+    var btn = f.querySelector('button[type="submit"]');
+    var editId = f.dataset.editId;
+    runServer(editId ? 'adminUpdateSubject' : 'adminCreateSubject', editId ? [editId, data] : [data], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('Mapel tersimpan.'); f.reset(); runServer('adminGetSubjects', [], { onSuccess: function (rows) { SuperAdmin.subjects = rows; SuperAdmin_renderMapel(); SuperAdmin_refreshSelects(); } }); }
+      onSuccess: function () {
+        SIPENA_toast(editId ? 'Mapel diperbarui.' : 'Mapel tersimpan.');
+        SuperAdmin_clearFormEditMode_(f);
+        runServer('adminGetSubjects', [], { onSuccess: function (rows) { SuperAdmin.subjects = rows; SuperAdmin_renderMapel(); SuperAdmin_refreshSelects(); } });
+      }
     });
   });
+}
+function SuperAdmin_editSubject_(mapelId) {
+  var m = SuperAdmin.subjects.filter(function (r) { return r.mapel_id === mapelId; })[0];
+  if (!m) return;
+  var f = document.getElementById('sp-form-mapel');
+  f.kode_mapel.value = m.kode_mapel || '';
+  f.nama_mapel.value = m.nama_mapel || '';
+  f.jenjang.value = m.jenjang || '';
+  SuperAdmin_setFormEditMode_(f, mapelId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderMapel() {
   SuperAdmin_table_('sp-table-mapel', [
     { key: 'mapel_id', label: 'ID' }, { key: 'kode_mapel', label: 'Kode' },
     { key: 'nama_mapel', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
-    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteSubject_(\'' + r.mapel_id + '\', \'' + String(r.nama_mapel).replace(/'/g, "\\'") + '\')">Hapus</button>'; } }
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editSubject_(\'' + r.mapel_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteSubject_(\'' + r.mapel_id + '\', \'' + String(r.nama_mapel).replace(/'/g, "\\'") + '\')">Hapus</button>';
+      } }
   ], SuperAdmin.subjects, 'Belum ada mata pelajaran.');
 }
 function SuperAdmin_deleteSubject_(mapelId, namaMapel) {
@@ -298,6 +401,7 @@ function SuperAdmin_panelKelas_() {
     '    <div class="sp-field"><label>Jenjang</label><select name="jenjang"><option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
     '    <div class="sp-field"><label>Program Keahlian (SMK)</label><input name="program_keahlian"></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditKelas_(this.form)">Batal Edit</button>' +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Kelas</div>' +
     '  <div id="sp-table-kelas"></div>' +
@@ -307,13 +411,45 @@ function SuperAdmin_wireKelas_() {
   document.getElementById('sp-form-kelas').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
+    var editId = f.dataset.editId;
+    var btn = f.querySelector('button[type="submit"]');
+
+    if (editId) {
+      var patch = { nama_kelas: f.nama_kelas.value, tingkat: f.tingkat.value, jenjang: f.jenjang.value, program_keahlian: f.program_keahlian.value };
+      runServer('adminUpdateClass', [editId, patch], {
+        loadingEl: btn,
+        onSuccess: function () {
+          SIPENA_toast('Kelas diperbarui.');
+          f.sekolah_id.disabled = false;
+          SuperAdmin_clearFormEditMode_(f);
+          runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
+        }
+      });
+      return;
+    }
+
     var data = { sekolah_id: f.sekolah_id.value, nama_kelas: f.nama_kelas.value, tingkat: f.tingkat.value, jenjang: f.jenjang.value, program_keahlian: f.program_keahlian.value };
-    var btn = f.querySelector('button');
     runServer('adminCreateClass', [data], {
       loadingEl: btn,
       onSuccess: function () { SIPENA_toast('Kelas tersimpan.'); f.reset(); runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } }); }
     });
   });
+}
+function SuperAdmin_cancelEditKelas_(form) {
+  form.sekolah_id.disabled = false;
+  SuperAdmin_clearFormEditMode_(form);
+}
+function SuperAdmin_editClass_(kelasId) {
+  var k = SuperAdmin.classes.filter(function (r) { return r.kelas_id === kelasId; })[0];
+  if (!k) return;
+  var f = document.getElementById('sp-form-kelas');
+  f.sekolah_id.value = k.sekolah_id || ''; f.sekolah_id.disabled = true;
+  f.nama_kelas.value = k.nama_kelas || '';
+  f.tingkat.value = k.tingkat || '';
+  f.jenjang.value = k.jenjang || '';
+  f.program_keahlian.value = k.program_keahlian || '';
+  SuperAdmin_setFormEditMode_(f, kelasId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderKelas() {
   SuperAdmin_table_('sp-table-kelas', [
@@ -321,7 +457,10 @@ function SuperAdmin_renderKelas() {
     { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
     { key: 'nama_kelas', label: 'Nama Kelas' }, { key: 'tingkat', label: 'Tingkat' },
     { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
-    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteClass_(\'' + r.kelas_id + '\', \'' + String(r.nama_kelas).replace(/'/g, "\\'") + '\')">Hapus</button>'; } }
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editClass_(\'' + r.kelas_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteClass_(\'' + r.kelas_id + '\', \'' + String(r.nama_kelas).replace(/'/g, "\\'") + '\')">Hapus</button>';
+      } }
   ], SuperAdmin.classes, 'Belum ada kelas.');
 }
 function SuperAdmin_deleteClass_(kelasId, namaKelas) {
@@ -343,6 +482,7 @@ function SuperAdmin_panelTahunAjaran_() {
     '    <div class="sp-field"><label>Label</label><input name="label" placeholder="2026/2027" required></div>' +
     '    <div class="sp-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
+    SuperAdmin_cancelEditButton_() +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Tahun Ajaran</div>' +
     '  <div id="sp-table-ta" style="margin-bottom:24px;"></div>' +
@@ -359,10 +499,15 @@ function SuperAdmin_wireTahunAjaran_() {
     e.preventDefault();
     var f = e.target;
     var data = { label: f.label.value, semester: f.semester.value };
-    var btn = f.querySelector('button');
-    runServer('adminCreateAcademicYear', [data], {
+    var btn = f.querySelector('button[type="submit"]');
+    var editId = f.dataset.editId;
+    runServer(editId ? 'adminUpdateAcademicYear' : 'adminCreateAcademicYear', editId ? [editId, data] : [data], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('Tahun ajaran tersimpan.'); f.reset(); runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } }); }
+      onSuccess: function () {
+        SIPENA_toast(editId ? 'Tahun ajaran diperbarui.' : 'Tahun ajaran tersimpan.');
+        SuperAdmin_clearFormEditMode_(f);
+        runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } });
+      }
     });
   });
   document.getElementById('sp-form-periode').addEventListener('submit', function (e) {
@@ -379,8 +524,20 @@ function SuperAdmin_renderTahunAjaran() {
   SuperAdmin_table_('sp-table-ta', [
     { key: 'tahun_ajaran_id', label: 'ID' }, { key: 'label', label: 'Label' },
     { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' },
-    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAcademicYear_(\'' + r.tahun_ajaran_id + '\', \'' + String(r.label).replace(/'/g, "\\'") + ' ' + r.semester + '\')">Hapus</button>'; } }
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editAcademicYear_(\'' + r.tahun_ajaran_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAcademicYear_(\'' + r.tahun_ajaran_id + '\', \'' + String(r.label).replace(/'/g, "\\'") + ' ' + r.semester + '\')">Hapus</button>';
+      } }
   ], SuperAdmin.academicYears, 'Belum ada tahun ajaran.');
+}
+function SuperAdmin_editAcademicYear_(tahunAjaranId) {
+  var t = SuperAdmin.academicYears.filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; })[0];
+  if (!t) return;
+  var f = document.getElementById('sp-form-ta');
+  f.label.value = t.label || '';
+  f.semester.value = t.semester || '';
+  SuperAdmin_setFormEditMode_(f, tahunAjaranId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_deleteAcademicYear_(tahunAjaranId, label) {
   if (!confirm('Hapus tahun ajaran "' + label + '"? Aksi ini tidak bisa dibatalkan.')) return;
@@ -404,6 +561,7 @@ function SuperAdmin_panelPenugasan_() {
     '    <div class="sp-field"><label>Tahun Ajaran</label><select name="tahun_ajaran_id" data-source="tahunajaran" required></select></div>' +
     '    <div class="sp-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
+    SuperAdmin_cancelEditButton_() +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Penugasan</div>' +
     '  <div id="sp-table-penugasan"></div>' +
@@ -419,12 +577,29 @@ function SuperAdmin_wirePenugasan_() {
       guru_id: f.guru_id.value, mapel_id: f.mapel_id.value, kelas_id: f.kelas_id.value,
       sekolah_id: guru.sekolah_id, tahun_ajaran_id: f.tahun_ajaran_id.value, semester: f.semester.value
     };
-    var btn = f.querySelector('button');
-    runServer('adminCreateAssignment', [data], {
+    var btn = f.querySelector('button[type="submit"]');
+    var editId = f.dataset.editId;
+    runServer(editId ? 'adminUpdateAssignment' : 'adminCreateAssignment', editId ? [editId, data] : [data], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('Penugasan tersimpan & disinkron ke spreadsheet guru.'); f.reset(); runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } }); }
+      onSuccess: function () {
+        SIPENA_toast(editId ? 'Penugasan diperbarui & disinkron.' : 'Penugasan tersimpan & disinkron ke spreadsheet guru.');
+        SuperAdmin_clearFormEditMode_(f);
+        runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
+      }
     });
   });
+}
+function SuperAdmin_editAssignment_(assignmentId) {
+  var a = SuperAdmin.assignments.filter(function (r) { return r.assignment_id === assignmentId; })[0];
+  if (!a) return;
+  var f = document.getElementById('sp-form-penugasan');
+  f.guru_id.value = a.guru_id || '';
+  f.mapel_id.value = a.mapel_id || '';
+  f.kelas_id.value = a.kelas_id || '';
+  f.tahun_ajaran_id.value = a.tahun_ajaran_id || '';
+  f.semester.value = a.semester || '';
+  SuperAdmin_setFormEditMode_(f, assignmentId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderPenugasan() {
   SuperAdmin_table_('sp-table-penugasan', [
@@ -432,7 +607,10 @@ function SuperAdmin_renderPenugasan() {
     { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' },
     { label: 'Tahun Ajaran', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.academicYears, 'tahun_ajaran_id', r.tahun_ajaran_id, 'label'); } },
     { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' },
-    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAssignment_(\'' + r.assignment_id + '\')">Hapus</button>'; } }
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editAssignment_(\'' + r.assignment_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAssignment_(\'' + r.assignment_id + '\')">Hapus</button>';
+      } }
   ], SuperAdmin.assignments, 'Belum ada penugasan.');
 }
 function SuperAdmin_deleteAssignment_(assignmentId) {

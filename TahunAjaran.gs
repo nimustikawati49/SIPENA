@@ -28,6 +28,26 @@ function adminCreateAcademicYear(data) {
   return { tahun_ajaran_id: tahunAjaranId };
 }
 
+function adminUpdateAcademicYear(tahunAjaranId, data) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_getSheet_('MASTER_TAHUN_AJARAN');
+  const rowNum = Utils_findRowById_(sh, 'tahun_ajaran_id', tahunAjaranId);
+  if (rowNum === -1) throw new Error('Tahun ajaran tidak ditemukan.');
+
+  const patch = {};
+  if (data.label !== undefined) patch.label = String(data.label).trim();
+  if (data.semester !== undefined) {
+    const semester = String(data.semester).toUpperCase().trim();
+    if (['GANJIL', 'GENAP'].indexOf(semester) === -1) throw new Error('Semester harus GANJIL atau GENAP.');
+    patch.semester = semester;
+  }
+  if (data.status !== undefined) patch.status = data.status;
+  Utils_updateRowByHeader_(sh, rowNum, patch);
+
+  AuditLog_write_(auth, 'UPDATE_ACADEMIC_YEAR', 'TahunAjaran', tahunAjaranId, JSON.stringify(patch));
+  return { ok: true };
+}
+
 /**
  * adminDeleteAcademicYear(tahunAjaranId)
  * Ditolak kalau masih dipakai di GURU_MAPEL/PENUGASAN_MENGAJAR/

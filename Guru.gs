@@ -59,10 +59,11 @@ function adminUpdateTeacher(guruId, data) {
   const guru = Utils_sheetToObjects_(sh).filter(function (r) { return r.guru_id === guruId; })[0];
   if (!guru) throw new Error('Guru tidak ditemukan.');
 
-  // guru_id, email, sekolah_id, NIP tidak boleh diubah dari sini demi
-  // konsistensi RESOURCE_MAP/PENUGASAN yang sudah mereferensikannya —
-  // mandat spec: guru tidak boleh mengubah field kritis, dan Superadmin
-  // ubah field itu lewat alur mutasi/replace, bukan edit biasa.
+  // guru_id, email, sekolah_id TIDAK boleh diubah lewat sini (walau oleh
+  // Superadmin) demi konsistensi RESOURCE_MAP/PENUGASAN yang sudah
+  // mereferensikannya — pindah sekolah/ganti email butuh alur mutasi
+  // tersendiri, bukan edit biasa. NIP/NUPTK/jabatan boleh diubah karena
+  // itu memang data administrasi yang dikelola Superadmin (spec §11).
   const patch = {};
   ['nama_lengkap', 'nip', 'nuptk', 'jabatan', 'status', 'no_hp'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];

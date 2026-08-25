@@ -70,18 +70,57 @@ function adminCreateAssignment(data) {
   return { assignment_id: assignmentId };
 }
 
+/**
+ * adminUpdateAssignment(assignmentId, data)
+ * Mendukung dua mode: patch status saja (data hanya berisi `status`), atau
+ * edit penuh (guru_id/mapel_id/kelas_id/tahun_ajaran_id/semester) dari
+ * form "Tambah Penugasan" yang dipakai ulang untuk edit. Kalau guru_id
+ * berubah, sinkronisasi dijalankan untuk guru LAMA (supaya baris usang
+ * hilang dari spreadsheet-nya) maupun guru BARU.
+ */
 function adminUpdateAssignment(assignmentId, data) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   const sh = Config_getSheet_('PENUGASAN_MENGAJAR');
   const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.assignment_id === assignmentId; })[0];
   if (!row) throw new Error('Penugasan tidak ditemukan.');
 
+  const isFullEdit = data.guru_id !== undefined || data.mapel_id !== undefined || data.kelas_id !== undefined;
   const patch = {};
-  if (data.status !== undefined) patch.status = data.status;
-  Utils_updateRowByHeader_(sh, row._row, patch);
 
+  if (isFullEdit) {
+    const guruId = String(data.guru_id || row.guru_id).trim();
+    const mapelId = String(data.mapel_id || row.mapel_id).trim();
+    const kelasId = String(data.kelas_id || row.kelas_id).trim();
+    const tahunAjaranId = String(data.tahun_ajaran_id || row.tahun_ajaran_id).trim();
+    const semester = String(data.semester || row.semester).toUpperCase().trim();
+    if (!guruId || !mapelId || !kelasId || !tahunAjaranId) throw new Error('Guru, mapel, kelas, dan tahun ajaran wajib diisi.');
+    if (['GANJIL', 'GENAP'].indexOf(semester) === -1) throw new Error('Semester harus GANJIL atau GENAP.');
+
+    const guru = Utils_sheetToObjects_(Config_getSheet_('MASTER_GURU')).filter(function (r) { return r.guru_id === guruId; })[0];
+    if (!guru) throw new Error('Guru tidak ditemukan.');
+
+    const dup = Utils_sheetToObjects_(sh).filter(function (r) {
+      return r.assignment_id !== assignmentId && r.guru_id === guruId && r.mapel_id === mapelId &&
+        r.kelas_id === kelasId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
+    })[0];
+    if (dup) throw new Error('Sudah ada penugasan lain dengan kombinasi guru/mapel/kelas/periode yang sama.');
+
+    Penugasan_ensureGuruMapel_(guruId, mapelId, guru.sekolah_id, tahunAjaranId);
+
+    patch.guru_id = guruId;
+    patch.mapel_id = mapelId;
+    patch.kelas_id = kelasId;
+    patch.sekolah_id = guru.sekolah_id;
+    patch.tahun_ajaran_id = tahunAjaranId;
+    patch.semester = semester;
+  }
+  if (data.status !== undefined) patch.status = data.status;
+
+  Utils_updateRowByHeader_(sh, row._row, patch);
   AuditLog_write_(auth, 'UPDATE_ASSIGNMENT', 'Penugasan', assignmentId, JSON.stringify(patch));
+
   Sync_teacherData_(row.guru_id);
+  if (patch.guru_id && patch.guru_id !== row.guru_id) Sync_teacherData_(patch.guru_id);
   return { ok: true };
 }
 
