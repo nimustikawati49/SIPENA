@@ -77,13 +77,20 @@
     display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 999px;
     background: var(--card); border: 1px solid var(--border); cursor: pointer;
     box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    /* <button> tidak mewarisi color/font dari body secara default (UA
+       stylesheet browser memaksa "buttontext") — tanpa baris ini nama
+       guru/superadmin tampil pudar/gelap walau mode dark aktif. */
+    color: inherit; font: inherit; position: relative; z-index: 2;
   }
   .sp-corner-caret{ font-size: 10px; color: var(--text-muted); transition: transform .15s ease; }
   .sp-corner-trigger.open .sp-corner-caret{ transform: rotate(180deg); }
   .sp-corner-panel{
-    position: absolute; top: calc(100% + 8px); right: 0; width: 320px; max-width: calc(100vw - 40px);
+    /* Selalu di BAWAH trigger dengan jarak aman — tidak pernah menutupi
+       nama, karena posisinya dihitung dari tepi bawah trigger (top:100%),
+       bukan menimpa area trigger itu sendiri. */
+    position: absolute; top: calc(100% + 10px); right: 0; width: 320px; max-width: calc(100vw - 40px);
     background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px;
-    box-shadow: 0 10px 34px rgba(0,0,0,.18);
+    box-shadow: 0 10px 34px rgba(0,0,0,.18); z-index: 1;
   }
   .sp-avatar-upload{ display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
   .sp-avatar-upload .sp-avatar{ width: 54px; height: 54px; font-size: 18px; }
@@ -93,7 +100,7 @@
   }
   .sp-upload-label:hover{ background: var(--bg); }
   .sp-profile-info{ text-align: right; line-height: 1.4; }
-  .sp-profile-name{ font-weight: 700; font-size: 13px; }
+  .sp-profile-name{ font-weight: 700; font-size: 13px; color: var(--text); }
   .sp-profile-meta{ font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 
   .sp-role-badge{

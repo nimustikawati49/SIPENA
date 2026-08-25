@@ -124,11 +124,15 @@ function GuruApp_render_(dash) {
   var mapelNames = (dash.mapel || []).map(function (m) { return m.nama_mapel; }).join(', ');
   var kelasNames = (dash.kelas || []).map(function (k) { return k.nama_kelas; }).join(', ');
 
+  var totalLengkap = 0, totalSiswaCakupan = 0;
+  (dash.nilai_completion || []).forEach(function (c) { totalLengkap += c.siswa_lengkap; totalSiswaCakupan += c.total_siswa; });
+  var persenNilai = totalSiswaCakupan ? Math.round((totalLengkap / totalSiswaCakupan) * 100) : 0;
+
   document.getElementById('sp-guru-stats').innerHTML =
     GuruApp_statTile_('Mata Pelajaran', dash.ringkasan.jumlah_mapel, mapelNames) +
     GuruApp_statTile_('Kelas', dash.ringkasan.jumlah_kelas, kelasNames) +
     GuruApp_statTile_('Total Siswa', dash.ringkasan.jumlah_siswa) +
-    GuruApp_statTile_('Penugasan Aktif', dash.ringkasan.jumlah_penugasan_aktif);
+    GuruApp_statTile_('Nilai Terisi', persenNilai + '%', totalSiswaCakupan ? (totalLengkap + '/' + totalSiswaCakupan + ' siswa lengkap') : 'Belum ada nilai diinput');
 
   var avatarHtml = SIPENA_avatarHtml_(p.foto_url, p.nama_lengkap);
   document.getElementById('sp-corner-guru-avatar').innerHTML = avatarHtml;
