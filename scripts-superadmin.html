@@ -1,6 +1,6 @@
 <script>
 var SuperAdmin = {
-  schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: [], students: [], schedules: [], kktp: []
+  schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: [], students: [], schedules: [], kktp: [], katrolTargets: []
 };
 
 var SP_TINGKAT_OPTIONS_ = {
@@ -369,9 +369,9 @@ function SuperAdmin_panelGuru_() {
     '  <div class="sp-section-title">Daftar Guru</div>' +
     '  <div id="sp-table-guru" style="margin-bottom:28px;"></div>' +
 
-    '  <div class="sp-section-title">Migrasi Modul Nilai Akhir</div>' +
-    '  <div class="msg" style="margin:-6px 0 10px;">Sekali klik: siapkan sheet "Nilai Akhir" di spreadsheet guru yang sudah ada sebelum modul ini dirilis (guru baru sudah otomatis dapat). Aman dijalankan berkali-kali.</div>' +
-    '  <button type="button" class="sp-btn secondary" id="sp-btn-migrate-nilai-akhir" style="margin-bottom:28px;">Migrasi Sheet Nilai Akhir</button>' +
+    '  <div class="sp-section-title">Migrasi Sheet Operasional Guru</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Sekali klik: siapkan sheet Nilai Akhir &amp; Katrol Nilai (dan kolom baru di sheet yang sudah ada) di spreadsheet guru yang diprovisi sebelum modul-modul itu dirilis — guru baru sudah otomatis dapat. Aman dijalankan berkali-kali.</div>' +
+    '  <button type="button" class="sp-btn secondary" id="sp-btn-migrate-nilai-akhir" style="margin-bottom:28px;">Migrasi Sheet Operasional Guru</button>' +
 
     '  <div class="sp-section-title">Sinkronisasi Gagal</div>' +
     '  <div class="msg" style="margin:-6px 0 10px;">Kalau update data guru (penugasan/siswa/jadwal) gagal tersinkron ke spreadsheet pribadinya (mis. spreadsheet terhapus/kuota Drive habis), muncul di sini — aksi admin yang memicunya tetap berhasil, cuma sinkronisasi guru itu yang tertunda. Klik "Coba Lagi" setelah masalahnya diperbaiki (mis. provisi ulang di atas).</div>' +
@@ -381,13 +381,13 @@ function SuperAdmin_panelGuru_() {
 function SuperAdmin_wireGuru_() {
   document.getElementById('sp-btn-migrate-nilai-akhir').addEventListener('click', function () {
     var btn = this;
-    runServer('adminMigrateNilaiAkhirSheets', [], {
+    runServer('adminMigrateGuruOperationalSheets', [], {
       loadingEl: btn,
       onSuccess: function (res) {
         var msg = res.migrated + ' dari ' + res.total + ' spreadsheet guru disiapkan.';
         if (res.failed.length) msg += ' ' + res.failed.length + ' gagal (cek console).';
         SIPENA_toast(msg, res.failed.length ? 'error' : 'ok');
-        if (res.failed.length) console.error('adminMigrateNilaiAkhirSheets failed:', res.failed);
+        if (res.failed.length) console.error('adminMigrateGuruOperationalSheets failed:', res.failed);
       }
     });
   });
@@ -1780,6 +1780,27 @@ function SuperAdmin_panelKktp_() {
     '  <div id="sp-kktp-copy-tingkat" style="margin-bottom:10px;"></div>' +
     '  <button type="button" class="sp-btn secondary" onclick="SuperAdmin_previewCopyKktp_()">Preview Salin</button>' +
     '  <div id="sp-kktp-copy-preview" class="hidden" style="margin-top:14px;"></div>' +
+
+    '  <div class="sp-section-title">Target Katrol Nilai Akhir (Default)</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Rentang target awal yang mengisi panel "Katrol Nilai" guru — guru tetap harus lihat &amp; konfirmasi angka sebelum menyimpan, jadi ini cuma nilai awal, bukan kunci ke kebijakan sekolah.</div>' +
+    '  <form class="sp-form" id="sp-form-katroltarget">' +
+    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang" id="sp-katroltarget-jenjang" required>' +
+    '      <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
+    '    </select></div>' +
+    '    <div class="sp-field"><label>Tingkat</label><select name="tingkat" id="sp-katroltarget-tingkat" required><option value="">Pilih jenjang dulu</option></select></div>' +
+    '    <div class="sp-field"><label>Sekolah (opsional)</label><select name="sekolah_id" data-source="sekolah"></select></div>' +
+    '    <div class="sp-field"><label>Tahun Ajaran (opsional)</label><select name="tahun_ajaran_id" data-source="tahunajaran"></select></div>' +
+    '    <div class="sp-field"><label>Semester (opsional)</label><select name="semester"><option value="">Semua</option><option value="GANJIL">Ganjil</option><option value="GENAP">Genap</option></select></div>' +
+    '    <div class="sp-field"><label>Mapel (opsional)</label><select name="mapel_id" data-source="mapel"></select></div>' +
+    '    <div class="sp-field"><label>Target Min</label><input name="target_min" type="number" min="0" max="100" required></div>' +
+    '    <div class="sp-field"><label>Target Max</label><input name="target_max" type="number" min="0" max="100" required></div>' +
+    '    <div class="sp-field"><label>Pembulatan</label><select name="pembulatan">' +
+    '      <option value="BILANGAN_BULAT">Bilangan Bulat</option><option value="1_DESIMAL">1 Desimal</option><option value="2_DESIMAL">2 Desimal</option>' +
+    '    </select></div>' +
+    '    <button class="sp-btn" type="submit">Simpan Target</button>' +
+    SuperAdmin_cancelEditButton_() +
+    '  </form>' +
+    '  <div id="sp-table-katroltarget"></div>' +
     '</div>';
 }
 
@@ -1807,6 +1828,69 @@ function SuperAdmin_wireKktp_() {
         runServer('adminGetKktpList', [{}], { onSuccess: function (rows) { SuperAdmin.kktp = rows; SuperAdmin_renderKktp_(); } });
       }
     });
+  });
+
+  document.getElementById('sp-katroltarget-jenjang').addEventListener('change', function (e) {
+    SuperAdmin_fillTingkatOptions_(document.getElementById('sp-katroltarget-tingkat'), e.target.value);
+  });
+
+  document.getElementById('sp-form-katroltarget').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { jenjang: f.jenjang.value, tingkat: f.tingkat.value, sekolah_id: f.sekolah_id.value, tahun_ajaran_id: f.tahun_ajaran_id.value, semester: f.semester.value, mapel_id: f.mapel_id.value, target_min: f.target_min.value, target_max: f.target_max.value, pembulatan: f.pembulatan.value };
+    if (f.dataset.editId) data.config_id = f.dataset.editId;
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('adminSaveKatrolTarget', [data], {
+      loadingEl: btn,
+      onSuccess: function () {
+        SIPENA_toast('Target katrol disimpan.');
+        SuperAdmin_clearFormEditMode_(f);
+        SuperAdmin_loadKatrolTargets_();
+      }
+    });
+  });
+
+  SuperAdmin_loadKatrolTargets_();
+}
+
+function SuperAdmin_loadKatrolTargets_() {
+  runServer('adminGetKatrolTargetList', [{}], { onSuccess: function (rows) { SuperAdmin.katrolTargets = rows; SuperAdmin_renderKatrolTargets_(); } });
+}
+
+function SuperAdmin_renderKatrolTargets_() {
+  SIPENA_table_('sp-table-katroltarget', [
+    { label: 'Cakupan', render: SuperAdmin_kktpScopeLabel_ },
+    { label: 'Target', render: function (r) { return r.target_min + '–' + r.target_max; } },
+    { key: 'pembulatan', label: 'Pembulatan' },
+    { label: 'Status', render: function (r) { return '<span class="badge ' + (String(r.status).toUpperCase() === 'AKTIF' ? 'ok' : 'danger') + '">' + r.status + '</span>'; } },
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editKatrolTarget_(\'' + r.config_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_toggleKatrolTargetStatus_(\'' + r.config_id + '\')">' + (String(r.status).toUpperCase() === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan') + '</button>';
+      } }
+  ], SuperAdmin.katrolTargets, 'Belum ada target katrol.');
+}
+
+function SuperAdmin_editKatrolTarget_(configId) {
+  var k = SuperAdmin.katrolTargets.filter(function (r) { return r.config_id === configId; })[0];
+  if (!k) return;
+  var f = document.getElementById('sp-form-katroltarget');
+  SuperAdmin_fillTingkatOptions_(document.getElementById('sp-katroltarget-tingkat'), k.jenjang);
+  f.jenjang.value = k.jenjang || '';
+  f.tingkat.value = String(k.tingkat || '');
+  f.sekolah_id.value = k.sekolah_id || '';
+  f.tahun_ajaran_id.value = k.tahun_ajaran_id || '';
+  f.semester.value = k.semester || '';
+  f.mapel_id.value = k.mapel_id || '';
+  f.target_min.value = k.target_min;
+  f.target_max.value = k.target_max;
+  f.pembulatan.value = k.pembulatan || 'BILANGAN_BULAT';
+  SuperAdmin_setFormEditMode_(f, configId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function SuperAdmin_toggleKatrolTargetStatus_(configId) {
+  runServer('adminToggleKatrolTargetStatus', [configId], {
+    onSuccess: function () { SIPENA_toast('Status target katrol diperbarui.'); SuperAdmin_loadKatrolTargets_(); }
   });
 }
 

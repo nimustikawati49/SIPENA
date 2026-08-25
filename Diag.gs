@@ -11,21 +11,30 @@ function adminGetCentralSpreadsheetInfo() {
   return { id: ss.getId(), url: ss.getUrl(), sheets: sheets };
 }
 
+// Sheet operasional guru yang ditambahkan setelah provisioning awal
+// (modul Nilai Akhir, Katrol) — daftar dicek satu per satu di
+// adminMigrateGuruOperationalSheets di bawah. Tambah nama sheet baru ke
+// sini tiap kali modul baru menambah sheet ke CONFIG_GURU_OPERATIONAL_SCHEMA_.
+const DIAG_GURU_SHEETS_TO_MIGRATE_ = ['NILAI_AKHIR', 'KATROL_HISTORY'];
+
 /**
- * adminMigrateNilaiAkhirSheets()
- * Sheet NILAI_AKHIR (modul Nilai Akhir) otomatis ada di spreadsheet guru
- * yang BARU diprovisi (sudah masuk CONFIG_GURU_OPERATIONAL_SCHEMA_), tapi
- * guru yang spreadsheet-nya dibuat SEBELUM modul ini tidak otomatis
- * dapat. Sengaja TIDAK dibuat lazy dari sisi guru (Nilai.gs) — spreadsheet
- * guru dimiliki Superadmin yang memprovisinya (SpreadsheetApp.create saat
- * eksekusi sebagai Superadmin), dan operasi struktural (insertSheet) dari
- * akun guru sendiri bisa ditolak izin Drive walau guru sudah bisa
- * baca/tulis SEL di spreadsheet yang sama — pernah menyebabkan getAuth()
- * gagal total untuk guru saat sheet central baru dibuat lazy dengan pola
- * serupa. Jadi migrasi ini dijalankan SEKALI oleh Superadmin (pemilik
- * file), bukan otomatis oleh guru.
+ * adminMigrateGuruOperationalSheets()
+ * Sheet operasional guru yang ditambahkan BELAKANGAN (NILAI_AKHIR, lalu
+ * KATROL_HISTORY) otomatis ada di spreadsheet guru yang BARU diprovisi
+ * (sudah masuk CONFIG_GURU_OPERATIONAL_SCHEMA_), tapi guru yang
+ * spreadsheet-nya dibuat SEBELUM modul itu ada tidak otomatis dapat.
+ * Sengaja TIDAK dibuat lazy dari sisi guru — spreadsheet guru dimiliki
+ * Superadmin yang memprovisinya (SpreadsheetApp.create saat eksekusi
+ * sebagai Superadmin), dan operasi struktural (insertSheet) dari akun
+ * guru sendiri bisa ditolak izin Drive walau guru sudah bisa baca/tulis
+ * SEL di spreadsheet yang sama — pernah menyebabkan getAuth() gagal total
+ * untuk guru saat sheet central baru dibuat lazy dengan pola serupa. Jadi
+ * migrasi ini dijalankan SEKALI oleh Superadmin (pemilik file), bukan
+ * otomatis oleh guru. Config_ensureGuruSheet_ juga sekaligus melengkapi
+ * kolom yang mungkin masih kurang di sheet yang SUDAH ada (mis.
+ * nilai_kktp/kategori/status_ketercapaian di NILAI_AKHIR).
  */
-function adminMigrateNilaiAkhirSheets() {
+function adminMigrateGuruOperationalSheets() {
   Security_requireRole_(['SUPERADMIN']);
   const entries = Utils_sheetToObjects_(Config_getSheet_('RESOURCE_MAP')).filter(function (r) {
     return String(r.status).toLowerCase() === 'active' && r.spreadsheet_id;
@@ -36,9 +45,13 @@ function adminMigrateNilaiAkhirSheets() {
   entries.forEach(function (r) {
     try {
       const ss = SpreadsheetApp.openById(r.spreadsheet_id);
-      const already = !!ss.getSheetByName('NILAI_AKHIR');
-      Config_ensureGuruSheet_(ss, 'NILAI_AKHIR');
-      if (!already) migrated++;
+      let touchedAny = false;
+      DIAG_GURU_SHEETS_TO_MIGRATE_.forEach(function (sheetName) {
+        const already = !!ss.getSheetByName(sheetName);
+        Config_ensureGuruSheet_(ss, sheetName);
+        if (!already) touchedAny = true;
+      });
+      if (touchedAny) migrated++;
     } catch (e) {
       failed.push({ guru_id: r.guru_id, email: r.email, error: String(e.message || e) });
     }

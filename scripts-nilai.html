@@ -33,18 +33,40 @@ function NilaiApp_markup_() {
     '    <button type="button" class="sp-btn" onclick="NilaiApp_loadGrades_()">Tampilkan</button>' +
     '  </div>' +
 
-    '  <div id="sp-nilai-settings-box" class="hidden" style="margin-bottom:16px;">' +
-    '    <button type="button" class="sp-btn secondary" onclick="NilaiApp_toggleSettings_()">Atur KKM &amp; Rentang Katrol</button>' +
-    '    <form class="sp-form hidden" id="sp-nilai-settings-form" style="margin-top:10px;">' +
+    '  <div id="sp-nilai-settings-box" class="hidden" style="margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;">' +
+    '    <button type="button" class="sp-btn secondary" onclick="NilaiApp_toggleSettings_()">Atur KKM, Katrol Komponen &amp; Nilai Rapor</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="KatrolApp_open_()">Katrol Nilai Akhir</button>' +
+    '    <form class="sp-form hidden" id="sp-nilai-settings-form" style="margin-top:10px;flex-basis:100%;">' +
     '      <div class="sp-field"><label>KKM</label><input name="kkm" type="number" min="0" max="100" required></div>' +
-    '      <div class="sp-field"><label>Nilai Min Katrol</label><input name="nilai_min_target" type="number" min="0" max="100" required></div>' +
-    '      <div class="sp-field"><label>Nilai Max Katrol</label><input name="nilai_max_target" type="number" min="0" max="100" required></div>' +
+    '      <div class="sp-field"><label>Nilai Min Katrol Komponen</label><input name="nilai_min_target" type="number" min="0" max="100" required></div>' +
+    '      <div class="sp-field"><label>Nilai Max Katrol Komponen</label><input name="nilai_max_target" type="number" min="0" max="100" required></div>' +
+    '      <div class="sp-field"><label>Sumber Nilai Rapor</label><select name="sumber_nilai_rapor"><option value="MURNI">Nilai Akhir Murni</option><option value="KATROL">Nilai Akhir Katrol</option></select></div>' +
     '      <button class="sp-btn" type="submit">Simpan Pengaturan</button>' +
     '    </form>' +
     '  </div>' +
 
     '  <div id="sp-nilai-table"></div>' +
     '  <button type="button" class="sp-btn hidden" id="sp-nilai-save-btn" style="margin-top:14px;" onclick="NilaiApp_saveGrades_()">Simpan Perubahan</button>' +
+
+    '  <div id="sp-katrol-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">' +
+    '    <div style="background:var(--card);border-radius:14px;padding:24px;max-width:640px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+    '      <div class="sp-section-title">Katrol Nilai Akhir</div>' +
+    '      <div id="sp-katrol-context" class="msg" style="margin:-6px 0 14px;"></div>' +
+    '      <div id="sp-katrol-source" class="sp-detail-grid" style="margin-bottom:14px;"></div>' +
+    '      <form class="sp-form" id="sp-katrol-form" style="margin-bottom:14px;">' +
+    '        <div class="sp-field"><label>Target Min</label><input name="target_min" type="number" min="0" max="100" required></div>' +
+    '        <div class="sp-field"><label>Target Max</label><input name="target_max" type="number" min="0" max="100" required></div>' +
+    '        <button type="submit" class="sp-btn secondary">Preview Katrol</button>' +
+    '      </form>' +
+    '      <div id="sp-katrol-uniform" class="hidden msg danger" style="margin-bottom:14px;"></div>' +
+    '      <div id="sp-katrol-preview"></div>' +
+    '      <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">' +
+    '        <button type="button" class="sp-btn secondary" onclick="KatrolApp_close_()">Batal</button>' +
+    '        <button type="button" class="sp-btn hidden" id="sp-katrol-save-btn" onclick="KatrolApp_save_()">Simpan Nilai Katrol</button>' +
+    '        <button type="button" class="sp-btn secondary" onclick="KatrolApp_reset_()" style="margin-left:auto;">Reset Katrol</button>' +
+    '      </div>' +
+    '    </div>' +
+    '  </div>' +
     '</div>' +
 
     '<div class="sp-panel" id="sp-nilai-sub-rekap">' +
@@ -77,11 +99,13 @@ function NilaiApp_wire_() {
     var ctx = NilaiApp.currentContext;
     if (!ctx) return;
     var btn = f.querySelector('button[type="submit"]');
-    runServer('saveMyGradeSettings', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, f.kkm.value, f.nilai_min_target.value, f.nilai_max_target.value], {
+    runServer('saveMyGradeSettings', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, f.kkm.value, f.nilai_min_target.value, f.nilai_max_target.value, f.sumber_nilai_rapor.value], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('Pengaturan KKM & katrol disimpan.'); NilaiApp_loadGrades_(); }
+      onSuccess: function () { SIPENA_toast('Pengaturan disimpan.'); NilaiApp_loadGrades_(); }
     });
   });
+
+  document.getElementById('sp-katrol-form').addEventListener('submit', function (e) { e.preventDefault(); KatrolApp_preview_(); });
 }
 
 function NilaiApp_toggleSettings_() {
@@ -121,6 +145,7 @@ function NilaiApp_loadGrades_() {
       f.kkm.value = res.settings.kkm;
       f.nilai_min_target.value = res.settings.nilai_min_target;
       f.nilai_max_target.value = res.settings.nilai_max_target;
+      f.sumber_nilai_rapor.value = res.settings.sumber_nilai_rapor;
 
       NilaiApp.currentContext.bobotConfig = res.bobotConfig;
       NilaiApp.currentContext.assessmentLabel = res.assessmentLabel;
@@ -151,7 +176,7 @@ function NilaiApp_renderGradeTable_() {
   var cols = NilaiApp_gradeColumns_();
   var thead = '<tr><th class="sp-sticky-col sp-sticky-col-1">No</th><th class="sp-sticky-col sp-sticky-col-2">NIS</th><th class="sp-sticky-col sp-sticky-col-3">Nama</th>' +
     cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') +
-    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th></tr>';
+    '<th>Rata-rata Harian</th><th>Nilai Akhir (Murni)</th><th>Nilai Akhir (Katrol)</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th></tr>';
 
   var rows = students.map(function (s, i) {
     var pindahanNote = s.dari_sekolah_asal ? ' <span class="msg" style="margin:0;">(dari sekolah asal)</span>' : '';
@@ -167,6 +192,7 @@ function NilaiApp_renderGradeTable_() {
       cells +
       '<td id="sp-nilai-rata-' + s.siswa_id + '">' + NilaiApp_fmt_(s.rata_rata_harian) + '</td>' +
       '<td id="sp-nilai-akhir-' + s.siswa_id + '">' + NilaiApp_fmt_(s.nilai_akhir_murni) + '</td>' +
+      '<td>' + (s.nilai_akhir_katrol !== '' ? NilaiApp_fmt_(s.nilai_akhir_katrol) : '-') + '</td>' +
       '<td id="sp-nilai-status-' + s.siswa_id + '">' + NilaiApp_statusBadge_(s.status_nilai) + '</td>' +
       '<td>' + (s.nilai_kktp !== '' ? s.nilai_kktp : '-') + '</td>' +
       '<td>' + (s.kategori || '-') + '</td>' +
@@ -400,5 +426,102 @@ function NilaiApp_printRecap_() {
   document.body.classList.add('sp-printing');
   window.print();
   document.body.classList.remove('sp-printing');
+}
+
+/* ================= Katrol Nilai Akhir ================= */
+var KatrolApp = { lastPreview: null };
+
+function KatrolApp_open_() {
+  var ctx = NilaiApp.currentContext;
+  if (!ctx) { SIPENA_toast('Tampilkan tabel nilai dulu.', 'error'); return; }
+
+  var p = NilaiApp_selectedPenugasan_('sp-nilai-penugasan');
+  document.getElementById('sp-katrol-context').textContent = (p ? p.nama_mapel + ' — ' + p.nama_kelas + ' — ' + p.semester : '');
+  document.getElementById('sp-katrol-source').innerHTML = '';
+  document.getElementById('sp-katrol-preview').innerHTML = '';
+  document.getElementById('sp-katrol-uniform').classList.add('hidden');
+  document.getElementById('sp-katrol-save-btn').classList.add('hidden');
+  KatrolApp.lastPreview = null;
+
+  runServer('getMyKatrolTargetDefault', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester], {
+    onSuccess: function (def) {
+      var f = document.getElementById('sp-katrol-form');
+      f.target_min.value = def.target_min;
+      f.target_max.value = def.target_max;
+      document.getElementById('sp-katrol-overlay').classList.remove('hidden');
+      KatrolApp_preview_();
+    }
+  });
+}
+
+function KatrolApp_close_() {
+  document.getElementById('sp-katrol-overlay').classList.add('hidden');
+}
+
+function KatrolApp_preview_(uniformValue) {
+  var ctx = NilaiApp.currentContext;
+  var f = document.getElementById('sp-katrol-form');
+  var targetMin = f.target_min.value, targetMax = f.target_max.value;
+
+  runServer('getMyKatrolPreview', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, targetMin, targetMax, uniformValue], {
+    onSuccess: function (res) {
+      KatrolApp.lastPreview = res;
+      document.getElementById('sp-katrol-source').innerHTML =
+        '<div class="item"><div class="sp-detail-label">Jumlah Siswa</div><div class="sp-detail-value">' + res.jumlah_siswa + '</div></div>' +
+        '<div class="item"><div class="sp-detail-label">Nilai Murni Terendah</div><div class="sp-detail-value">' + res.source_min + '</div></div>' +
+        '<div class="item"><div class="sp-detail-label">Nilai Murni Tertinggi</div><div class="sp-detail-value">' + res.source_max + '</div></div>';
+
+      if (res.uniform && !res.students) {
+        document.getElementById('sp-katrol-uniform').classList.remove('hidden');
+        document.getElementById('sp-katrol-uniform').innerHTML = res.message +
+          '<div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+          '<button type="button" class="sp-btn secondary" onclick="KatrolApp_close_()">Tidak melakukan katrol</button>' +
+          '<input type="number" min="0" max="100" id="sp-katrol-uniform-value" placeholder="Nilai target" style="width:110px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);">' +
+          '<button type="button" class="sp-btn secondary" onclick="KatrolApp_preview_(document.getElementById(\'sp-katrol-uniform-value\').value)">Gunakan nilai target tertentu</button>' +
+          '</div>';
+        document.getElementById('sp-katrol-preview').innerHTML = '';
+        document.getElementById('sp-katrol-save-btn').classList.add('hidden');
+        return;
+      }
+
+      document.getElementById('sp-katrol-uniform').classList.add('hidden');
+      document.getElementById('sp-katrol-preview').innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>No</th><th>Nama</th><th>Nilai Murni</th><th>Nilai Katrol</th></tr></thead><tbody>' +
+        res.students.map(function (s, i) {
+          return '<tr><td>' + (i + 1) + '</td><td>' + s.nama_lengkap + '</td><td>' + s.nilai_akhir_murni + '</td><td>' + s.nilai_akhir_katrol_preview + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+      document.getElementById('sp-katrol-save-btn').classList.remove('hidden');
+    }
+  });
+}
+
+function KatrolApp_save_() {
+  var ctx = NilaiApp.currentContext;
+  var f = document.getElementById('sp-katrol-form');
+  var preview = KatrolApp.lastPreview;
+  if (!preview) { SIPENA_toast('Preview dulu sebelum menyimpan.', 'error'); return; }
+  var uniformValue = preview.uniform && preview.students ? preview.students[0].nilai_akhir_katrol_preview : undefined;
+
+  var btn = document.getElementById('sp-katrol-save-btn');
+  runServer('saveMyKatrol', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, f.target_min.value, f.target_max.value, uniformValue], {
+    loadingEl: btn,
+    onSuccess: function (res) {
+      SIPENA_toast('Katrol tersimpan untuk ' + res.jumlah_siswa + ' siswa.');
+      KatrolApp_close_();
+      NilaiApp_loadGrades_();
+    }
+  });
+}
+
+function KatrolApp_reset_() {
+  var ctx = NilaiApp.currentContext;
+  if (!ctx) return;
+  if (!confirm('Reset nilai katrol untuk kelas/mapel/periode ini? Nilai Akhir Murni tidak akan berubah.')) return;
+  runServer('resetMyKatrol', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester], {
+    onSuccess: function (res) {
+      SIPENA_toast(res.reset + ' nilai katrol direset.');
+      KatrolApp_close_();
+      NilaiApp_loadGrades_();
+    }
+  });
 }
 </script>

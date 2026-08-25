@@ -6,12 +6,14 @@
 // di bawah ini PIVOT baris-baris itu jadi tabel lebar di memori, bukan
 // mengubah skema jadi kolom tetap.
 //
-// Dua lapis katrol: (a) per-komponen (Nilai_applyKatrol_, existing, tetap
-// dipakai rekap per-jenis), (b) level Nilai Akhir (Nilai_applyFinalKatrol_,
-// baru — rescale nilai_akhir_murni sekelas). Baris sumber_nilai=SEKOLAH_ASAL
-// (nilai pindahan, jenis RAPOR_TERAKHIR) otomatis TIDAK ikut kedua lapis
-// katrol maupun rata-rata harian/Nilai Akhir, karena RAPOR_TERAKHIR bukan
-// bagian dari NILAI_HARIAN_JENIS_/PTS/ASAS-ASAT yang dipakai modul ini.
+// Dua lapis katrol, beda sifat: (a) per-komponen (Nilai_applyKatrol_, di
+// bawah, tetap otomatis di setiap saveMyGradeSheetBatch — dipakai rekap
+// per-jenis), (b) level Nilai Akhir (Katrol.gs: saveMyKatrol) — aksi
+// EKSPLISIT guru lewat panel "Katrol Nilai" dengan preview wajib, TIDAK
+// LAGI otomatis di sini. Baris sumber_nilai=SEKOLAH_ASAL (nilai pindahan,
+// jenis RAPOR_TERAKHIR) otomatis TIDAK ikut katrol manapun maupun
+// rata-rata harian/Nilai Akhir, karena RAPOR_TERAKHIR bukan bagian dari
+// NILAI_HARIAN_JENIS_/PTS/ASAS-ASAT yang dipakai modul ini.
 
 const NILAI_HARIAN_JENIS_ = ['TGS1', 'TGS2', 'TGS3', 'UH1', 'UH2', 'UH3'];
 const NILAI_DEFAULT_KKM_ = 75;
@@ -57,17 +59,19 @@ function Nilai_ensureNilaiAkhirSheet_(ss) {
 }
 
 function Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester) {
-  const row = Utils_sheetToObjects_(ss.getSheetByName('PENGATURAN')).filter(function (r) {
+  const sh = Config_ensureGuruSheetColumns_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
+  const row = Utils_sheetToObjects_(sh).filter(function (r) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
   })[0];
   return {
     kkm: row && row.kkm !== '' ? Number(row.kkm) : NILAI_DEFAULT_KKM_,
     nilai_min_target: row && row.nilai_min_target !== '' ? Number(row.nilai_min_target) : NILAI_DEFAULT_MIN_TARGET_,
-    nilai_max_target: row && row.nilai_max_target !== '' ? Number(row.nilai_max_target) : NILAI_DEFAULT_MAX_TARGET_
+    nilai_max_target: row && row.nilai_max_target !== '' ? Number(row.nilai_max_target) : NILAI_DEFAULT_MAX_TARGET_,
+    sumber_nilai_rapor: row && row.sumber_nilai_rapor === 'KATROL' ? 'KATROL' : 'MURNI'
   };
 }
 
-function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nilaiMinTarget, nilaiMaxTarget) {
+function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nilaiMinTarget, nilaiMaxTarget, sumberNilaiRapor) {
   const auth = Security_requireRole_(['GURU']);
   Nilai_validateScope_(kelasId, mapelId, tahunAjaranId, semester);
   kkm = Number(kkm); nilaiMinTarget = Number(nilaiMinTarget); nilaiMaxTarget = Number(nilaiMaxTarget);
@@ -75,14 +79,15 @@ function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nil
     throw new Error('KKM dan rentang katrol harus angka 0–100.');
   }
   if (nilaiMinTarget >= nilaiMaxTarget) throw new Error('Nilai minimum target harus lebih kecil dari maksimum.');
+  sumberNilaiRapor = sumberNilaiRapor === 'KATROL' ? 'KATROL' : 'MURNI';
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  const sh = ss.getSheetByName('PENGATURAN');
+  const sh = Config_ensureGuruSheetColumns_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
   const existing = Utils_sheetToObjects_(sh).filter(function (r) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
   })[0];
 
-  const patch = { kkm: kkm, nilai_min_target: nilaiMinTarget, nilai_max_target: nilaiMaxTarget };
+  const patch = { kkm: kkm, nilai_min_target: nilaiMinTarget, nilai_max_target: nilaiMaxTarget, sumber_nilai_rapor: sumberNilaiRapor };
   if (existing) {
     Utils_updateRowByHeader_(sh, existing._row, patch);
   } else {
@@ -187,6 +192,20 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
   }).forEach(function (r) { akhirBySiswa[r.siswa_id] = r; });
 
+  const settings = Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester);
+
+  // KKTP config cuma di-fetch ULANG (satu kali untuk seluruh kelas, bukan
+  // per siswa) kalau nilai rapor sumbernya Katrol — kategori/status yang
+  // TERSIMPAN di NILAI_AKHIR adalah snapshot berbasis MURNI (§1.5 blueprint),
+  // jadi untuk tampilan yang konsisten dengan nilai rapor Katrol perlu
+  // dihitung ulang di memori terhadap nilai_akhir_katrol memakai config
+  // KKTP yang SAMA (bukan snapshot lain) — tidak menimpa snapshot murni.
+  let liveKktpConfig = null;
+  if (settings.sumber_nilai_rapor === 'KATROL') {
+    const kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
+    if (kelasInfo) liveKktpConfig = Nilai_getKktpConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId);
+  }
+
   const rows = students.map(function (s) {
     const comps = nilaiBySiswa[s.siswa_id] || {};
     const wide = { siswa_id: s.siswa_id, nis: s.nis, nama_lengkap: s.nama_lengkap };
@@ -201,15 +220,24 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
     wide.nilai_akhir_murni = akhir && akhir.nilai_akhir_murni !== '' ? akhir.nilai_akhir_murni : '';
     wide.nilai_akhir_katrol = akhir && akhir.nilai_akhir_katrol !== '' ? akhir.nilai_akhir_katrol : '';
     wide.status_nilai = akhir ? akhir.status_nilai : 'BELUM_LENGKAP';
-    wide.nilai_kktp = akhir && akhir.nilai_kktp !== '' ? akhir.nilai_kktp : '';
-    wide.kategori = akhir ? akhir.kategori : '';
-    wide.status_ketercapaian = akhir ? akhir.status_ketercapaian : '';
+    wide.nilai_rapor = settings.sumber_nilai_rapor === 'KATROL' && wide.nilai_akhir_katrol !== '' ? wide.nilai_akhir_katrol : wide.nilai_akhir_murni;
+
+    if (liveKktpConfig && wide.nilai_akhir_katrol !== '') {
+      const live = Kktp_categorize_(wide.nilai_akhir_katrol, liveKktpConfig);
+      wide.nilai_kktp = live.nilai_kktp;
+      wide.kategori = live.kategori;
+      wide.status_ketercapaian = live.status_ketercapaian;
+    } else {
+      wide.nilai_kktp = akhir && akhir.nilai_kktp !== '' ? akhir.nilai_kktp : '';
+      wide.kategori = akhir ? akhir.kategori : '';
+      wide.status_ketercapaian = akhir ? akhir.status_ketercapaian : '';
+    }
     return wide;
   });
 
   return {
     students: rows,
-    settings: Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester),
+    settings: settings,
     bobotConfig: Nilai_getBobotConfig_(auth.sekolahId),
     assessmentLabel: assessmentLabel
   };
@@ -400,15 +428,12 @@ function saveMyGradeSheetBatch(kelasId, mapelId, tahunAjaranId, semester, rows) 
     rowArr[akhirIdx.updated_at] = now;
   });
 
-  // Katrol Nilai Akhir — rescale nilai_akhir_murni SELURUH kelas (butuh
-  // min-max sebaran kelas, tapi murni di memori, tidak ada baca tambahan).
-  const finalScopeIdxs = [];
-  akhirData.forEach(function (row, i) {
-    if (row[akhirIdx.kelas_id] === kelasId && row[akhirIdx.mapel_id] === mapelId && row[akhirIdx.tahun_ajaran_id] === tahunAjaranId && row[akhirIdx.semester] === semester) {
-      finalScopeIdxs.push(i);
-    }
-  });
-  Nilai_applyFinalKatrol_(akhirData, akhirIdx, finalScopeIdxs, settings);
+  // Katrol Nilai Akhir TIDAK LAGI otomatis di sini — sekarang aksi
+  // eksplisit guru lewat panel "Katrol Nilai" (lihat Katrol.gs:
+  // saveMyKatrol), dengan preview wajib sebelum simpan. nilai_akhir_katrol
+  // yang mungkin sudah ada untuk siswa ini dari katrol sebelumnya
+  // sengaja TIDAK disentuh di sini (baris di atas hanya menulis field
+  // rata_rata_harian/nilai_akhir_murni/status/KKTP, bukan seluruh kolom).
 
   if (akhirData.length) {
     if (akhirSh.getMaxRows() < akhirData.length + 1) akhirSh.insertRowsAfter(akhirSh.getMaxRows(), akhirData.length + 1 - akhirSh.getMaxRows());
@@ -439,31 +464,6 @@ function Nilai_applyKatrol_(dataRange, idx, scopeIdxs, settings) {
     if (isNaN(v)) return;
     const katrol = (max === min) ? v : settings.nilai_min_target + ((v - min) / (max - min)) * (settings.nilai_max_target - settings.nilai_min_target);
     dataRange[i][idx.nilai_katrol] = Math.round(katrol * 100) / 100;
-  });
-}
-
-/**
- * Nilai_applyFinalKatrol_(dataRange, idx, scopeIdxs, settings)
- * Sama seperti Nilai_applyKatrol_ tapi untuk nilai_akhir_murni →
- * nilai_akhir_katrol di sheet NILAI_AKHIR — baris dengan status
- * BELUM_LENGKAP (nilai_akhir_murni bukan angka) dilewati, katrolnya
- * dikosongkan (bukan ikut rescale sebagai 0).
- */
-function Nilai_applyFinalKatrol_(dataRange, idx, scopeIdxs, settings) {
-  const numericIdxs = scopeIdxs.filter(function (i) { return typeof dataRange[i][idx.nilai_akhir_murni] === 'number' && !isNaN(dataRange[i][idx.nilai_akhir_murni]); });
-  scopeIdxs.forEach(function (i) {
-    if (numericIdxs.indexOf(i) === -1) dataRange[i][idx.nilai_akhir_katrol] = '';
-  });
-  if (!numericIdxs.length) return;
-
-  const nums = numericIdxs.map(function (i) { return dataRange[i][idx.nilai_akhir_murni]; });
-  const min = Math.min.apply(null, nums);
-  const max = Math.max.apply(null, nums);
-
-  numericIdxs.forEach(function (i) {
-    const v = dataRange[i][idx.nilai_akhir_murni];
-    const katrol = (max === min) ? v : settings.nilai_min_target + ((v - min) / (max - min)) * (settings.nilai_max_target - settings.nilai_min_target);
-    dataRange[i][idx.nilai_akhir_katrol] = Math.round(katrol * 100) / 100;
   });
 }
 
@@ -534,13 +534,18 @@ function getMyGradeRecap(kelasId, mapelId, tahunAjaranId, semester) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
   }).forEach(function (r) { akhirBySiswa[r.siswa_id] = r; });
 
+  const sumberRapor = Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester).sumber_nilai_rapor;
+
   return students.map(function (s) {
     const akhir = akhirBySiswa[s.siswa_id];
+    const murni = akhir && akhir.nilai_akhir_murni !== '' ? akhir.nilai_akhir_murni : '';
+    const katrol = akhir && akhir.nilai_akhir_katrol !== '' ? akhir.nilai_akhir_katrol : '';
     return {
       siswa_id: s.siswa_id, nis: s.nis, nama_lengkap: s.nama_lengkap, nilai: bySiswa[s.siswa_id] || [],
       rata_rata_harian: akhir ? akhir.rata_rata_harian : '',
-      nilai_akhir_murni: akhir ? akhir.nilai_akhir_murni : '',
-      nilai_akhir_katrol: akhir ? akhir.nilai_akhir_katrol : '',
+      nilai_akhir_murni: murni,
+      nilai_akhir_katrol: katrol,
+      nilai_rapor: sumberRapor === 'KATROL' && katrol !== '' ? katrol : murni,
       status_nilai: akhir ? akhir.status_nilai : 'BELUM_LENGKAP',
       nilai_kktp: akhir ? akhir.nilai_kktp : '',
       kategori: akhir ? akhir.kategori : '',
