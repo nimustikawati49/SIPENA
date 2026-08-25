@@ -1,5 +1,7 @@
 <script>
-var NilaiApp = { initialized: false, penugasan: [], currentContext: null };
+var NilaiApp = { initialized: false, penugasan: [], currentContext: null, students: [], original: {}, dirty: {} };
+
+var NILAI_HARIAN_JENIS = ['tgs1', 'tgs2', 'tgs3', 'uh1', 'uh2', 'uh3'];
 
 function NilaiApp_init() {
   if (NilaiApp.initialized) return;
@@ -7,6 +9,15 @@ function NilaiApp_init() {
   document.getElementById('sp-guru-panel-nilai').innerHTML = NilaiApp_markup_();
   NilaiApp_wire_();
   NilaiApp_loadPenugasan_();
+}
+
+/**
+ * NilaiApp_assessmentLabel_(semester)
+ * Salinan identik Nilai_getAssessmentLabel_ di Nilai.gs — dipakai untuk
+ * preview label kolom di klien sebelum respons server datang.
+ */
+function NilaiApp_assessmentLabel_(semester) {
+  return semester === 'GENAP' ? 'ASAT' : 'ASAS';
 }
 
 function NilaiApp_markup_() {
@@ -19,10 +30,6 @@ function NilaiApp_markup_() {
     '<div class="sp-panel active" id="sp-nilai-sub-input">' +
     '  <div class="sp-form" id="sp-nilai-filter">' +
     '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Periode)</label><select id="sp-nilai-penugasan" style="min-width:280px;" required></select></div>' +
-    '    <div class="sp-field"><label>Jenis Nilai</label><select id="sp-nilai-jenis" required>' +
-    '      <option value="">Pilih</option><option value="TUGAS">Tugas</option><option value="UH">Ulangan Harian</option>' +
-    '      <option value="PTS">PTS</option><option value="SAS">SAS</option><option value="ASAT">ASAT</option><option value="LAINNYA">Lainnya</option>' +
-    '    </select></div>' +
     '    <button type="button" class="sp-btn" onclick="NilaiApp_loadGrades_()">Tampilkan</button>' +
     '  </div>' +
 
@@ -37,8 +44,7 @@ function NilaiApp_markup_() {
     '  </div>' +
 
     '  <div id="sp-nilai-table"></div>' +
-    '  <button type="button" class="sp-btn hidden" id="sp-nilai-save-btn" style="margin-top:14px;" onclick="NilaiApp_saveGrades_()">Simpan Semua Nilai</button>' +
-    '  <div id="sp-nilai-riwayat-box" style="margin-top:20px;"></div>' +
+    '  <button type="button" class="sp-btn hidden" id="sp-nilai-save-btn" style="margin-top:14px;" onclick="NilaiApp_saveGrades_()">Simpan Perubahan</button>' +
     '</div>' +
 
     '<div class="sp-panel" id="sp-nilai-sub-rekap">' +
@@ -103,74 +109,207 @@ function NilaiApp_selectedPenugasan_(selectId) {
 
 function NilaiApp_loadGrades_() {
   var p = NilaiApp_selectedPenugasan_('sp-nilai-penugasan');
-  var jenis = document.getElementById('sp-nilai-jenis').value;
   if (!p) { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
-  if (!jenis) { SIPENA_toast('Pilih jenis nilai dulu.', 'error'); return; }
 
-  NilaiApp.currentContext = { kelasId: p.kelas_id, mapelId: p.mapel_id, tahunAjaranId: p.tahun_ajaran_id, semester: p.semester, jenisNilai: jenis };
-  document.getElementById('sp-nilai-riwayat-box').innerHTML = '';
+  NilaiApp.currentContext = { kelasId: p.kelas_id, mapelId: p.mapel_id, tahunAjaranId: p.tahun_ajaran_id, semester: p.semester };
+  NilaiApp.dirty = {};
 
-  runServer('getMyGradeSheet', [p.kelas_id, p.mapel_id, p.tahun_ajaran_id, p.semester, jenis], {
+  runServer('getMyGradeSheetWide', [p.kelas_id, p.mapel_id, p.tahun_ajaran_id, p.semester], {
     onSuccess: function (res) {
       document.getElementById('sp-nilai-settings-box').classList.remove('hidden');
       var f = document.getElementById('sp-nilai-settings-form');
       f.kkm.value = res.settings.kkm;
       f.nilai_min_target.value = res.settings.nilai_min_target;
       f.nilai_max_target.value = res.settings.nilai_max_target;
-      NilaiApp_renderGradeTable_(res.students);
+
+      NilaiApp.currentContext.bobotConfig = res.bobotConfig;
+      NilaiApp.currentContext.assessmentLabel = res.assessmentLabel;
+      NilaiApp.students = res.students;
+      NilaiApp.original = {};
+      res.students.forEach(function (s) { NilaiApp.original[s.siswa_id] = Object.assign({}, s); });
+
+      NilaiApp_renderGradeTable_();
       document.getElementById('sp-nilai-save-btn').classList.toggle('hidden', res.students.length === 0);
     }
   });
 }
 
-function NilaiApp_renderGradeTable_(students) {
+function NilaiApp_gradeColumns_() {
+  var label = NilaiApp.currentContext.assessmentLabel;
+  return [
+    { key: 'tgs1', label: 'TGS 1' }, { key: 'tgs2', label: 'TGS 2' }, { key: 'tgs3', label: 'TGS 3' },
+    { key: 'uh1', label: 'UH 1' }, { key: 'uh2', label: 'UH 2' }, { key: 'uh3', label: 'UH 3' },
+    { key: 'pts', label: 'PTS' }, { key: label.toLowerCase(), label: label }
+  ];
+}
+
+function NilaiApp_renderGradeTable_() {
   var el = document.getElementById('sp-nilai-table');
+  var students = NilaiApp.students;
   if (!students.length) { el.innerHTML = '<div class="sp-empty">Belum ada siswa aktif di kelas ini. Hubungi Superadmin untuk mengelola roster.</div>'; return; }
 
-  var rows = students.map(function (s) {
-    var pindahanNote = s.sumber_nilai === 'SEKOLAH_ASAL' ? ' <span class="msg" style="margin:0;">(dari sekolah asal)</span>' : '';
-    return '<tr>' +
-      '<td>' + (s.nis || '-') + '</td>' +
-      '<td>' + s.nama_lengkap + pindahanNote + '</td>' +
-      '<td><input type="number" min="0" max="100" step="0.01" class="sp-nilai-input" data-siswa="' + s.siswa_id + '" value="' + (s.nilai_murni !== '' ? s.nilai_murni : '') + '" style="width:80px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);"></td>' +
-      '<td>' + (s.nilai_katrol !== '' ? s.nilai_katrol : '-') + '</td>' +
-      '<td>' + (s.nilai_id ? '<button type="button" class="sp-btn secondary" onclick="NilaiApp_showHistory_(\'' + s.nilai_id + '\')">Riwayat</button>' : '-') + '</td>' +
+  var cols = NilaiApp_gradeColumns_();
+  var thead = '<tr><th class="sp-sticky-col sp-sticky-col-1">No</th><th class="sp-sticky-col sp-sticky-col-2">NIS</th><th class="sp-sticky-col sp-sticky-col-3">Nama</th>' +
+    cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') +
+    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th></tr>';
+
+  var rows = students.map(function (s, i) {
+    var pindahanNote = s.dari_sekolah_asal ? ' <span class="msg" style="margin:0;">(dari sekolah asal)</span>' : '';
+    var cells = cols.map(function (c) {
+      return '<td><input type="number" min="0" max="100" step="0.01" class="sp-nilai-input" ' +
+        'data-siswa="' + s.siswa_id + '" data-col="' + c.key + '" value="' + (s[c.key] !== '' ? s[c.key] : '') + '" ' +
+        'style="width:70px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);"></td>';
+    }).join('');
+    return '<tr id="sp-nilai-row-' + s.siswa_id + '">' +
+      '<td class="sp-sticky-col sp-sticky-col-1">' + (i + 1) + '</td>' +
+      '<td class="sp-sticky-col sp-sticky-col-2">' + (s.nis || '-') + '</td>' +
+      '<td class="sp-sticky-col sp-sticky-col-3">' + s.nama_lengkap + pindahanNote + '</td>' +
+      cells +
+      '<td id="sp-nilai-rata-' + s.siswa_id + '">' + NilaiApp_fmt_(s.rata_rata_harian) + '</td>' +
+      '<td id="sp-nilai-akhir-' + s.siswa_id + '">' + NilaiApp_fmt_(s.nilai_akhir_murni) + '</td>' +
+      '<td id="sp-nilai-status-' + s.siswa_id + '">' + NilaiApp_statusBadge_(s.status_nilai) + '</td>' +
       '</tr>';
   }).join('');
 
-  el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
-    '<th>NIS</th><th>Nama</th><th>Nilai Murni</th><th>Nilai Katrol</th><th>Riwayat</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<div class="msg">Kosongkan kolom nilai untuk siswa yang belum memiliki nilai jenis ini — jangan diisi 0.</div>';
+  el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="msg">Kosongkan sel untuk siswa yang belum memiliki nilai jenis itu — jangan diisi 0. Rata-rata Harian &amp; Nilai Akhir dihitung otomatis saat mengetik, klik "Simpan Perubahan" untuk menyimpan ke database.</div>';
+
+  el.querySelectorAll('.sp-nilai-input').forEach(function (input) {
+    input.addEventListener('input', NilaiApp_onCellInput_);
+    input.addEventListener('keydown', NilaiApp_onCellKeydown_);
+  });
+}
+
+function NilaiApp_fmt_(v) {
+  if (v === '' || v === null || v === undefined || isNaN(v)) return '-';
+  var places = (NilaiApp.currentContext.bobotConfig && NilaiApp.currentContext.bobotConfig.decimal_places) || 2;
+  return Number(v).toFixed(places);
+}
+
+function NilaiApp_statusBadge_(status) {
+  if (status === 'LENGKAP') return '<span class="badge ok">Lengkap</span>';
+  return '<span class="badge danger">Belum Lengkap</span>';
+}
+
+/**
+ * NilaiApp_calcRow_(values)
+ * Salinan identik Nilai_calculateDailyAverage_/Nilai_calculateFinalScore_
+ * di Nilai.gs — preview instan di klien saat mengetik, tanpa panggilan
+ * server. Hasil akhir yang tersimpan tetap ditentukan backend saat
+ * "Simpan Perubahan" (backend adalah sumber kebenaran).
+ */
+function NilaiApp_calcDailyAverage_(values) {
+  var nums = values.filter(function (v) { return v !== '' && v !== null && v !== undefined && !isNaN(v); }).map(Number);
+  if (!nums.length) return '';
+  return nums.reduce(function (a, b) { return a + b; }, 0) / nums.length;
+}
+
+function NilaiApp_calcFinalScore_(rataHarian, pts, akhirSemester, bobotConfig) {
+  var comps = [
+    { value: rataHarian, weight: bobotConfig.bobot_harian },
+    { value: pts, weight: bobotConfig.bobot_pts },
+    { value: akhirSemester, weight: bobotConfig.bobot_akhir_semester }
+  ];
+  var available = comps.filter(function (c) { return c.value !== '' && c.value !== null && c.value !== undefined && !isNaN(c.value); });
+
+  if (bobotConfig.mode_perhitungan === 'KOMPONEN_TERSEDIA') {
+    if (!available.length) return { nilai: '', status: 'BELUM_LENGKAP' };
+    var totalWeight = available.reduce(function (s, c) { return s + c.weight; }, 0);
+    var weighted = available.reduce(function (s, c) { return s + c.value * c.weight; }, 0);
+    return { nilai: totalWeight ? weighted / totalWeight : '', status: available.length === comps.length ? 'LENGKAP' : 'BELUM_LENGKAP' };
+  }
+
+  if (available.length !== comps.length) return { nilai: '', status: 'BELUM_LENGKAP' };
+  var nilai = comps.reduce(function (s, c) { return s + c.value * c.weight; }, 0) / 100;
+  return { nilai: nilai, status: 'LENGKAP' };
+}
+
+function NilaiApp_onCellInput_(e) {
+  var input = e.target;
+  var siswaId = input.getAttribute('data-siswa');
+  var col = input.getAttribute('data-col');
+  var raw = input.value.trim();
+
+  if (raw !== '' && (isNaN(raw) || Number(raw) < 0 || Number(raw) > 100)) {
+    input.classList.add('sp-input-error');
+    input.title = 'Nilai harus antara 0–100.';
+  } else {
+    input.classList.remove('sp-input-error');
+    input.title = '';
+  }
+
+  if (!NilaiApp.dirty[siswaId]) NilaiApp.dirty[siswaId] = {};
+  NilaiApp.dirty[siswaId][col] = raw;
+
+  var row = document.getElementById('sp-nilai-row-' + siswaId);
+  if (row) row.classList.add('sp-row-dirty');
+
+  NilaiApp_recomputeRow_(siswaId);
+}
+
+function NilaiApp_valueFor_(siswaId, col) {
+  var dirtyRow = NilaiApp.dirty[siswaId];
+  if (dirtyRow && dirtyRow.hasOwnProperty(col)) return dirtyRow[col];
+  var orig = NilaiApp.original[siswaId];
+  return orig ? orig[col] : '';
+}
+
+function NilaiApp_recomputeRow_(siswaId) {
+  var harian = NILAI_HARIAN_JENIS.map(function (c) { return NilaiApp_valueFor_(siswaId, c); });
+  var rataHarian = NilaiApp_calcDailyAverage_(harian);
+  var pts = NilaiApp_valueFor_(siswaId, 'pts');
+  var label = NilaiApp.currentContext.assessmentLabel.toLowerCase();
+  var akhirSem = NilaiApp_valueFor_(siswaId, label);
+  var result = NilaiApp_calcFinalScore_(rataHarian, pts, akhirSem, NilaiApp.currentContext.bobotConfig);
+
+  var rataEl = document.getElementById('sp-nilai-rata-' + siswaId);
+  var akhirEl = document.getElementById('sp-nilai-akhir-' + siswaId);
+  var statusEl = document.getElementById('sp-nilai-status-' + siswaId);
+  if (rataEl) rataEl.textContent = NilaiApp_fmt_(rataHarian);
+  if (akhirEl) akhirEl.textContent = NilaiApp_fmt_(result.nilai);
+  if (statusEl) statusEl.innerHTML = NilaiApp_statusBadge_(result.status);
+}
+
+/**
+ * NilaiApp_onCellKeydown_(e)
+ * Enter/ArrowDown pindah ke sel yang sama baris berikutnya, ArrowUp ke
+ * baris sebelumnya — Tab dan panah kiri/kanan pakai perilaku browser
+ * bawaan.
+ */
+function NilaiApp_onCellKeydown_(e) {
+  if (e.key !== 'Enter' && e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+  e.preventDefault();
+  var input = e.target;
+  var row = input.closest('tr');
+  var targetRow = e.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling;
+  if (!targetRow) return;
+  var col = input.getAttribute('data-col');
+  var targetInput = targetRow.querySelector('.sp-nilai-input[data-col="' + col + '"]');
+  if (targetInput) targetInput.focus();
 }
 
 function NilaiApp_saveGrades_() {
   var ctx = NilaiApp.currentContext;
   if (!ctx) return;
-  var entries = Array.prototype.slice.call(document.querySelectorAll('.sp-nilai-input')).map(function (input) {
-    return { siswa_id: input.getAttribute('data-siswa'), nilai_murni: input.value };
+
+  var invalid = document.querySelector('.sp-input-error');
+  if (invalid) { SIPENA_toast('Perbaiki nilai yang tidak valid (harus 0–100) sebelum menyimpan.', 'error'); invalid.focus(); return; }
+
+  var siswaIds = Object.keys(NilaiApp.dirty);
+  if (!siswaIds.length) { SIPENA_toast('Tidak ada perubahan untuk disimpan.', 'error'); return; }
+
+  var rows = siswaIds.map(function (siswaId) {
+    var row = { siswa_id: siswaId };
+    NilaiApp_gradeColumns_().forEach(function (c) { row[c.key] = NilaiApp_valueFor_(siswaId, c.key); });
+    return row;
   });
+
   var btn = document.getElementById('sp-nilai-save-btn');
-  runServer('saveMyGrades', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, ctx.jenisNilai, entries], {
+  runServer('saveMyGradeSheetBatch', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, rows], {
     loadingEl: btn,
     onSuccess: function (res) {
-      SIPENA_toast(res.saved + ' nilai tersimpan & katrol dihitung ulang.');
+      SIPENA_toast(res.saved + ' siswa tersimpan & nilai akhir dihitung ulang.');
       NilaiApp_loadGrades_();
-    }
-  });
-}
-
-function NilaiApp_showHistory_(nilaiId) {
-  runServer('getMyGradeHistory', [nilaiId], {
-    onSuccess: function (rows) {
-      var el = document.getElementById('sp-nilai-riwayat-box');
-      if (!rows.length) { el.innerHTML = '<div class="sp-section-title" style="font-size:13px;">Riwayat Perubahan</div><div class="sp-empty">Belum pernah diubah.</div>'; return; }
-      var body = rows.map(function (r) {
-        return '<tr><td>' + new Date(r.updated_at).toLocaleString('id-ID') + '</td><td>' + r.nilai_sebelum + ' → ' + r.nilai_sesudah + '</td><td>' + r.updated_by + '</td></tr>';
-      }).join('');
-      el.innerHTML = '<div class="sp-section-title" style="font-size:13px;">Riwayat Perubahan</div>' +
-        '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Waktu</th><th>Perubahan</th><th>Oleh</th></tr></thead><tbody>' + body + '</tbody></table></div>';
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   });
 }
@@ -202,7 +341,8 @@ function NilaiApp_renderRecap_(rows) {
     '<h2 style="margin:0 0 2px;">Rekap Nilai — ' + p.nama_mapel + '</h2>' +
     '<div style="margin:0 0 16px;color:#555;">Kelas ' + p.nama_kelas + ' &middot; ' + p.semester + '</div>';
 
-  var thead = '<tr><th>NIS</th><th>Nama</th>' + jenisList.map(function (j) { return '<th>' + j + '</th>'; }).join('') + '</tr>';
+  var thead = '<tr><th>NIS</th><th>Nama</th>' + jenisList.map(function (j) { return '<th>' + j + '</th>'; }).join('') +
+    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th></tr>';
   var tbody = rows.map(function (r) {
     var byJenis = {};
     r.nilai.forEach(function (n) { byJenis[n.jenis_nilai] = n; });
@@ -211,11 +351,15 @@ function NilaiApp_renderRecap_(rows) {
       if (!n) return '<td>-</td>';
       return '<td>' + n.nilai_murni + (n.nilai_katrol !== '' ? ' / ' + n.nilai_katrol : '') + '</td>';
     }).join('');
-    return '<tr><td>' + (r.nis || '-') + '</td><td>' + r.nama_lengkap + '</td>' + cells + '</tr>';
+    var akhirCell = r.nilai_akhir_murni !== '' ? (r.nilai_akhir_murni + (r.nilai_akhir_katrol !== '' ? ' / ' + r.nilai_akhir_katrol : '')) : '-';
+    return '<tr><td>' + (r.nis || '-') + '</td><td>' + r.nama_lengkap + '</td>' + cells +
+      '<td>' + (r.rata_rata_harian !== '' ? r.rata_rata_harian : '-') + '</td>' +
+      '<td>' + akhirCell + '</td>' +
+      '<td>' + NilaiApp_statusBadge_(r.status_nilai) + '</td></tr>';
   }).join('');
 
   el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>' +
-    '<div class="msg">Format sel: nilai murni / nilai katrol.</div>';
+    '<div class="msg">Format sel komponen: nilai murni / nilai katrol.</div>';
 }
 
 /**

@@ -60,7 +60,8 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   JADWAL_MENGAJAR: ['jadwal_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'status'],
   REQUEST_JADWAL_PERUBAHAN: ['request_id', 'guru_id', 'jadwal_id_terkait', 'perubahan_json', 'alasan', 'requested_at', 'status', 'processed_by', 'processed_at', 'catatan'],
   SYNC_QUEUE: ['queue_id', 'guru_id', 'status', 'attempt', 'last_error', 'created_at', 'updated_at'],
-  AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
+  AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description'],
+  PENGATURAN_BOBOT_NILAI: ['sekolah_id', 'bobot_harian', 'bobot_pts', 'bobot_akhir_semester', 'mode_perhitungan', 'decimal_places', 'updated_at', 'updated_by']
 };
 
 // Kolom "kode" yang HARUS selalu tersimpan sebagai teks, bukan angka —
@@ -88,6 +89,7 @@ const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
   RIWAYAT_NILAI: ['riwayat_id', 'nilai_id', 'nilai_sebelum', 'nilai_sesudah', 'updated_by', 'updated_at'],
   JADWAL: ['jadwal_id', 'mapel_id', 'nama_mapel', 'kelas_id', 'nama_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'tahun_ajaran_id', 'semester', 'status'],
   PENGATURAN: ['kelas_id', 'mapel_id', 'tahun_ajaran_id', 'semester', 'kkm', 'nilai_min_target', 'nilai_max_target'],
+  NILAI_AKHIR: ['nilai_akhir_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'rata_rata_harian', 'nilai_akhir_murni', 'nilai_akhir_katrol', 'status_nilai', 'updated_at'],
   LOG: ['timestamp', 'aksi', 'keterangan']
 };
 
@@ -204,6 +206,27 @@ function Config_ensureTextFormatColumns_() {
   });
 
   props.setProperty('TEXT_FORMAT_APPLIED_V2', '1');
+}
+
+/**
+ * Config_ensureGuruSheet_(ss, sheetName)
+ * Sheet operasional guru cuma dibuat SEKALI saat provisioning
+ * (Guru_provisionSpreadsheet_) — guru yang spreadsheet-nya sudah dibuat
+ * SEBELUM sheetName ini ditambahkan ke CONFIG_GURU_OPERATIONAL_SCHEMA_
+ * tidak otomatis punya sheet ini. Self-healing murah: getSheetByName()
+ * gagal → buat sekali, sesudahnya selalu ada (tidak perlu flag versi
+ * seperti migrasi central, karena cek keberadaan sheet sendiri sudah
+ * murah dan idempoten).
+ */
+function Config_ensureGuruSheet_(ss, sheetName) {
+  let sh = ss.getSheetByName(sheetName);
+  if (sh) return sh;
+  const headers = CONFIG_GURU_OPERATIONAL_SCHEMA_[sheetName];
+  sh = ss.insertSheet(sheetName);
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sh.setFrozenRows(1);
+  sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  return sh;
 }
 
 function Config_applyTextFormat_(sh, colNames) {

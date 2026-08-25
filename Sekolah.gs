@@ -82,3 +82,49 @@ function adminUpdateSchool(sekolahId, data) {
   AuditLog_write_(auth, 'UPDATE_SCHOOL', 'Sekolah', sekolahId, JSON.stringify(patch));
   return { ok: true };
 }
+
+/**
+ * adminGetBobotNilai(sekolahId) / adminSaveBobotNilai(...)
+ * Bobot nilai akhir (harian/PTS/ASAS-ASAT) + mode perhitungan adalah
+ * kebijakan akademik SEKOLAH, jadi diatur Superadmin di sini — bukan
+ * per-guru — konsisten dengan pola SEKOLAH_PERIODE_AKTIF/MASTER_TAHUN_AJARAN
+ * yang juga domain Superadmin. Dipakai oleh Nilai_getBobotConfig_
+ * (Nilai.gs) saat menghitung Nilai Akhir guru.
+ */
+function adminGetBobotNilai(sekolahId) {
+  Security_requireRole_(['SUPERADMIN']);
+  if (!sekolahId) throw new Error('Sekolah wajib dipilih.');
+  return Nilai_getBobotConfig_(sekolahId);
+}
+
+function adminSaveBobotNilai(sekolahId, bobotHarian, bobotPts, bobotAkhirSemester, modePerhitungan, decimalPlaces) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  if (!sekolahId) throw new Error('Sekolah wajib dipilih.');
+
+  bobotHarian = Number(bobotHarian); bobotPts = Number(bobotPts); bobotAkhirSemester = Number(bobotAkhirSemester);
+  if ([bobotHarian, bobotPts, bobotAkhirSemester].some(function (v) { return isNaN(v) || v < 0 || v > 100; })) {
+    throw new Error('Bobot harus angka 0–100.');
+  }
+  if (bobotHarian + bobotPts + bobotAkhirSemester !== 100) {
+    throw new Error('Total bobot harus 100 (saat ini ' + (bobotHarian + bobotPts + bobotAkhirSemester) + ').');
+  }
+  if (NILAI_MODE_VALID_.indexOf(modePerhitungan) === -1) throw new Error('Mode perhitungan tidak valid.');
+  decimalPlaces = Number(decimalPlaces);
+  if (isNaN(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) throw new Error('Angka desimal harus 0–4.');
+
+  const sh = Config_getSheet_('PENGATURAN_BOBOT_NILAI');
+  const existing = Utils_sheetToObjects_(sh).filter(function (r) { return r.sekolah_id === sekolahId; })[0];
+  const patch = {
+    bobot_harian: bobotHarian, bobot_pts: bobotPts, bobot_akhir_semester: bobotAkhirSemester,
+    mode_perhitungan: modePerhitungan, decimal_places: decimalPlaces,
+    updated_at: new Date(), updated_by: auth.email
+  };
+  if (existing) {
+    Utils_updateRowByHeader_(sh, existing._row, patch);
+  } else {
+    Utils_appendRowByHeader_(sh, Object.assign({ sekolah_id: sekolahId }, patch));
+  }
+
+  AuditLog_write_(auth, 'UPDATE_BOBOT_NILAI', 'Sekolah', sekolahId, JSON.stringify(patch));
+  return { ok: true };
+}

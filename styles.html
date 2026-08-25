@@ -183,6 +183,19 @@
   table.sp-table tr:last-child td{ border-bottom: none; }
   .sp-empty{ padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
 
+  /* ---- Tabel Input Nilai (wide) — kolom No/NIS/Nama sticky saat scroll
+     horizontal, khusus di dalam #sp-nilai-table (offset left dihitung
+     untuk urutan kolom tetap tabel ini). ---- */
+  #sp-nilai-table .sp-sticky-col{ position: sticky; background: var(--card); z-index: 1; }
+  #sp-nilai-table thead .sp-sticky-col{ z-index: 2; }
+  #sp-nilai-table .sp-sticky-col-1{ left: 0; min-width: 36px; }
+  #sp-nilai-table .sp-sticky-col-2{ left: 36px; min-width: 70px; }
+  #sp-nilai-table .sp-sticky-col-3{ left: 106px; min-width: 140px; box-shadow: 2px 0 4px rgba(0,0,0,.06); }
+
+  .sp-row-dirty{ background: rgba(129, 140, 248, .12); }
+  .sp-row-dirty .sp-sticky-col{ background: rgba(129, 140, 248, .12); }
+  .sp-nilai-input.sp-input-error{ border-color: var(--danger) !important; background: var(--danger-bg) !important; }
+
   .sp-toast{
     position: fixed; bottom: 20px; right: 20px; padding: 12px 18px; border-radius: 10px;
     font-size: 13px; font-weight: 600; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.15); z-index: 999;

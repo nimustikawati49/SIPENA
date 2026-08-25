@@ -251,9 +251,49 @@ function SuperAdmin_panelSekolah_() {
     '  </form>' +
     '  <div class="sp-section-title">Daftar Sekolah</div>' +
     '  <div id="sp-table-sekolah"></div>' +
+
+    '  <div class="sp-section-title">Bobot Nilai Akhir per Sekolah</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Bobot Rata-rata Harian, PTS, dan ASAS/ASAT dipakai guru saat menghitung Nilai Akhir siswa — kebijakan akademik tiap sekolah, total bobot harus 100.</div>' +
+    '  <form class="sp-form" id="sp-form-bobot-nilai">' +
+    '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
+    '    <div class="sp-field"><label>Bobot Harian (%)</label><input name="bobot_harian" type="number" min="0" max="100" required></div>' +
+    '    <div class="sp-field"><label>Bobot PTS (%)</label><input name="bobot_pts" type="number" min="0" max="100" required></div>' +
+    '    <div class="sp-field"><label>Bobot ASAS/ASAT (%)</label><input name="bobot_akhir_semester" type="number" min="0" max="100" required></div>' +
+    '    <div class="sp-field"><label>Mode Perhitungan</label><select name="mode_perhitungan" required>' +
+    '      <option value="WAJIB_LENGKAP">Wajib Lengkap</option><option value="KOMPONEN_TERSEDIA">Komponen Tersedia</option>' +
+    '    </select></div>' +
+    '    <div class="sp-field"><label>Angka Desimal</label><input name="decimal_places" type="number" min="0" max="4" value="2" required></div>' +
+    '    <button class="sp-btn" type="submit">Simpan Bobot</button>' +
+    '  </form>' +
     '</div>';
 }
 function SuperAdmin_wireSekolah_() {
+  document.getElementById('sp-form-bobot-nilai').sekolah_id.addEventListener('change', function (e) {
+    var sekolahId = e.target.value;
+    var f = document.getElementById('sp-form-bobot-nilai');
+    if (!sekolahId) return;
+    runServer('adminGetBobotNilai', [sekolahId], {
+      onSuccess: function (cfg) {
+        f.bobot_harian.value = cfg.bobot_harian;
+        f.bobot_pts.value = cfg.bobot_pts;
+        f.bobot_akhir_semester.value = cfg.bobot_akhir_semester;
+        f.mode_perhitungan.value = cfg.mode_perhitungan;
+        f.decimal_places.value = cfg.decimal_places;
+      }
+    });
+  });
+  document.getElementById('sp-form-bobot-nilai').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    if (!f.sekolah_id.value) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
+    var total = Number(f.bobot_harian.value) + Number(f.bobot_pts.value) + Number(f.bobot_akhir_semester.value);
+    if (total !== 100) { SIPENA_toast('Total bobot harus 100 (saat ini ' + total + ').', 'error'); return; }
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('adminSaveBobotNilai', [f.sekolah_id.value, f.bobot_harian.value, f.bobot_pts.value, f.bobot_akhir_semester.value, f.mode_perhitungan.value, f.decimal_places.value], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Bobot nilai disimpan.'); }
+    });
+  });
   document.getElementById('sp-form-sekolah').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
