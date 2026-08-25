@@ -150,8 +150,7 @@ function SuperAdmin_buildPanels() {
     SuperAdmin_panelMapel_() +
     SuperAdmin_panelKelas_() +
     SuperAdmin_panelTahunAjaran_() +
-    SuperAdmin_panelPenugasan_() +
-    SuperAdmin_panelRombel_();
+    SuperAdmin_panelPenugasan_();
 
   SuperAdmin_wireSekolah_();
   SuperAdmin_wireGuru_();
@@ -414,67 +413,92 @@ function SuperAdmin_deleteSubject_(mapelId, namaMapel) {
   });
 }
 
-/* ---------- Kelas ---------- */
+/* ---------- Kelas (+ Generator Rombel, digabung jadi satu tab) ---------- */
 function SuperAdmin_panelKelas_() {
   return '' +
     '<div class="sp-panel" id="sp-panel-kelas">' +
-    '  <div class="sp-section-title">Tambah Kelas</div>' +
-    '  <form class="sp-form" id="sp-form-kelas">' +
+
+    '  <div class="sp-section-title">Buat Kelas — Generate Satu Tingkat</div>' +
+    '  <form class="sp-form" id="sp-form-rombel-single">' +
     '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
-    '    <div class="sp-field"><label>Nama Kelas</label><input name="nama_kelas" placeholder="7A" required></div>' +
-    '    <div class="sp-field"><label>Tingkat</label><input name="tingkat" placeholder="7"></div>' +
-    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang"><option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
-    '    <div class="sp-field"><label>Program Keahlian (SMK)</label><input name="program_keahlian"></div>' +
-    '    <button class="sp-btn" type="submit">Simpan</button>' +
-    '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditKelas_(this.form)">Batal Edit</button>' +
+    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang" id="sp-rombel-jenjang" required>' +
+    '      <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
+    '    </select></div>' +
+    '    <div class="sp-field"><label>Tingkat</label><select name="tingkat" id="sp-rombel-tingkat" required><option value="">Pilih jenjang dulu</option></select></div>' +
+    '    <div class="sp-field hidden" id="sp-rombel-smk-field"><label>Program/Konsentrasi Keahlian</label><input name="program_keahlian" placeholder="TKJ"></div>' +
+    '    <div class="sp-field"><label>Jumlah Rombel</label><input name="jumlah_rombel" type="number" min="1" max="26" value="1" style="min-width:80px;" required></div>' +
+    '    <button class="sp-btn" type="submit">Lihat Preview</button>' +
     '  </form>' +
+    '  <div id="sp-rombel-preview" class="hidden" style="margin-bottom:28px;"></div>' +
+
+    '  <div class="sp-section-title">Buat Kelas — Beberapa Tingkat Sekaligus</div>' +
+    '  <div class="sp-form" style="flex-direction:column;align-items:stretch;">' +
+    '    <div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+    '      <div class="sp-field"><label>Sekolah</label><select id="sp-rombel-batch-sekolah" data-source="sekolah" required></select></div>' +
+    '      <div class="sp-field"><label>Jenjang</label><select id="sp-rombel-batch-jenjang" required>' +
+    '        <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
+    '      </select></div>' +
+    '    </div>' +
+    '    <div id="sp-rombel-batch-rows" style="margin-top:8px;"></div>' +
+    '    <div><button type="button" class="sp-btn secondary" onclick="SuperAdmin_addRombelBatchRow_()">+ Tambah Baris Tingkat</button></div>' +
+    '  </div>' +
+    '  <button type="button" class="sp-btn" style="margin-top:10px;" onclick="SuperAdmin_previewRombelBatch_()">Lihat Preview Semua</button>' +
+    '  <div id="sp-rombel-batch-preview" class="hidden" style="margin-top:16px;margin-bottom:28px;"></div>' +
+
     '  <div class="sp-section-title">Daftar Kelas</div>' +
-    '  <div id="sp-table-kelas"></div>' +
+    '  <div id="sp-table-kelas" style="margin-bottom:20px;"></div>' +
+
+    '  <div class="hidden" id="sp-kelas-edit-box">' +
+    '    <div class="sp-section-title">Edit Kelas</div>' +
+    '    <form class="sp-form" id="sp-form-kelas-edit">' +
+    '      <div class="sp-field"><label>Nama Kelas</label><input name="nama_kelas" required></div>' +
+    '      <div class="sp-field"><label>Tingkat</label><input name="tingkat"></div>' +
+    '      <div class="sp-field"><label>Jenjang</label><select name="jenjang"><option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
+    '      <div class="sp-field"><label>Program Keahlian (SMK)</label><input name="program_keahlian"></div>' +
+    '      <div class="sp-field"><label>Status</label><select name="status"><option>AKTIF</option><option>NONAKTIF</option></select></div>' +
+    '      <button class="sp-btn" type="submit">Update</button>' +
+    '      <button type="button" class="sp-btn secondary" onclick="SuperAdmin_cancelEditKelas_()">Batal</button>' +
+    '    </form>' +
+    '  </div>' +
     '</div>';
 }
+
 function SuperAdmin_wireKelas_() {
-  document.getElementById('sp-form-kelas').addEventListener('submit', function (e) {
+  document.getElementById('sp-form-kelas-edit').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
     var editId = f.dataset.editId;
+    if (!editId) return;
+    var patch = { nama_kelas: f.nama_kelas.value, tingkat: f.tingkat.value, jenjang: f.jenjang.value, program_keahlian: f.program_keahlian.value, status: f.status.value };
     var btn = f.querySelector('button[type="submit"]');
-
-    if (editId) {
-      var patch = { nama_kelas: f.nama_kelas.value, tingkat: f.tingkat.value, jenjang: f.jenjang.value, program_keahlian: f.program_keahlian.value };
-      runServer('adminUpdateClass', [editId, patch], {
-        loadingEl: btn,
-        onSuccess: function () {
-          SIPENA_toast('Kelas diperbarui.');
-          f.sekolah_id.disabled = false;
-          SuperAdmin_clearFormEditMode_(f);
-          runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
-        }
-      });
-      return;
-    }
-
-    var data = { sekolah_id: f.sekolah_id.value, nama_kelas: f.nama_kelas.value, tingkat: f.tingkat.value, jenjang: f.jenjang.value, program_keahlian: f.program_keahlian.value };
-    runServer('adminCreateClass', [data], {
+    runServer('adminUpdateClass', [editId, patch], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('Kelas tersimpan.'); f.reset(); runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } }); }
+      onSuccess: function () {
+        SIPENA_toast('Kelas diperbarui.');
+        SuperAdmin_cancelEditKelas_();
+        runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
+      }
     });
   });
 }
-function SuperAdmin_cancelEditKelas_(form) {
-  form.sekolah_id.disabled = false;
-  SuperAdmin_clearFormEditMode_(form);
+function SuperAdmin_cancelEditKelas_() {
+  document.getElementById('sp-kelas-edit-box').classList.add('hidden');
+  document.getElementById('sp-form-kelas-edit').reset();
+  delete document.getElementById('sp-form-kelas-edit').dataset.editId;
 }
 function SuperAdmin_editClass_(kelasId) {
   var k = SuperAdmin.classes.filter(function (r) { return r.kelas_id === kelasId; })[0];
   if (!k) return;
-  var f = document.getElementById('sp-form-kelas');
-  f.sekolah_id.value = k.sekolah_id || ''; f.sekolah_id.disabled = true;
+  var f = document.getElementById('sp-form-kelas-edit');
   f.nama_kelas.value = k.nama_kelas || '';
   f.tingkat.value = k.tingkat || '';
   f.jenjang.value = k.jenjang || '';
   f.program_keahlian.value = k.program_keahlian || '';
-  SuperAdmin_setFormEditMode_(f, kelasId);
-  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  f.status.value = k.status || 'AKTIF';
+  f.dataset.editId = kelasId;
+  var box = document.getElementById('sp-kelas-edit-box');
+  box.classList.remove('hidden');
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderKelas() {
   SuperAdmin_table_('sp-table-kelas', [
@@ -692,38 +716,6 @@ function SuperAdmin_tingkatOptions_(jenjang) {
   var opts = SP_TINGKAT_OPTIONS_[jenjang] || [];
   if (!opts.length) return '<option value="">-</option>';
   return opts.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
-}
-
-function SuperAdmin_panelRombel_() {
-  return '' +
-    '<div class="sp-panel" id="sp-panel-rombel">' +
-    '  <div class="sp-section-title">Generate Satu Tingkat</div>' +
-    '  <form class="sp-form" id="sp-form-rombel-single">' +
-    '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
-    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang" id="sp-rombel-jenjang" required>' +
-    '      <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
-    '    </select></div>' +
-    '    <div class="sp-field"><label>Tingkat</label><select name="tingkat" id="sp-rombel-tingkat" required><option value="">Pilih jenjang dulu</option></select></div>' +
-    '    <div class="sp-field hidden" id="sp-rombel-smk-field"><label>Program/Konsentrasi Keahlian</label><input name="program_keahlian" placeholder="TKJ"></div>' +
-    '    <div class="sp-field"><label>Jumlah Rombel</label><input name="jumlah_rombel" type="number" min="1" max="26" value="1" style="min-width:80px;" required></div>' +
-    '    <button class="sp-btn" type="submit">Lihat Preview</button>' +
-    '  </form>' +
-    '  <div id="sp-rombel-preview" class="hidden" style="margin-bottom:28px;"></div>' +
-
-    '  <div class="sp-section-title">Generate Banyak Tingkat Sekaligus</div>' +
-    '  <div class="sp-form" style="flex-direction:column;align-items:stretch;">' +
-    '    <div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-    '      <div class="sp-field"><label>Sekolah</label><select id="sp-rombel-batch-sekolah" data-source="sekolah" required></select></div>' +
-    '      <div class="sp-field"><label>Jenjang</label><select id="sp-rombel-batch-jenjang" required>' +
-    '        <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
-    '      </select></div>' +
-    '    </div>' +
-    '    <div id="sp-rombel-batch-rows" style="margin-top:8px;"></div>' +
-    '    <div><button type="button" class="sp-btn secondary" onclick="SuperAdmin_addRombelBatchRow_()">+ Tambah Baris Tingkat</button></div>' +
-    '  </div>' +
-    '  <button type="button" class="sp-btn" style="margin-top:10px;" onclick="SuperAdmin_previewRombelBatch_()">Lihat Preview Semua</button>' +
-    '  <div id="sp-rombel-batch-preview" class="hidden" style="margin-top:16px;"></div>' +
-    '</div>';
 }
 
 function SuperAdmin_wireRombel_() {
