@@ -1,6 +1,6 @@
 <script>
 var SuperAdmin = {
-  schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: [], students: []
+  schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: [], students: [], schedules: []
 };
 
 var SP_TINGKAT_OPTIONS_ = {
@@ -52,6 +52,8 @@ function SuperAdmin_loadAll() {
   runServer('adminGetTeachers', [], { onSuccess: function (rows) { SuperAdmin.teachers = rows; SuperAdmin_renderGuru(); SuperAdmin_refreshSelects(); } });
   runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
   runServer('adminGetStudents', [], { onSuccess: function (rows) { SuperAdmin.students = rows; SuperAdmin_renderSiswa(); } });
+  runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
+  SuperAdmin_loadJadwalRequests_();
 }
 
 /* ================= helper umum ================= */
@@ -148,6 +150,7 @@ function SuperAdmin_buildPanels() {
     SuperAdmin_panelTahunAjaran_() +
     SuperAdmin_panelPenugasan_() +
     SuperAdmin_panelKenaikanKelas_() +
+    SuperAdmin_panelJadwal_() +
     SuperAdmin_panelSiswa_();
 
   SuperAdmin_wireSekolah_();
@@ -158,6 +161,7 @@ function SuperAdmin_buildPanels() {
   SuperAdmin_wirePenugasan_();
   SuperAdmin_wireRombel_();
   SuperAdmin_wireKenaikanKelas_();
+  SuperAdmin_wireJadwal_();
   SuperAdmin_wireSiswa_();
 }
 
@@ -978,6 +982,186 @@ function SuperAdmin_renderKKHistory_(rows) {
     { key: 'status', label: 'Status' }, { key: 'notes', label: 'Catatan' },
     { label: 'Diproses', render: function (r) { return r.processed_at ? new Date(r.processed_at).toLocaleString('id-ID') : '-'; } }
   ], rows, 'Belum ada riwayat kenaikan kelas.');
+}
+
+/* ---------- Jadwal ---------- */
+function SuperAdmin_panelJadwal_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-jadwal">' +
+    '  <div class="sp-section-title">Tambah Jadwal</div>' +
+    '  <form class="sp-form" id="sp-form-jadwal">' +
+    '    <div class="sp-field"><label>Guru</label><select id="sp-jadwal-guru" data-source="guru" required></select></div>' +
+    '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Tahun Ajaran)</label><select id="sp-jadwal-penugasan" style="min-width:260px;" required><option value="">Pilih guru dulu</option></select></div>' +
+    '    <div class="sp-field"><label>Hari</label><select name="hari" required><option value="">Pilih</option><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
+    '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="time" required></div>' +
+    '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="time" required></div>' +
+    '    <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
+    '    <div class="sp-field"><label>Keterangan</label><input name="keterangan"></div>' +
+    '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditJadwal_(this.form)">Batal Edit</button>' +
+    '  </form>' +
+    '  <div class="sp-section-title">Daftar Jadwal</div>' +
+    '  <div id="sp-table-jadwal" style="margin-bottom:28px;"></div>' +
+
+    '  <div class="sp-section-title">Pengajuan Perubahan Jadwal (Menunggu)</div>' +
+    '  <div id="sp-jadwal-requests-table"></div>' +
+    '</div>';
+}
+
+function SuperAdmin_wireJadwal_() {
+  document.getElementById('sp-jadwal-guru').addEventListener('change', function () {
+    SuperAdmin_refreshJadwalPenugasanOptions_(this.value);
+  });
+
+  document.getElementById('sp-form-jadwal').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var guruId = document.getElementById('sp-jadwal-guru').value;
+    var penugasanIdx = document.getElementById('sp-jadwal-penugasan').value;
+    var btn = f.querySelector('button[type="submit"]');
+    var editId = f.dataset.editId;
+
+    if (editId) {
+      var patch = { hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value, ruangan: f.ruangan.value, keterangan: f.keterangan.value };
+      runServer('adminUpdateSchedule', [editId, patch], {
+        loadingEl: btn,
+        onSuccess: function () {
+          SIPENA_toast('Jadwal diperbarui & disinkron.');
+          SuperAdmin_cancelEditJadwal_(f);
+          runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
+        }
+      });
+      return;
+    }
+
+    if (!guruId || penugasanIdx === '') { SIPENA_toast('Pilih guru dan penugasan dulu.', 'error'); return; }
+    var p = window.SuperAdmin._jadwalPenugasanOptions[Number(penugasanIdx)];
+    var data = {
+      guru_id: guruId, mapel_id: p.mapel_id, kelas_id: p.kelas_id, tahun_ajaran_id: p.tahun_ajaran_id,
+      hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value,
+      ruangan: f.ruangan.value, keterangan: f.keterangan.value
+    };
+    runServer('adminCreateSchedule', [data], {
+      loadingEl: btn,
+      onSuccess: function () {
+        SIPENA_toast('Jadwal tersimpan & disinkron ke spreadsheet guru.');
+        f.reset();
+        runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
+      }
+    });
+  });
+}
+
+function SuperAdmin_refreshJadwalPenugasanOptions_(guruId) {
+  var assignments = SuperAdmin.assignments.filter(function (a) { return a.guru_id === guruId && String(a.status).toUpperCase() === 'AKTIF'; });
+  window.SuperAdmin._jadwalPenugasanOptions = assignments;
+  var sel = document.getElementById('sp-jadwal-penugasan');
+  if (!assignments.length) { sel.innerHTML = '<option value="">Guru ini belum punya penugasan</option>'; return; }
+  sel.innerHTML = '<option value="">Pilih...</option>' + assignments.map(function (a, i) {
+    return '<option value="' + i + '">' + a.nama_mapel + ' — ' + a.nama_kelas + ' — ' + SuperAdmin_tahunAjaranLabel_(a.tahun_ajaran_id) + '</option>';
+  }).join('');
+}
+
+function SuperAdmin_cancelEditJadwal_(form) {
+  document.getElementById('sp-jadwal-guru').disabled = false;
+  document.getElementById('sp-jadwal-penugasan').disabled = false;
+  SuperAdmin_clearFormEditMode_(form);
+}
+
+function SuperAdmin_editJadwal_(jadwalId) {
+  var j = SuperAdmin.schedules.filter(function (r) { return r.jadwal_id === jadwalId; })[0];
+  if (!j) return;
+  var f = document.getElementById('sp-form-jadwal');
+  document.getElementById('sp-jadwal-guru').value = j.guru_id;
+  document.getElementById('sp-jadwal-guru').disabled = true;
+  SuperAdmin_refreshJadwalPenugasanOptions_(j.guru_id);
+  var opts = window.SuperAdmin._jadwalPenugasanOptions || [];
+  var idx = -1;
+  opts.forEach(function (a, i) { if (a.mapel_id === j.mapel_id && a.kelas_id === j.kelas_id && a.tahun_ajaran_id === j.tahun_ajaran_id) idx = i; });
+  document.getElementById('sp-jadwal-penugasan').value = idx >= 0 ? String(idx) : '';
+  document.getElementById('sp-jadwal-penugasan').disabled = true;
+  f.hari.value = j.hari;
+  f.jam_mulai.value = j.jam_mulai;
+  f.jam_selesai.value = j.jam_selesai;
+  f.ruangan.value = j.ruangan || '';
+  f.keterangan.value = j.keterangan || '';
+  SuperAdmin_setFormEditMode_(f, jadwalId);
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function SuperAdmin_renderJadwal() {
+  var el = document.getElementById('sp-table-jadwal');
+  if (!SuperAdmin.schedules.length) { el.innerHTML = '<div class="sp-empty">Belum ada jadwal.</div>'; return; }
+
+  var bySekolah = {};
+  SuperAdmin.schedules.forEach(function (r) {
+    if (!bySekolah[r.sekolah_id]) bySekolah[r.sekolah_id] = [];
+    bySekolah[r.sekolah_id].push(r);
+  });
+  var sekolahIds = Object.keys(bySekolah).sort(function (a, b) {
+    return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', a, 'nama_sekolah')
+      .localeCompare(SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', b, 'nama_sekolah'));
+  });
+
+  el.innerHTML = sekolahIds.map(function (sid) {
+    var namaSekolah = SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', sid, 'nama_sekolah') || '(Sekolah tidak diketahui)';
+    var body = bySekolah[sid].map(function (r) {
+      return '<tr><td>' + r.nama_guru + '</td><td>' + r.hari + '</td><td>' + r.jam_mulai + '–' + r.jam_selesai + '</td>' +
+        '<td>' + r.nama_mapel + '</td><td>' + r.nama_kelas + '</td><td>' + (r.ruangan || '-') + '</td>' +
+        '<td><button class="sp-btn secondary" onclick="SuperAdmin_editJadwal_(\'' + r.jadwal_id + '\')">Edit</button> ' +
+        '<button class="sp-btn secondary" onclick="SuperAdmin_deleteJadwal_(\'' + r.jadwal_id + '\')">Hapus</button></td></tr>';
+    }).join('');
+    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' +
+      '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+      '<th>Guru</th><th>Hari</th><th>Jam</th><th>Mapel</th><th>Kelas</th><th>Ruangan</th><th>Aksi</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table></div>';
+  }).join('');
+}
+
+function SuperAdmin_deleteJadwal_(jadwalId) {
+  if (!confirm('Hapus jadwal ini? Aksi ini tidak bisa dibatalkan.')) return;
+  runServer('adminDeleteSchedule', [jadwalId], {
+    onSuccess: function () {
+      SIPENA_toast('Jadwal dihapus.');
+      runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
+    }
+  });
+}
+
+function SuperAdmin_loadJadwalRequests_() {
+  runServer('adminGetScheduleRequests', ['PENDING'], { onSuccess: SuperAdmin_renderJadwalRequests_ });
+}
+
+function SuperAdmin_renderJadwalRequests_(rows) {
+  SIPENA_table_('sp-jadwal-requests-table', [
+    { key: 'nama_guru', label: 'Guru' }, { key: 'jadwal_saat_ini', label: 'Jadwal Saat Ini' },
+    { label: 'Perubahan Diminta', render: function (r) {
+        var p = JSON.parse(r.perubahan_json || '{}');
+        return (p.hari || '') + ' ' + (p.jam_mulai || '') + '-' + (p.jam_selesai || '') + (p.ruangan ? ' (' + p.ruangan + ')' : '');
+      } },
+    { key: 'alasan', label: 'Alasan' },
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_processJadwalRequest_(\'' + r.request_id + '\', \'APPROVED\')">Setujui</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_processJadwalRequest_(\'' + r.request_id + '\', \'REJECTED\')">Tolak</button>';
+      } }
+  ], rows, 'Tidak ada pengajuan yang menunggu.');
+}
+
+function SuperAdmin_processJadwalRequest_(requestId, decision) {
+  var catatan = '';
+  if (decision === 'REJECTED') {
+    catatan = prompt('Catatan penolakan (opsional):');
+    if (catatan === null) return;
+  } else if (!confirm('Setujui perubahan jadwal ini? Jadwal resmi akan langsung berubah.')) {
+    return;
+  }
+  runServer('adminProcessScheduleRequest', [requestId, decision, catatan || ''], {
+    onSuccess: function () {
+      SIPENA_toast(decision === 'APPROVED' ? 'Perubahan jadwal disetujui & diterapkan.' : 'Pengajuan ditolak.');
+      SuperAdmin_loadJadwalRequests_();
+      runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
+    }
+  });
 }
 
 /* ---------- Siswa (+ Kelola Siswa per Kelas) ---------- */

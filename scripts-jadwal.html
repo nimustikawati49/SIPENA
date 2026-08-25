@@ -1,0 +1,101 @@
+<script>
+var JadwalGuruApp = { initialized: false, schedule: [] };
+
+function JadwalGuruApp_init() {
+  if (JadwalGuruApp.initialized) return;
+  JadwalGuruApp.initialized = true;
+  document.getElementById('sp-guru-panel-jadwal').innerHTML = JadwalGuruApp_markup_();
+  JadwalGuruApp_wireForm_();
+  JadwalGuruApp_load_();
+  JadwalGuruApp_loadRequests_();
+}
+
+function JadwalGuruApp_markup_() {
+  return '' +
+    '<div class="sp-section-title">Jadwal Mengajar Saya</div>' +
+    '<div class="msg" style="margin:-6px 0 10px;">Jadwal resmi dikelola Superadmin. Kalau perlu diubah, ajukan lewat tombol "Ajukan Perubahan" — perubahan baru berlaku setelah disetujui.</div>' +
+    '<div id="sp-guru-jadwal-table"></div>' +
+
+    '<div id="sp-guru-jadwal-form-box" class="hidden" style="margin-top:16px;">' +
+    '  <div class="sp-section-title" style="font-size:14px;">Ajukan Perubahan Jadwal</div>' +
+    '  <form class="sp-form" id="sp-form-jadwal-request">' +
+    '    <div class="sp-field"><label>Hari</label><select name="hari" required><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
+    '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="time" required></div>' +
+    '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="time" required></div>' +
+    '    <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
+    '    <div class="sp-field" style="flex-basis:100%;"><label>Alasan Pengajuan</label><input name="alasan" style="width:100%;" required></div>' +
+    '    <button class="sp-btn" type="submit">Kirim Pengajuan</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-guru-jadwal-form-box\').classList.add(\'hidden\')">Batal</button>' +
+    '  </form>' +
+    '</div>' +
+
+    '<div class="sp-section-title" style="margin-top:28px;">Riwayat Pengajuan Saya</div>' +
+    '<div id="sp-guru-jadwal-requests"></div>';
+}
+
+function JadwalGuruApp_load_() {
+  runServer('getMySchedule', [], {
+    onSuccess: function (rows) {
+      JadwalGuruApp.schedule = rows;
+      JadwalGuruApp_render_(rows);
+    }
+  });
+}
+
+function JadwalGuruApp_render_(rows) {
+  SIPENA_table_('sp-guru-jadwal-table', [
+    { key: 'hari', label: 'Hari' },
+    { label: 'Jam', render: function (r) { return r.jam_mulai + ' - ' + r.jam_selesai; } },
+    { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' }, { key: 'ruangan', label: 'Ruangan' },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="JadwalGuruApp_openRequestForm_(\'' + r.jadwal_id + '\')">Ajukan Perubahan</button>'; } }
+  ], rows, 'Belum ada jadwal — hubungi Superadmin.');
+}
+
+function JadwalGuruApp_openRequestForm_(jadwalId) {
+  var j = JadwalGuruApp.schedule.filter(function (r) { return r.jadwal_id === jadwalId; })[0];
+  if (!j) return;
+  var f = document.getElementById('sp-form-jadwal-request');
+  f.dataset.jadwalId = jadwalId;
+  f.hari.value = j.hari || 'SENIN';
+  f.jam_mulai.value = j.jam_mulai || '';
+  f.jam_selesai.value = j.jam_selesai || '';
+  f.ruangan.value = j.ruangan || '';
+  f.alasan.value = '';
+  var box = document.getElementById('sp-guru-jadwal-form-box');
+  box.classList.remove('hidden');
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function JadwalGuruApp_wireForm_() {
+  document.getElementById('sp-form-jadwal-request').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var jadwalId = f.dataset.jadwalId;
+    var perubahan = { hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value, ruangan: f.ruangan.value };
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('requestScheduleChange', [jadwalId, perubahan, f.alasan.value], {
+      loadingEl: btn,
+      onSuccess: function () {
+        SIPENA_toast('Pengajuan perubahan jadwal terkirim, menunggu persetujuan Superadmin.');
+        document.getElementById('sp-guru-jadwal-form-box').classList.add('hidden');
+        JadwalGuruApp_loadRequests_();
+      }
+    });
+  });
+}
+
+function JadwalGuruApp_loadRequests_() {
+  runServer('getMyScheduleRequests', [], { onSuccess: JadwalGuruApp_renderRequests_ });
+}
+
+function JadwalGuruApp_renderRequests_(rows) {
+  SIPENA_table_('sp-guru-jadwal-requests', [
+    { label: 'Diajukan', render: function (r) { return new Date(r.requested_at).toLocaleString('id-ID'); } },
+    { label: 'Perubahan Diminta', render: function (r) {
+        var p = JSON.parse(r.perubahan_json || '{}');
+        return (p.hari || '') + ' ' + (p.jam_mulai || '') + '-' + (p.jam_selesai || '') + (p.ruangan ? ' (' + p.ruangan + ')' : '');
+      } },
+    { key: 'alasan', label: 'Alasan' }, { key: 'status', label: 'Status' }, { key: 'catatan', label: 'Catatan Superadmin' }
+  ], rows, 'Belum pernah mengajukan perubahan jadwal.');
+}
+</script>
