@@ -217,6 +217,38 @@ function Nilai_applyKatrol_(dataRange, idx, scopeIdxs, settings) {
   });
 }
 
+/**
+ * exportMyGradeRecapUrl(kelasId, mapelId, tahunAjaranId, semester)
+ * Bangun ulang rekap di server (sama seperti getMyGradeRecap) dan tulis
+ * ke sheet helper _EXPORT_REKAP di spreadsheet PRIBADI guru sendiri,
+ * lalu kembalikan URL export-xlsx-nya (lihat Utils_writeExportSheetAndGetUrl_
+ * untuk alasan kenapa server-side, bukan client-side Blob download).
+ */
+function exportMyGradeRecapUrl(kelasId, mapelId, tahunAjaranId, semester) {
+  const auth = Security_requireRole_(['GURU']);
+  const recap = getMyGradeRecap(kelasId, mapelId, tahunAjaranId, semester);
+
+  const jenisSet = {};
+  recap.forEach(function (r) { r.nilai.forEach(function (n) { jenisSet[n.jenis_nilai] = true; }); });
+  const jenisList = Object.keys(jenisSet);
+  if (!jenisList.length) throw new Error('Belum ada nilai yang diinput untuk kelas/mapel/periode ini.');
+
+  const dataRows = recap.map(function (r) {
+    const byJenis = {};
+    r.nilai.forEach(function (n) { byJenis[n.jenis_nilai] = n; });
+    const row = [r.nis || '-', r.nama_lengkap];
+    jenisList.forEach(function (j) {
+      const n = byJenis[j];
+      row.push(n ? (n.nilai_murni + (n.nilai_katrol !== '' ? ' / ' + n.nilai_katrol : '')) : '-');
+    });
+    return row;
+  });
+
+  const ss = Config_getGuruSpreadsheet_(auth.guruId);
+  const url = Utils_writeExportSheetAndGetUrl_(ss, '_EXPORT_REKAP', ['NIS', 'Nama'].concat(jenisList), dataRows);
+  return { export_url: url };
+}
+
 function getMyGradeHistory(nilaiId) {
   const auth = Security_requireRole_(['GURU']);
   const ss = Config_getGuruSpreadsheet_(auth.guruId);

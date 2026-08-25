@@ -220,31 +220,17 @@ function NilaiApp_renderRecap_(rows) {
 
 /**
  * NilaiApp_exportRecapExcel_()
- * Bangun .xlsx langsung di browser (SheetJS) dari rekap yang sedang
- * tampil — tidak perlu round-trip ke server, datanya sudah ada di
- * window.NilaiApp._rekapRows/_rekapJenisList (Phase 7: Export Nilai).
+ * Rekap ditulis ulang di SERVER ke sheet helper di spreadsheet guru
+ * sendiri, lalu dibuka lewat URL export-xlsx native Google Sheets —
+ * BUKAN client-side XLSX.writeFile, yang gagal diam-diam di dalam
+ * iframe sandbox HtmlService (lihat Utils_writeExportSheetAndGetUrl_).
  */
 function NilaiApp_exportRecapExcel_() {
-  var rows = window.NilaiApp._rekapRows, jenisList = window.NilaiApp._rekapJenisList, p = window.NilaiApp._rekapPenugasan;
-  if (!rows || !jenisList) { SIPENA_toast('Tampilkan rekap dulu.', 'error'); return; }
-
-  var aoa = [['NIS', 'Nama'].concat(jenisList)];
-  rows.forEach(function (r) {
-    var byJenis = {};
-    r.nilai.forEach(function (n) { byJenis[n.jenis_nilai] = n; });
-    var row = [r.nis || '-', r.nama_lengkap];
-    jenisList.forEach(function (j) {
-      var n = byJenis[j];
-      row.push(n ? (n.nilai_murni + (n.nilai_katrol !== '' ? ' / ' + n.nilai_katrol : '')) : '-');
-    });
-    aoa.push(row);
+  var p = window.NilaiApp._rekapPenugasan;
+  if (!window.NilaiApp._rekapRows || !p) { SIPENA_toast('Tampilkan rekap dulu.', 'error'); return; }
+  runServer('exportMyGradeRecapUrl', [p.kelas_id, p.mapel_id, p.tahun_ajaran_id, p.semester], {
+    onSuccess: function (res) { window.open(res.export_url, '_blank'); }
   });
-
-  var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 12 }, { wch: 26 }].concat(jenisList.map(function () { return { wch: 14 }; }));
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Rekap Nilai');
-  XLSX.writeFile(wb, 'Rekap_Nilai_' + p.nama_mapel + '_' + p.nama_kelas + '.xlsx');
 }
 
 /**

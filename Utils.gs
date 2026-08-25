@@ -56,6 +56,33 @@ function Utils_sheetToObjects_(sh) {
  * Utils_logError_(context, err)
  * Catat error ke sheet central _LOG_ERROR_. Tidak pernah throw.
  */
+/**
+ * Utils_writeExportSheetAndGetUrl_(ss, sheetName, headerRow, dataRows)
+ * Tulis data ke sheet helper (bikin kalau belum ada, timpa isi lama
+ * kalau sudah), lalu kembalikan URL export-xlsx NATIF Google Sheets
+ * untuk sheet itu. Dipakai untuk semua fitur "Export Excel" — client-
+ * side Blob download (mis. XLSX.writeFile) tidak bisa diandalkan jalan
+ * di dalam iframe sandbox HtmlService (Apps Script menyajikan halaman
+ * lewat iframe yang lazimnya tidak diizinkan memicu download berkas),
+ * sementara window.open() ke URL export Sheets ini adalah navigasi
+ * biasa ke domain lain sehingga tidak kena batasan itu — pola yang sama
+ * dipakai SAG (Export.js) dan sudah terbukti jalan di produksi.
+ */
+function Utils_writeExportSheetAndGetUrl_(ss, sheetName, headerRow, dataRows) {
+  let sh = ss.getSheetByName(sheetName);
+  if (!sh) {
+    sh = ss.insertSheet(sheetName);
+  } else {
+    sh.clear();
+  }
+  const allRows = [headerRow].concat(dataRows);
+  sh.getRange(1, 1, allRows.length, headerRow.length).setValues(allRows);
+  sh.getRange(1, 1, 1, headerRow.length).setFontWeight('bold');
+  sh.setFrozenRows(1);
+  try { sh.autoResizeColumns(1, headerRow.length); } catch (e) {}
+  return ss.getUrl().replace(/edit$/, 'export?format=xlsx&gid=' + sh.getSheetId());
+}
+
 function Utils_logError_(context, err) {
   try {
     const ss = Config_getCentralSpreadsheet_();

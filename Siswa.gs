@@ -82,6 +82,62 @@ function adminDeleteStudent(siswaId) {
 }
 
 /**
+ * adminGetImportTemplateUrl()
+ * Template dibuat SEKALI (cached di Script Properties) dan dipakai ulang
+ * — bukan file baru tiap klik, supaya Drive Superadmin tidak numpuk file
+ * sampah. Format generik (tidak spesifik satu sekolah); nama kelas tetap
+ * divalidasi ketat saat preview import (adminImportStudents), jadi
+ * template tidak perlu tahu daftar kelas sekolah tertentu.
+ */
+function adminGetImportTemplateUrl() {
+  Security_requireRole_(['SUPERADMIN']);
+  const props = PropertiesService.getScriptProperties();
+  let id = props.getProperty('IMPORT_TEMPLATE_SPREADSHEET_ID');
+  let ss = null;
+  if (id) {
+    try { ss = SpreadsheetApp.openById(id); } catch (e) { id = null; }
+  }
+  if (!ss) {
+    ss = SpreadsheetApp.create('SIPENA - Template Import Siswa');
+    const sh = ss.getActiveSheet();
+    sh.setName('Import Siswa');
+    sh.getRange(1, 1, 1, 4).setValues([['Kelas', 'NIS', 'Nama Lengkap', 'Jenis Kelamin (L/P)']]);
+    sh.getRange(1, 1, 1, 4).setFontWeight('bold').setBackground('#4f46e5').setFontColor('#ffffff');
+    sh.getRange(2, 1, 3, 4).setValues([
+      ['7A', '1234', 'Contoh Nama Siswa Satu', 'L'],
+      ['7A', '1235', 'Contoh Nama Siswa Dua', 'P'],
+      ['7B', '1236', 'Contoh Nama Siswa Tiga', 'L']
+    ]);
+    sh.setFrozenRows(1);
+    try { sh.autoResizeColumns(1, 4); } catch (e) {}
+    id = ss.getId();
+    props.setProperty('IMPORT_TEMPLATE_SPREADSHEET_ID', id);
+  }
+  const sh = ss.getSheetByName('Import Siswa') || ss.getSheets()[0];
+  return { export_url: ss.getUrl().replace(/edit$/, 'export?format=xlsx&gid=' + sh.getSheetId()) };
+}
+
+/**
+ * adminExportStudentsUrl(sekolahId)
+ * Export "Daftar Siswa" lewat sheet helper di spreadsheet CENTRAL
+ * (bukan bikin file baru tiap kali) — lihat Utils_writeExportSheetAndGetUrl_.
+ */
+function adminExportStudentsUrl(sekolahId) {
+  Security_requireRole_(['SUPERADMIN']);
+  const schoolById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_SEKOLAH')), 'sekolah_id');
+  let rows = Utils_sheetToObjects_(Config_getSheet_('MASTER_SISWA'));
+  if (sekolahId) rows = rows.filter(function (r) { return r.sekolah_id === sekolahId; });
+  const dataRows = rows.map(function (r) {
+    return [r.nis || '', r.nisn || '', r.nama_lengkap, (schoolById[r.sekolah_id] || {}).nama_sekolah || '-', r.jenis_kelamin || '', r.status];
+  });
+  const url = Utils_writeExportSheetAndGetUrl_(
+    Config_getCentralSpreadsheet_(), '_EXPORT_SISWA',
+    ['NIS', 'NISN', 'Nama Lengkap', 'Sekolah', 'JK', 'Status'], dataRows
+  );
+  return { export_url: url };
+}
+
+/**
  * adminImportStudents(sekolahId, rows)
  * Import massal — rows sudah divalidasi & di-preview di client
  * (SuperAdmin_previewImport_): [{nis, nisn, nama_lengkap, jenis_kelamin,

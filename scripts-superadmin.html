@@ -1226,7 +1226,7 @@ function SuperAdmin_panelSiswa_() {
     '  <div id="sp-stats-box" style="margin-bottom:28px;"></div>' +
 
     '  <div class="sp-section-title">Import Siswa (Massal)</div>' +
-    '  <div class="msg" style="margin:-6px 0 10px;">Pilih sekolah, lalu unduh template Excel, isi (Kelas, NIS, Nama Lengkap, Jenis Kelamin), dan unggah kembali — atau tempel langsung dari Excel/Sheets. Bisa sekaligus untuk beberapa kelas/tingkat (mis. kelas 7-9) dalam satu file/tempel. Kalau sekolah sudah punya tahun ajaran aktif, siswa langsung masuk roster kelasnya masing-masing.</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Unduh template Excel, isi (Kelas, NIS, Nama Lengkap, Jenis Kelamin), lalu pilih sekolah dan unggah kembali — atau tempel langsung dari Excel/Sheets. Nama kelas di kolom "Kelas" harus SAMA PERSIS dengan nama kelas yang sudah ada di sekolah itu (cek tab Kelas). Bisa sekaligus untuk beberapa kelas/tingkat (mis. kelas 7-9) dalam satu file/tempel. Kalau sekolah sudah punya tahun ajaran aktif, siswa langsung masuk roster kelasnya masing-masing.</div>' +
     '  <div class="sp-form" style="flex-direction:column;align-items:stretch;">' +
     '    <div class="sp-field"><label>Sekolah</label><select id="sp-import-sekolah" data-source="sekolah" required></select></div>' +
     '    <div>' +
@@ -1331,14 +1331,9 @@ function SuperAdmin_renderSiswa() {
 
 function SuperAdmin_exportSiswaExcel_() {
   if (!SuperAdmin.students.length) { SIPENA_toast('Belum ada siswa untuk diexport.', 'error'); return; }
-  var aoa = [['NIS', 'NISN', 'Nama Lengkap', 'Sekolah', 'JK', 'Status']];
-  SuperAdmin.students.forEach(function (r) {
-    aoa.push([r.nis || '', r.nisn || '', r.nama_lengkap, SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'), r.jenis_kelamin || '', r.status]);
+  runServer('adminExportStudentsUrl', [null], {
+    onSuccess: function (res) { window.open(res.export_url, '_blank'); }
   });
-  var ws = XLSX.utils.aoa_to_sheet(aoa);
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Daftar Siswa');
-  XLSX.writeFile(wb, 'Daftar_Siswa_SIPENA.xlsx');
 }
 
 function SuperAdmin_editSiswa_(siswaId) {
@@ -1406,30 +1401,16 @@ function SuperAdmin_renderStudentStats_(stats) {
 
 /**
  * SuperAdmin_downloadImportTemplate_()
- * Buat file .xlsx template langsung di browser (SheetJS) — tidak perlu
- * round-trip ke server. Kolom SENGAJA Kelas dulu (bukan NIS/Nama) supaya
- * kalau diisi/diurutkan per kelas di Excel, hasilnya tetap konsisten
- * dengan cara preview mengelompokkan (per kelas).
+ * Template dibuat & disimpan di server (Config_getImportTemplateUrl_)
+ * lalu dibuka lewat window.open ke URL export-xlsx native Google Sheets
+ * — BUKAN client-side XLSX.writeFile, yang gagal diam-diam kalau halaman
+ * sedang berjalan di dalam iframe sandbox HtmlService (Apps Script tidak
+ * mengizinkan iframe-nya memicu download berkas langsung).
  */
 function SuperAdmin_downloadImportTemplate_() {
-  var sekolahId = document.getElementById('sp-import-sekolah').value;
-  var classNames = SuperAdmin.classes.filter(function (k) { return k.sekolah_id === sekolahId; })
-    .map(function (k) { return k.nama_kelas; }).sort();
-  var contohKelas = classNames.length ? classNames[0] : '7A';
-
-  var aoa = [
-    ['Kelas', 'NIS', 'Nama Lengkap', 'Jenis Kelamin (L/P)'],
-    [contohKelas, '1234', 'Contoh Nama Siswa', 'L']
-  ];
-  if (classNames.length) {
-    aoa.push(['— Kelas yang tersedia di sekolah ini: ' + classNames.join(', ') + ' —', '', '', '']);
-  }
-
-  var ws = XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 28 }, { wch: 18 }];
-  var wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Import Siswa');
-  XLSX.writeFile(wb, 'Template_Import_Siswa_SIPENA.xlsx');
+  runServer('adminGetImportTemplateUrl', [], {
+    onSuccess: function (res) { window.open(res.export_url, '_blank'); }
+  });
 }
 
 function SuperAdmin_previewImport_() {
