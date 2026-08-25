@@ -46,20 +46,48 @@ const CONFIG_SUPERADMIN_BOOTSTRAP_EMAIL = 'nimustikawati49@guru.smp.belajar.id';
 const CONFIG_CENTRAL_SCHEMA_ = {
   MASTER_SUPERADMIN: ['email', 'nama', 'status', 'created_at'],
   MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
-  RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at']
+  RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at'],
+  MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'status', 'created_at', 'updated_at'],
+  MASTER_MAPEL: ['mapel_id', 'kode_mapel', 'nama_mapel', 'jenjang', 'status'],
+  MASTER_KELAS: ['kelas_id', 'sekolah_id', 'tingkat', 'nama_kelas', 'jenjang', 'program_keahlian', 'konsentrasi_keahlian', 'status'],
+  GURU_MAPEL: ['guru_mapel_id', 'guru_id', 'mapel_id', 'sekolah_id', 'tahun_ajaran_id', 'status'],
+  PENUGASAN_MENGAJAR: ['assignment_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'status'],
+  MASTER_TAHUN_AJARAN: ['tahun_ajaran_id', 'label', 'semester', 'status'],
+  SEKOLAH_PERIODE_AKTIF: ['sekolah_id', 'tahun_ajaran_id', 'semester', 'status', 'activated_at', 'activated_by'],
+  AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
+};
+
+// Sheet yang dibuat di spreadsheet PRIBADI tiap guru saat provisioning
+// (bukan sheet central). Lihat Guru.gs: Guru_provisionSpreadsheet_.
+const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
+  PROFIL: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'no_hp', 'foto_url', 'ttd_url', 'updated_at'],
+  MAPEL: ['guru_mapel_id', 'mapel_id', 'kode_mapel', 'nama_mapel', 'tahun_ajaran_id', 'status'],
+  KELAS: ['kelas_id', 'nama_kelas', 'tingkat', 'jenjang', 'status'],
+  PENUGASAN: ['assignment_id', 'mapel_id', 'nama_mapel', 'kelas_id', 'nama_kelas', 'tahun_ajaran_id', 'semester', 'status'],
+  SISWA: ['siswa_id', 'nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'kelas_id', 'status'],
+  NILAI: ['nilai_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenis_nilai', 'sumber_nilai', 'nilai_murni', 'nilai_katrol', 'asal_sekolah', 'tanggal_input', 'keterangan'],
+  RIWAYAT_NILAI: ['riwayat_id', 'nilai_id', 'nilai_sebelum', 'nilai_sesudah', 'updated_by', 'updated_at'],
+  JADWAL: ['jadwal_id', 'mapel_id', 'kelas_id', 'hari', 'jam_ke', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'tahun_ajaran_id', 'semester', 'status'],
+  PENGATURAN: ['kelas_id', 'mapel_id', 'tahun_ajaran_id', 'semester', 'kkm', 'nilai_min_target', 'nilai_max_target'],
+  LOG: ['timestamp', 'aksi', 'keterangan']
 };
 
 /**
  * Config_ensureCentralSchema_()
  * Idempoten: buat sheet + header kalau belum ada. Dipanggil dari
- * Auth_getAuth_() supaya sheet yang dibutuhkan auth selalu siap tanpa
+ * Config_getSheet_() supaya sheet yang dibutuhkan selalu siap tanpa
  * langkah setup manual terpisah.
+ *
+ * SENGAJA TIDAK di-cache dengan flag "sudah pernah jalan" — daftar sheet
+ * di CONFIG_CENTRAL_SCHEMA_ bertambah tiap fase (Phase 2 menambah
+ * MASTER_SEKOLAH dkk. di atas fondasi Phase 1). Cache semacam itu akan
+ * membuat sheet baru tidak pernah dibuat kalau flag-nya masih hidup dari
+ * deploy sebelumnya. getSheetByName() per nama itu sendiri murah (bukan
+ * baca isi sheet), jadi aman dipanggil tiap request tanpa cache.
  */
 function Config_ensureCentralSchema_() {
-  const cache = CacheService.getScriptCache();
-  if (cache.get('SCHEMA_READY')) return;
-
   const ss = Config_getCentralSpreadsheet_();
+  let createdAny = false;
   Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (name) {
     let sh = ss.getSheetByName(name);
     if (!sh) {
@@ -67,16 +95,16 @@ function Config_ensureCentralSchema_() {
       sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setValues([CONFIG_CENTRAL_SCHEMA_[name]]);
       sh.setFrozenRows(1);
       sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setFontWeight('bold');
+      createdAny = true;
     }
   });
 
-  // Hapus sheet default kosong ("Sheet1"/"Lembar1") kalau masih ada.
-  try {
-    const def = ss.getSheetByName('Sheet1') || ss.getSheetByName('Lembar1');
-    if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
-  } catch (e) {}
-
-  cache.put('SCHEMA_READY', '1', 3600);
+  if (createdAny) {
+    try {
+      const def = ss.getSheetByName('Sheet1') || ss.getSheetByName('Lembar1');
+      if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
+    } catch (e) {}
+  }
 }
 
 function Config_getSheet_(name) {

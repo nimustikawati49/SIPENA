@@ -1,0 +1,368 @@
+<script>
+var SuperAdmin = {
+  schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: []
+};
+
+function SuperAdmin_init() {
+  document.body.classList.add('sp-app-mode');
+  document.getElementById('sp-admin-app').classList.remove('hidden');
+  document.getElementById('sp-admin-email').textContent = (window.SIPENA.auth && window.SIPENA.auth.email) || '-';
+
+  document.querySelectorAll('#sp-admin-tabs .sp-tab').forEach(function (btn) {
+    btn.addEventListener('click', function () { SuperAdmin_showTab(btn.getAttribute('data-tab')); });
+  });
+
+  SuperAdmin_buildPanels();
+  SuperAdmin_loadAll();
+  SuperAdmin_showTab('sekolah');
+}
+
+function SuperAdmin_showTab(tabId) {
+  document.querySelectorAll('#sp-admin-tabs .sp-tab').forEach(function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-tab') === tabId);
+  });
+  document.querySelectorAll('#sp-admin-panels .sp-panel').forEach(function (p) {
+    p.classList.toggle('active', p.id === 'sp-panel-' + tabId);
+  });
+}
+
+function SuperAdmin_loadAll() {
+  runServer('adminGetSchools', [], { onSuccess: function (rows) { SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); } });
+  runServer('adminGetSubjects', [], { onSuccess: function (rows) { SuperAdmin.subjects = rows; SuperAdmin_renderMapel(); SuperAdmin_refreshSelects(); } });
+  runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
+  runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } });
+  runServer('adminGetTeachers', [], { onSuccess: function (rows) { SuperAdmin.teachers = rows; SuperAdmin_renderGuru(); SuperAdmin_refreshSelects(); } });
+  runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
+}
+
+/* ================= helper umum ================= */
+
+function SuperAdmin_el_(html) {
+  var t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstChild;
+}
+
+function SuperAdmin_table_(containerId, columns, rows, emptyText) {
+  var el = document.getElementById(containerId);
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="sp-empty">' + (emptyText || 'Belum ada data.') + '</div>';
+    return;
+  }
+  var thead = '<tr>' + columns.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr>';
+  var tbody = rows.map(function (r) {
+    return '<tr>' + columns.map(function (c) {
+      return '<td>' + (c.render ? c.render(r) : (r[c.key] === undefined || r[c.key] === '' ? '-' : r[c.key])) + '</td>';
+    }).join('') + '</tr>';
+  }).join('');
+  el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
+}
+
+function SuperAdmin_options_(list, valueKey, labelFn, placeholder) {
+  var opts = '<option value="">' + (placeholder || 'Pilih...') + '</option>';
+  list.forEach(function (item) {
+    opts += '<option value="' + item[valueKey] + '">' + labelFn(item) + '</option>';
+  });
+  return opts;
+}
+
+function SuperAdmin_refreshSelects() {
+  document.querySelectorAll('select[data-source="sekolah"]').forEach(function (sel) {
+    var cur = sel.value;
+    sel.innerHTML = SuperAdmin_options_(SuperAdmin.schools, 'sekolah_id', function (s) { return s.nama_sekolah + ' (' + s.jenjang + ')'; }, 'Pilih sekolah');
+    sel.value = cur;
+  });
+  document.querySelectorAll('select[data-source="mapel"]').forEach(function (sel) {
+    var cur = sel.value;
+    sel.innerHTML = SuperAdmin_options_(SuperAdmin.subjects, 'mapel_id', function (m) { return m.nama_mapel; }, 'Pilih mapel');
+    sel.value = cur;
+  });
+  document.querySelectorAll('select[data-source="kelas"]').forEach(function (sel) {
+    var cur = sel.value;
+    sel.innerHTML = SuperAdmin_options_(SuperAdmin.classes, 'kelas_id', function (k) { return k.nama_kelas; }, 'Pilih kelas');
+    sel.value = cur;
+  });
+  document.querySelectorAll('select[data-source="guru"]').forEach(function (sel) {
+    var cur = sel.value;
+    sel.innerHTML = SuperAdmin_options_(SuperAdmin.teachers, 'guru_id', function (g) { return g.nama_lengkap + ' (' + g.email + ')'; }, 'Pilih guru');
+    sel.value = cur;
+  });
+  document.querySelectorAll('select[data-source="tahunajaran"]').forEach(function (sel) {
+    var cur = sel.value;
+    sel.innerHTML = SuperAdmin_options_(SuperAdmin.academicYears, 'tahun_ajaran_id', function (t) { return t.label + ' - ' + t.semester; }, 'Pilih tahun ajaran');
+    sel.value = cur;
+  });
+}
+
+function SuperAdmin_labelFromId_(list, idKey, id, labelKey) {
+  var found = list.filter(function (r) { return r[idKey] === id; })[0];
+  return found ? found[labelKey] : id;
+}
+
+/* ================= bangun markup semua panel ================= */
+
+function SuperAdmin_buildPanels() {
+  var root = document.getElementById('sp-admin-panels');
+  root.innerHTML =
+    SuperAdmin_panelSekolah_() +
+    SuperAdmin_panelGuru_() +
+    SuperAdmin_panelMapel_() +
+    SuperAdmin_panelKelas_() +
+    SuperAdmin_panelTahunAjaran_() +
+    SuperAdmin_panelPenugasan_();
+
+  SuperAdmin_wireSekolah_();
+  SuperAdmin_wireGuru_();
+  SuperAdmin_wireMapel_();
+  SuperAdmin_wireKelas_();
+  SuperAdmin_wireTahunAjaran_();
+  SuperAdmin_wirePenugasan_();
+}
+
+/* ---------- Sekolah ---------- */
+function SuperAdmin_panelSekolah_() {
+  return '' +
+    '<div class="sp-panel active" id="sp-panel-sekolah">' +
+    '  <div class="sp-section-title">Tambah Sekolah</div>' +
+    '  <form class="sp-form" id="sp-form-sekolah">' +
+    '    <div class="sp-field"><label>NPSN</label><input name="npsn"></div>' +
+    '    <div class="sp-field"><label>Nama Sekolah</label><input name="nama_sekolah" required></div>' +
+    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang" required>' +
+    '      <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
+    '    </select></div>' +
+    '    <div class="sp-field"><label>Kabupaten</label><input name="kabupaten"></div>' +
+    '    <div class="sp-field"><label>Provinsi</label><input name="provinsi"></div>' +
+    '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '  </form>' +
+    '  <div class="sp-section-title">Daftar Sekolah</div>' +
+    '  <div id="sp-table-sekolah"></div>' +
+    '</div>';
+}
+function SuperAdmin_wireSekolah_() {
+  document.getElementById('sp-form-sekolah').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { npsn: f.npsn.value, nama_sekolah: f.nama_sekolah.value, jenjang: f.jenjang.value, kabupaten: f.kabupaten.value, provinsi: f.provinsi.value };
+    var btn = f.querySelector('button');
+    runServer('adminCreateSchool', [data], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Sekolah tersimpan.'); f.reset(); runServer('adminGetSchools', [], { onSuccess: function (rows) { SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); } }); }
+    });
+  });
+}
+function SuperAdmin_renderSekolah() {
+  SuperAdmin_table_('sp-table-sekolah', [
+    { key: 'sekolah_id', label: 'ID' }, { key: 'npsn', label: 'NPSN' },
+    { key: 'nama_sekolah', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' }
+  ], SuperAdmin.schools, 'Belum ada sekolah.');
+}
+
+/* ---------- Guru ---------- */
+function SuperAdmin_panelGuru_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-guru">' +
+    '  <div class="sp-section-title">Tambah Guru</div>' +
+    '  <form class="sp-form" id="sp-form-guru">' +
+    '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
+    '    <div class="sp-field"><label>Email</label><input name="email" type="email" required></div>' +
+    '    <div class="sp-field"><label>Nama Lengkap</label><input name="nama_lengkap" required></div>' +
+    '    <div class="sp-field"><label>NIP</label><input name="nip"></div>' +
+    '    <div class="sp-field"><label>NUPTK</label><input name="nuptk"></div>' +
+    '    <div class="sp-field"><label>Jabatan</label><input name="jabatan" value="Guru"></div>' +
+    '    <button class="sp-btn" type="submit">Simpan &amp; Provisi Spreadsheet</button>' +
+    '  </form>' +
+    '  <div class="sp-section-title">Daftar Guru</div>' +
+    '  <div id="sp-table-guru"></div>' +
+    '</div>';
+}
+function SuperAdmin_wireGuru_() {
+  document.getElementById('sp-form-guru').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { sekolah_id: f.sekolah_id.value, email: f.email.value, nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, nuptk: f.nuptk.value, jabatan: f.jabatan.value };
+    var btn = f.querySelector('button');
+    runServer('adminCreateTeacher', [data], {
+      loadingEl: btn,
+      onSuccess: function (res) {
+        SIPENA_toast(res.spreadsheet_provisioned ? 'Guru tersimpan & spreadsheet siap.' : 'Guru tersimpan, TAPI provisioning spreadsheet gagal — coba tombol "Provisi ulang" di tabel.');
+        f.reset();
+        runServer('adminGetTeachers', [], { onSuccess: function (rows) { SuperAdmin.teachers = rows; SuperAdmin_renderGuru(); SuperAdmin_refreshSelects(); } });
+      }
+    });
+  });
+}
+function SuperAdmin_renderGuru() {
+  SuperAdmin_table_('sp-table-guru', [
+    { key: 'guru_id', label: 'ID' }, { key: 'email', label: 'Email' }, { key: 'nama_lengkap', label: 'Nama' },
+    { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
+    { key: 'jabatan', label: 'Jabatan' }, { key: 'status', label: 'Status' },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_reprovision_(\'' + r.guru_id + '\')">Provisi ulang</button>'; } }
+  ], SuperAdmin.teachers, 'Belum ada guru.');
+}
+function SuperAdmin_reprovision_(guruId) {
+  runServer('adminReprovisionTeacher', [guruId], { onSuccess: function (res) { SIPENA_toast(res.note || 'Provisioning selesai.'); } });
+}
+
+/* ---------- Mapel ---------- */
+function SuperAdmin_panelMapel_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-mapel">' +
+    '  <div class="sp-section-title">Tambah Mata Pelajaran</div>' +
+    '  <form class="sp-form" id="sp-form-mapel">' +
+    '    <div class="sp-field"><label>Kode</label><input name="kode_mapel"></div>' +
+    '    <div class="sp-field"><label>Nama Mapel</label><input name="nama_mapel" required></div>' +
+    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang"><option value="">Semua</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
+    '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '  </form>' +
+    '  <div class="sp-section-title">Daftar Mata Pelajaran</div>' +
+    '  <div id="sp-table-mapel"></div>' +
+    '</div>';
+}
+function SuperAdmin_wireMapel_() {
+  document.getElementById('sp-form-mapel').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { kode_mapel: f.kode_mapel.value, nama_mapel: f.nama_mapel.value, jenjang: f.jenjang.value };
+    var btn = f.querySelector('button');
+    runServer('adminCreateSubject', [data], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Mapel tersimpan.'); f.reset(); runServer('adminGetSubjects', [], { onSuccess: function (rows) { SuperAdmin.subjects = rows; SuperAdmin_renderMapel(); SuperAdmin_refreshSelects(); } }); }
+    });
+  });
+}
+function SuperAdmin_renderMapel() {
+  SuperAdmin_table_('sp-table-mapel', [
+    { key: 'mapel_id', label: 'ID' }, { key: 'kode_mapel', label: 'Kode' },
+    { key: 'nama_mapel', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' }
+  ], SuperAdmin.subjects, 'Belum ada mata pelajaran.');
+}
+
+/* ---------- Kelas ---------- */
+function SuperAdmin_panelKelas_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-kelas">' +
+    '  <div class="sp-section-title">Tambah Kelas</div>' +
+    '  <form class="sp-form" id="sp-form-kelas">' +
+    '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
+    '    <div class="sp-field"><label>Nama Kelas</label><input name="nama_kelas" placeholder="7A" required></div>' +
+    '    <div class="sp-field"><label>Tingkat</label><input name="tingkat" placeholder="7"></div>' +
+    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang"><option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
+    '    <div class="sp-field"><label>Program Keahlian (SMK)</label><input name="program_keahlian"></div>' +
+    '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '  </form>' +
+    '  <div class="sp-section-title">Daftar Kelas</div>' +
+    '  <div id="sp-table-kelas"></div>' +
+    '</div>';
+}
+function SuperAdmin_wireKelas_() {
+  document.getElementById('sp-form-kelas').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { sekolah_id: f.sekolah_id.value, nama_kelas: f.nama_kelas.value, tingkat: f.tingkat.value, jenjang: f.jenjang.value, program_keahlian: f.program_keahlian.value };
+    var btn = f.querySelector('button');
+    runServer('adminCreateClass', [data], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Kelas tersimpan.'); f.reset(); runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } }); }
+    });
+  });
+}
+function SuperAdmin_renderKelas() {
+  SuperAdmin_table_('sp-table-kelas', [
+    { key: 'kelas_id', label: 'ID' },
+    { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
+    { key: 'nama_kelas', label: 'Nama Kelas' }, { key: 'tingkat', label: 'Tingkat' },
+    { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' }
+  ], SuperAdmin.classes, 'Belum ada kelas.');
+}
+
+/* ---------- Tahun Ajaran ---------- */
+function SuperAdmin_panelTahunAjaran_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-tahunajaran">' +
+    '  <div class="sp-section-title">Tambah Tahun Ajaran</div>' +
+    '  <form class="sp-form" id="sp-form-ta">' +
+    '    <div class="sp-field"><label>Label</label><input name="label" placeholder="2026/2027" required></div>' +
+    '    <div class="sp-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
+    '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '  </form>' +
+    '  <div class="sp-section-title">Daftar Tahun Ajaran</div>' +
+    '  <div id="sp-table-ta" style="margin-bottom:24px;"></div>' +
+    '  <div class="sp-section-title">Aktifkan Periode per Sekolah</div>' +
+    '  <form class="sp-form" id="sp-form-periode">' +
+    '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
+    '    <div class="sp-field"><label>Tahun Ajaran</label><select name="tahun_ajaran_id" data-source="tahunajaran" required></select></div>' +
+    '    <button class="sp-btn" type="submit">Aktifkan</button>' +
+    '  </form>' +
+    '</div>';
+}
+function SuperAdmin_wireTahunAjaran_() {
+  document.getElementById('sp-form-ta').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var data = { label: f.label.value, semester: f.semester.value };
+    var btn = f.querySelector('button');
+    runServer('adminCreateAcademicYear', [data], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Tahun ajaran tersimpan.'); f.reset(); runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } }); }
+    });
+  });
+  document.getElementById('sp-form-periode').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var btn = f.querySelector('button');
+    runServer('adminSetActivePeriod', [f.sekolah_id.value, f.tahun_ajaran_id.value], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Periode aktif diperbarui untuk sekolah ini.'); }
+    });
+  });
+}
+function SuperAdmin_renderTahunAjaran() {
+  SuperAdmin_table_('sp-table-ta', [
+    { key: 'tahun_ajaran_id', label: 'ID' }, { key: 'label', label: 'Label' },
+    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' }
+  ], SuperAdmin.academicYears, 'Belum ada tahun ajaran.');
+}
+
+/* ---------- Penugasan ---------- */
+function SuperAdmin_panelPenugasan_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-penugasan">' +
+    '  <div class="sp-section-title">Tambah Penugasan Mengajar</div>' +
+    '  <form class="sp-form" id="sp-form-penugasan">' +
+    '    <div class="sp-field"><label>Guru</label><select name="guru_id" data-source="guru" required></select></div>' +
+    '    <div class="sp-field"><label>Mata Pelajaran</label><select name="mapel_id" data-source="mapel" required></select></div>' +
+    '    <div class="sp-field"><label>Kelas</label><select name="kelas_id" data-source="kelas" required></select></div>' +
+    '    <div class="sp-field"><label>Tahun Ajaran</label><select name="tahun_ajaran_id" data-source="tahunajaran" required></select></div>' +
+    '    <div class="sp-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
+    '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '  </form>' +
+    '  <div class="sp-section-title">Daftar Penugasan</div>' +
+    '  <div id="sp-table-penugasan"></div>' +
+    '</div>';
+}
+function SuperAdmin_wirePenugasan_() {
+  document.getElementById('sp-form-penugasan').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var guru = SuperAdmin.teachers.filter(function (g) { return g.guru_id === f.guru_id.value; })[0];
+    if (!guru) { SIPENA_toast('Pilih guru terlebih dahulu.', 'error'); return; }
+    var data = {
+      guru_id: f.guru_id.value, mapel_id: f.mapel_id.value, kelas_id: f.kelas_id.value,
+      sekolah_id: guru.sekolah_id, tahun_ajaran_id: f.tahun_ajaran_id.value, semester: f.semester.value
+    };
+    var btn = f.querySelector('button');
+    runServer('adminCreateAssignment', [data], {
+      loadingEl: btn,
+      onSuccess: function () { SIPENA_toast('Penugasan tersimpan & disinkron ke spreadsheet guru.'); f.reset(); runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } }); }
+    });
+  });
+}
+function SuperAdmin_renderPenugasan() {
+  SuperAdmin_table_('sp-table-penugasan', [
+    { key: 'assignment_id', label: 'ID' }, { key: 'nama_guru', label: 'Guru' },
+    { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' },
+    { label: 'Tahun Ajaran', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.academicYears, 'tahun_ajaran_id', r.tahun_ajaran_id, 'label'); } },
+    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' }
+  ], SuperAdmin.assignments, 'Belum ada penugasan.');
+}
+</script>

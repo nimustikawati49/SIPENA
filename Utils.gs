@@ -73,3 +73,52 @@ function Utils_trimLogSheet_(sh, maxRows) {
     sh.deleteRows(2, dataRows - maxRows);
   } catch (e) { /* jangan sampai trim gagal ganggu proses utama */ }
 }
+
+/**
+ * Utils_appendRowByHeader_(sh, obj)
+ * Tulis satu baris sesuai urutan header sheet (bukan urutan properti obj)
+ * — supaya penambahan/penataan ulang kolom header tidak diam-diam
+ * menggeser data yang ditulis modul lama.
+ */
+function Utils_appendRowByHeader_(sh, obj) {
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h || '').toLowerCase().trim(); });
+  const row = header.map(function (key) {
+    const v = obj[key];
+    return v === undefined || v === null ? '' : v;
+  });
+  sh.appendRow(row);
+}
+
+/**
+ * Utils_findRowById_(sh, idColName, idValue)
+ * Cari nomor baris (1-based, termasuk header) berdasarkan kolom ID.
+ * Dipakai HANYA untuk lookup posisi tulis internal server — ID publik yang
+ * dikirim ke client tetap string tergenerate, bukan nomor baris ini.
+ */
+function Utils_findRowById_(sh, idColName, idValue) {
+  if (!sh || sh.getLastRow() < 2) return -1;
+  const values = sh.getDataRange().getValues();
+  const idx = Utils_headerIndex_(values[0]);
+  const col = idx[String(idColName).toLowerCase()];
+  if (col === undefined) return -1;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][col]) === String(idValue)) return i + 1;
+  }
+  return -1;
+}
+
+/**
+ * Utils_updateRowByHeader_(sh, rowNum, patch)
+ * Update sebagian kolom (patch = {kolom: nilai}) pada baris rowNum,
+ * sisanya tidak tersentuh. Selalu header-indexed.
+ */
+function Utils_updateRowByHeader_(sh, rowNum, patch) {
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h || '').toLowerCase().trim(); });
+  Object.keys(patch).forEach(function (key) {
+    const col = header.indexOf(String(key).toLowerCase());
+    if (col === -1) return;
+    sh.getRange(rowNum, col + 1).setValue(patch[key]);
+  });
+}

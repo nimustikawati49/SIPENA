@@ -41,4 +41,54 @@
   .msg{ font-size: 13px; line-height: 1.6; color: var(--text-muted); margin-top: 16px; }
   .msg.danger{ color: var(--danger); }
   .hidden{ display: none !important; }
+
+  /* ===== Admin app shell (dipakai setelah body.sp-app-mode aktif) ===== */
+  body.sp-app-mode{ display: block; padding: 0; align-items: unset; justify-content: unset; }
+  #sp-admin-app{ max-width: 1100px; margin: 0 auto; padding: 0 20px 60px; }
+  .sp-topbar{
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px;
+  }
+  .sp-topbar-brand{ display: flex; align-items: center; gap: 10px; }
+  .sp-topbar-user{ font-size: 13px; color: var(--text-muted); }
+
+  .sp-tabs{ display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .sp-tab{
+    background: none; border: none; padding: 10px 16px; font-size: 14px; font-weight: 600;
+    color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
+  }
+  .sp-tab.active{ color: var(--brand); border-bottom-color: var(--brand); }
+
+  .sp-panel{ display: none; }
+  .sp-panel.active{ display: block; }
+
+  .sp-section-title{ font-size: 15px; font-weight: 700; margin: 0 0 12px; }
+
+  .sp-form{ display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 20px; padding: 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .sp-field{ display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .sp-field label{ color: var(--text-muted); font-weight: 600; }
+  .sp-field input, .sp-field select{
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--bg); color: var(--text); font-size: 13px; min-width: 140px;
+  }
+  .sp-btn{
+    padding: 9px 16px; border: none; border-radius: 8px; background: var(--brand); color: var(--brand-fg);
+    font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  .sp-btn:disabled{ opacity: .6; cursor: default; }
+  .sp-btn.secondary{ background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+  .sp-table-wrap{ overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+  table.sp-table{ width: 100%; border-collapse: collapse; font-size: 13px; background: var(--card); }
+  table.sp-table th, table.sp-table td{ text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  table.sp-table th{ color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+  table.sp-table tr:last-child td{ border-bottom: none; }
+  .sp-empty{ padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+  .sp-toast{
+    position: fixed; bottom: 20px; right: 20px; padding: 12px 18px; border-radius: 10px;
+    font-size: 13px; font-weight: 600; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.15); z-index: 999;
+  }
+  .sp-toast-ok{ background: var(--ok); }
+  .sp-toast-error{ background: var(--danger); }
 </style>

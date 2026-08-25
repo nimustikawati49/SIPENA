@@ -1,4 +1,37 @@
 <script>
+window.SIPENA = window.SIPENA || {};
+
+/**
+ * runServer(fnName, args, opts)
+ * Satu wrapper untuk semua panggilan google.script.run — pusat toast/error
+ * handling, supaya tidak diulang inline di tiap tombol (perbaikan atas
+ * pola SAG yang menulis withSuccessHandler/withFailureHandler berulang
+ * di setiap handler).
+ */
+function runServer(fnName, args, opts) {
+  opts = opts || {};
+  if (opts.loadingEl) opts.loadingEl.disabled = true;
+  var runner = google.script.run
+    .withSuccessHandler(function (res) {
+      if (opts.loadingEl) opts.loadingEl.disabled = false;
+      if (opts.onSuccess) opts.onSuccess(res);
+    })
+    .withFailureHandler(function (err) {
+      if (opts.loadingEl) opts.loadingEl.disabled = false;
+      var msg = err && err.message ? err.message : String(err);
+      if (opts.onError) { opts.onError(msg); } else { SIPENA_toast(msg, 'error'); }
+    });
+  runner[fnName].apply(runner, args || []);
+}
+
+function SIPENA_toast(message, kind) {
+  var el = document.createElement('div');
+  el.className = 'sp-toast ' + (kind === 'error' ? 'sp-toast-error' : 'sp-toast-ok');
+  el.textContent = message;
+  document.body.appendChild(el);
+  setTimeout(function () { el.remove(); }, 4000);
+}
+
 (function () {
   function show(id) {
     ['sp-loading', 'sp-authenticated', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
@@ -24,9 +57,12 @@
       document.getElementById('sp-sekolah-id').textContent = auth.sekolahId || '-';
     }
 
-    window.SIPENA = window.SIPENA || {};
     window.SIPENA.auth = auth; // hanya untuk keperluan UI, tidak pernah dikirim balik sebagai identitas tepercaya
     show('sp-authenticated');
+
+    if (auth.role === 'SUPERADMIN' && window.SuperAdmin_init) {
+      window.SuperAdmin_init();
+    }
   }
 
   function bootApp() {
