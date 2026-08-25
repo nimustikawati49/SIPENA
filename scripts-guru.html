@@ -42,12 +42,6 @@ function GuruApp_buildContent_() {
     '<div class="msg" style="margin:-6px 0 10px;">Persentase siswa yang sudah lengkap nilainya, dihitung dari jenis nilai yang sudah mulai Anda isi per kelas/mapel. Klik "Detail" untuk lihat siapa saja yang belum, dan nilai jenis apa yang masih kosong.</div>' +
     '<div id="sp-guru-nilai-completion" style="margin-bottom:28px;"></div>' +
 
-    '<div class="sp-section-title">Mata Pelajaran Saya</div>' +
-    '<div id="sp-guru-table-mapel" style="margin-bottom:24px;"></div>' +
-
-    '<div class="sp-section-title">Penugasan Mengajar Saya</div>' +
-    '<div id="sp-guru-table-penugasan" style="margin-bottom:24px;"></div>' +
-
     '<div class="sp-section-title">Edit Profil</div>' +
     '<div class="msg" style="margin:-6px 0 10px;">Nama, NIP, NUPTK, jabatan, dan sekolah dikelola Superadmin — di sini Anda hanya bisa ubah kontak/foto/tanda tangan.</div>' +
     '<form class="sp-form" id="sp-form-guru-profil">' +
@@ -98,18 +92,14 @@ function GuruApp_render_(dash) {
     GuruApp_detailItem_('Sekolah', dash.nama_sekolah) +
     '</div>';
 
+  var mapelNames = (dash.mapel || []).map(function (m) { return m.nama_mapel; }).join(', ');
+  var kelasNames = (dash.kelas || []).map(function (k) { return k.nama_kelas; }).join(', ');
+
   document.getElementById('sp-guru-stats').innerHTML =
-    GuruApp_statTile_('Mata Pelajaran', dash.ringkasan.jumlah_mapel) +
-    GuruApp_statTile_('Kelas', dash.ringkasan.jumlah_kelas) +
+    GuruApp_statTile_('Mata Pelajaran', dash.ringkasan.jumlah_mapel, mapelNames) +
+    GuruApp_statTile_('Kelas', dash.ringkasan.jumlah_kelas, kelasNames) +
+    GuruApp_statTile_('Total Siswa', dash.ringkasan.jumlah_siswa) +
     GuruApp_statTile_('Penugasan Aktif', dash.ringkasan.jumlah_penugasan_aktif);
-
-  SIPENA_table_('sp-guru-table-mapel',
-    [{ key: 'nama_mapel', label: 'Mapel' }, { key: 'kode_mapel', label: 'Kode' }],
-    dash.mapel, 'Belum ada mata pelajaran yang diampu — hubungi Superadmin.');
-
-  SIPENA_table_('sp-guru-table-penugasan',
-    [{ key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' }, { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' }],
-    dash.penugasan, 'Belum ada penugasan mengajar — hubungi Superadmin.');
 
   var f = document.getElementById('sp-form-guru-profil');
   f.no_hp.value = p.no_hp || '';
@@ -174,9 +164,11 @@ function GuruApp_detailItem_(label, value) {
   return '<div class="item"><div class="sp-detail-label">' + label + '</div><div class="sp-detail-value">' + (value || '-') + '</div></div>';
 }
 
-function GuruApp_statTile_(label, value) {
-  return '<div class="sp-form" style="flex-direction:column;align-items:flex-start;min-width:140px;padding:14px 18px;">' +
+function GuruApp_statTile_(label, value, sublist) {
+  return '<div class="sp-form" style="flex-direction:column;align-items:flex-start;min-width:150px;max-width:230px;padding:14px 18px;">' +
     '<div style="font-size:26px;font-weight:700;color:var(--brand);">' + value + '</div>' +
-    '<div style="font-size:12px;color:var(--text-muted);">' + label + '</div></div>';
+    '<div style="font-size:12px;color:var(--text-muted);">' + label + '</div>' +
+    (sublist ? '<div style="font-size:11.5px;color:var(--text-muted);line-height:1.4;margin-top:4px;">' + sublist + '</div>' : '') +
+    '</div>';
 }
 </script>

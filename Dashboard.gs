@@ -29,6 +29,8 @@ function getMyDashboard() {
   const mapel = Utils_sheetToObjects_(ss.getSheetByName('MAPEL')).map(Dashboard_stripRow_);
   const kelas = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).map(Dashboard_stripRow_);
   const penugasan = Utils_sheetToObjects_(ss.getSheetByName('PENUGASAN')).map(Dashboard_stripRow_);
+  const jumlahSiswa = Utils_sheetToObjects_(ss.getSheetByName('SISWA'))
+    .filter(function (s) { return String(s.status).toUpperCase() !== 'NONAKTIF'; }).length;
 
   const sekolah = Utils_sheetToObjects_(Config_getSheet_('MASTER_SEKOLAH'))
     .filter(function (r) { return r.sekolah_id === profil.sekolah_id; })[0];
@@ -45,6 +47,7 @@ function getMyDashboard() {
     ringkasan: {
       jumlah_mapel: mapel.length,
       jumlah_kelas: kelas.length,
+      jumlah_siswa: jumlahSiswa,
       jumlah_penugasan_aktif: penugasan.filter(function (p) { return String(p.status).toUpperCase() === 'AKTIF'; }).length
     },
     mapel: mapel,
