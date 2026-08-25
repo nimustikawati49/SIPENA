@@ -15,6 +15,16 @@ function SuperAdmin_init() {
   SuperAdmin_buildPanels();
   SuperAdmin_loadAll();
   SuperAdmin_showTab('sekolah');
+
+  document.getElementById('sp-btn-open-db').addEventListener('click', function () {
+    runServer('adminGetCentralSpreadsheetInfo', [], {
+      onSuccess: function (info) {
+        console.log('SIPENA_MASTER info:', info);
+        SIPENA_toast('Sheet: ' + info.sheets.map(function (s) { return s.name + '(' + s.rows + ')'; }).join(', '));
+        window.open(info.url, '_blank');
+      }
+    });
+  });
 }
 
 function SuperAdmin_showTab(tabId) {

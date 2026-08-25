@@ -82,28 +82,47 @@ const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
  * di CONFIG_CENTRAL_SCHEMA_ bertambah tiap fase (Phase 2 menambah
  * MASTER_SEKOLAH dkk. di atas fondasi Phase 1). Cache semacam itu akan
  * membuat sheet baru tidak pernah dibuat kalau flag-nya masih hidup dari
- * deploy sebelumnya. getSheetByName() per nama itu sendiri murah (bukan
- * baca isi sheet), jadi aman dipanggil tiap request tanpa cache.
+ * deploy sebelumnya.
+ *
+ * DIKUNCI dengan LockService: frontend menembak beberapa adminGetXxx()
+ * sekaligus saat panel dibuka (lihat SuperAdmin_loadAll), dan tanpa lock,
+ * dua eksekusi paralel yang sama-sama melihat sheet "belum ada" bisa
+ * sama-sama memanggil insertSheet(nama yang sama) — Sheets API menolak
+ * nama sheet duplikat, jadi salah satu eksekusi gagal dengan exception.
+ * Lock singkat di sini jauh lebih murah daripada request pemanggil
+ * (adminGetSchools dkk.) gagal secara acak. getSheetByName() untuk sheet
+ * yang SUDAH ada tetap murah dan tidak butuh lock (fast path).
  */
 function Config_ensureCentralSchema_() {
   const ss = Config_getCentralSpreadsheet_();
-  let createdAny = false;
-  Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (name) {
-    let sh = ss.getSheetByName(name);
-    if (!sh) {
-      sh = ss.insertSheet(name);
-      sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setValues([CONFIG_CENTRAL_SCHEMA_[name]]);
-      sh.setFrozenRows(1);
-      sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setFontWeight('bold');
-      createdAny = true;
-    }
+  const missing = Object.keys(CONFIG_CENTRAL_SCHEMA_).filter(function (name) {
+    return !ss.getSheetByName(name);
   });
+  if (missing.length === 0) return;
 
-  if (createdAny) {
-    try {
-      const def = ss.getSheetByName('Sheet1') || ss.getSheetByName('Lembar1');
-      if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
-    } catch (e) {}
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    let createdAny = false;
+    missing.forEach(function (name) {
+      let sh = ss.getSheetByName(name);
+      if (!sh) {
+        sh = ss.insertSheet(name);
+        sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setValues([CONFIG_CENTRAL_SCHEMA_[name]]);
+        sh.setFrozenRows(1);
+        sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setFontWeight('bold');
+        createdAny = true;
+      }
+    });
+
+    if (createdAny) {
+      try {
+        const def = ss.getSheetByName('Sheet1') || ss.getSheetByName('Lembar1');
+        if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
+      } catch (e) {}
+    }
+  } finally {
+    lock.releaseLock();
   }
 }
 
