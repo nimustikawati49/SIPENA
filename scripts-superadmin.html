@@ -147,6 +147,7 @@ function SuperAdmin_buildPanels() {
     SuperAdmin_panelKelas_() +
     SuperAdmin_panelTahunAjaran_() +
     SuperAdmin_panelPenugasan_() +
+    SuperAdmin_panelKenaikanKelas_() +
     SuperAdmin_panelSiswa_();
 
   SuperAdmin_wireSekolah_();
@@ -156,6 +157,7 @@ function SuperAdmin_buildPanels() {
   SuperAdmin_wireTahunAjaran_();
   SuperAdmin_wirePenugasan_();
   SuperAdmin_wireRombel_();
+  SuperAdmin_wireKenaikanKelas_();
   SuperAdmin_wireSiswa_();
 }
 
@@ -844,6 +846,138 @@ function SuperAdmin_deleteAssignment_(assignmentId) {
       runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
     }
   });
+}
+
+/* ---------- Kenaikan Kelas ---------- */
+function SuperAdmin_panelKenaikanKelas_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-kenaikankelas">' +
+    '  <div class="sp-section-title">Proses Kenaikan Kelas</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Petakan kelas lama ke kelas tujuan (atau LULUS/ALUMNI untuk kelas terakhir). Tidak menghapus/mengubah riwayat lama — hanya menambah riwayat baru. Saat preview, hilangkan centang siswa yang TIDAK ikut naik kali ini (mis. tinggal kelas) — urus mereka manual lewat "Kelola Siswa per Kelas".</div>' +
+    '  <div class="sp-form" style="flex-direction:column;align-items:stretch;">' +
+    '    <div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+    '      <div class="sp-field"><label>Sekolah</label><select id="sp-kk-sekolah" data-source="sekolah" required></select></div>' +
+    '      <div class="sp-field"><label>Tahun Ajaran Lama</label><select id="sp-kk-ta-lama" data-source="tahunajaran" required></select></div>' +
+    '      <div class="sp-field"><label>Tahun Ajaran Baru</label><select id="sp-kk-ta-baru" data-source="tahunajaran" required></select></div>' +
+    '    </div>' +
+    '    <div id="sp-kk-mapping-rows" style="margin-top:8px;"></div>' +
+    '    <div><button type="button" class="sp-btn secondary" onclick="SuperAdmin_addKKMappingRow_()">+ Tambah Baris Pemetaan Kelas</button></div>' +
+    '  </div>' +
+    '  <button type="button" class="sp-btn" style="margin-top:10px;" onclick="SuperAdmin_previewKenaikanKelas_()">Lihat Preview</button>' +
+    '  <div id="sp-kk-preview" class="hidden" style="margin-top:16px;"></div>' +
+
+    '  <div class="sp-section-title" style="margin-top:32px;">Riwayat Kenaikan Kelas</div>' +
+    '  <div class="sp-form">' +
+    '    <div class="sp-field"><label>Sekolah</label><select id="sp-kk-history-sekolah" data-source="sekolah" required></select></div>' +
+    '    <button type="button" class="sp-btn secondary" onclick="SuperAdmin_loadKKHistory_()">Tampilkan</button>' +
+    '  </div>' +
+    '  <div id="sp-kk-history-table"></div>' +
+    '</div>';
+}
+
+function SuperAdmin_wireKenaikanKelas_() {
+  document.getElementById('sp-kk-sekolah').addEventListener('change', function () {
+    document.getElementById('sp-kk-mapping-rows').innerHTML = '';
+    document.getElementById('sp-kk-preview').classList.add('hidden');
+  });
+}
+
+function SuperAdmin_addKKMappingRow_() {
+  var sekolahId = document.getElementById('sp-kk-sekolah').value;
+  if (!sekolahId) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
+  var classes = SuperAdmin.classes.filter(function (k) { return k.sekolah_id === sekolahId; });
+  var kelasOptions = SuperAdmin_options_(classes, 'kelas_id', function (k) { return k.nama_kelas; }, 'Pilih kelas');
+  var tujuanOptions = kelasOptions + '<option value="LULUS">— LULUS / ALUMNI —</option>';
+
+  var container = document.getElementById('sp-kk-mapping-rows');
+  var row = document.createElement('div');
+  row.className = 'sp-kk-row';
+  row.style.cssText = 'display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;';
+  row.innerHTML =
+    '<div class="sp-field"><label>Kelas Lama</label><select class="sp-kk-lama">' + kelasOptions + '</select></div>' +
+    '<div class="sp-field"><label>Kelas Tujuan</label><select class="sp-kk-tujuan">' + tujuanOptions + '</select></div>' +
+    '<button type="button" class="sp-btn secondary" onclick="this.closest(\'.sp-kk-row\').remove()">Hapus Baris</button>';
+  container.appendChild(row);
+}
+
+function SuperAdmin_previewKenaikanKelas_() {
+  var sekolahId = document.getElementById('sp-kk-sekolah').value;
+  var taLama = document.getElementById('sp-kk-ta-lama').value;
+  var taBaru = document.getElementById('sp-kk-ta-baru').value;
+  if (!sekolahId || !taLama || !taBaru) { SIPENA_toast('Lengkapi sekolah, tahun ajaran lama, dan tahun ajaran baru.', 'error'); return; }
+  if (taLama === taBaru) { SIPENA_toast('Tahun ajaran lama dan baru harus berbeda.', 'error'); return; }
+
+  var mapping = [];
+  document.querySelectorAll('#sp-kk-mapping-rows .sp-kk-row').forEach(function (row) {
+    mapping.push({ kelas_lama_id: row.querySelector('.sp-kk-lama').value, kelas_tujuan_id: row.querySelector('.sp-kk-tujuan').value });
+  });
+  if (!mapping.length) { SIPENA_toast('Tambah minimal satu baris pemetaan kelas.', 'error'); return; }
+
+  runServer('adminPreviewKenaikanKelas', [sekolahId, taLama, taBaru, mapping], {
+    onSuccess: function (plan) {
+      window.SuperAdmin._kkCtx = { sekolahId: sekolahId, taLama: taLama, taBaru: taBaru, mapping: mapping };
+      SuperAdmin_renderKKPreview_(plan);
+    }
+  });
+}
+
+function SuperAdmin_renderKKPreview_(plan) {
+  var el = document.getElementById('sp-kk-preview');
+  var totalSiswa = 0;
+  var html = '<div class="sp-form" style="flex-direction:column;align-items:stretch;">';
+  plan.mapping.forEach(function (m) {
+    totalSiswa += m.siswa.length;
+    html += '<div style="padding:10px 0;border-bottom:1px solid var(--border);">';
+    html += '<div style="font-weight:700;">' + m.nama_kelas_lama + ' &rarr; ' + m.nama_kelas_tujuan + ' (' + m.siswa.length + ' siswa)</div>';
+    if (!m.siswa.length) {
+      html += '<div class="msg">Tidak ada siswa aktif di kelas ini untuk tahun ajaran lama.</div>';
+    } else {
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:6px;max-height:160px;overflow-y:auto;">' +
+        m.siswa.map(function (s) {
+          return '<label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:13px;">' +
+            '<input type="checkbox" class="sp-kk-siswa-cb" checked value="' + s.siswa_id + '"> ' + s.nama_lengkap + (s.nis ? ' (' + s.nis + ')' : '') + '</label>';
+        }).join('') + '</div>';
+    }
+    html += '</div>';
+  });
+  html += '<div class="msg">Kosongkan centang untuk siswa yang TIDAK ikut naik kelas kali ini.</div>';
+  html += '<div style="display:flex;gap:10px;margin-top:12px;">';
+  html += '<button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-kk-preview\').classList.add(\'hidden\')">Batal</button>';
+  if (totalSiswa) html += '<button type="button" class="sp-btn" onclick="SuperAdmin_confirmKenaikanKelas_()">Proses Kenaikan Kelas</button>';
+  html += '</div></div>';
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+function SuperAdmin_confirmKenaikanKelas_() {
+  var ctx = window.SuperAdmin._kkCtx;
+  if (!ctx) return;
+  var excluded = Array.prototype.slice.call(document.querySelectorAll('.sp-kk-siswa-cb'))
+    .filter(function (cb) { return !cb.checked; }).map(function (cb) { return cb.value; });
+  if (!confirm('Proses kenaikan kelas sekarang? Riwayat kelas lama tidak akan diubah, hanya ditambah riwayat baru untuk tahun ajaran baru.')) return;
+
+  runServer('adminExecuteKenaikanKelas', [ctx.sekolahId, ctx.taLama, ctx.taBaru, ctx.mapping, excluded], {
+    onSuccess: function (res) {
+      SIPENA_toast(res.promoted + ' siswa naik kelas, ' + res.lulus + ' lulus/alumni' + (res.excluded ? ', ' + res.excluded + ' dikecualikan' : '') + '.');
+      document.getElementById('sp-kk-preview').classList.add('hidden');
+      document.getElementById('sp-kk-mapping-rows').innerHTML = '';
+    }
+  });
+}
+
+function SuperAdmin_loadKKHistory_() {
+  var sekolahId = document.getElementById('sp-kk-history-sekolah').value;
+  if (!sekolahId) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
+  runServer('adminGetKenaikanKelasHistory', [sekolahId], { onSuccess: SuperAdmin_renderKKHistory_ });
+}
+
+function SuperAdmin_renderKKHistory_(rows) {
+  SIPENA_table_('sp-kk-history-table', [
+    { label: 'Tahun Lama', render: function (r) { return SuperAdmin_tahunAjaranLabel_(r.tahun_ajaran_lama); } },
+    { label: 'Tahun Baru', render: function (r) { return SuperAdmin_tahunAjaranLabel_(r.tahun_ajaran_baru); } },
+    { key: 'status', label: 'Status' }, { key: 'notes', label: 'Catatan' },
+    { label: 'Diproses', render: function (r) { return r.processed_at ? new Date(r.processed_at).toLocaleString('id-ID') : '-'; } }
+  ], rows, 'Belum ada riwayat kenaikan kelas.');
 }
 
 /* ---------- Siswa (+ Kelola Siswa per Kelas) ---------- */
