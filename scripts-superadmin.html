@@ -37,7 +37,7 @@ function SuperAdmin_showTab(tabId) {
 }
 
 function SuperAdmin_loadAll() {
-  runServer('adminGetSchools', [], { onSuccess: function (rows) { SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); } });
+  runServer('adminGetSchools', [], { onSuccess: function (rows) { console.log('adminGetSchools ->', rows); SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); }, onError: function (msg) { console.error('adminGetSchools FAILED:', msg); SIPENA_toast('Gagal muat sekolah: ' + msg, 'error'); } });
   runServer('adminGetSubjects', [], { onSuccess: function (rows) { SuperAdmin.subjects = rows; SuperAdmin_renderMapel(); SuperAdmin_refreshSelects(); } });
   runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
   runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } });
@@ -156,7 +156,13 @@ function SuperAdmin_wireSekolah_() {
     var btn = f.querySelector('button');
     runServer('adminCreateSchool', [data], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('Sekolah tersimpan.'); f.reset(); runServer('adminGetSchools', [], { onSuccess: function (rows) { SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); } }); }
+      onSuccess: function () {
+        SIPENA_toast('Sekolah tersimpan.'); f.reset();
+        runServer('adminGetSchools', [], {
+          onSuccess: function (rows) { console.log('refetch adminGetSchools ->', rows); SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); },
+          onError: function (msg) { console.error('refetch adminGetSchools FAILED:', msg); SIPENA_toast('Tersimpan, tapi gagal muat ulang daftar: ' + msg, 'error'); }
+        });
+      }
     });
   });
 }

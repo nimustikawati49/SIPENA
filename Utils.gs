@@ -37,7 +37,15 @@ function Utils_sheetToObjects_(sh) {
   const rows = [];
   for (let i = 1; i < values.length; i++) {
     const obj = {};
-    header.forEach(function (key, c) { obj[key] = values[i][c]; });
+    header.forEach(function (key, c) {
+      const v = values[i][c];
+      // Sel bertipe tanggal (created_at/updated_at dsb.) diserialisasi jadi
+      // ISO string di sini, bukan dikirim sebagai Date mentah — Date yang
+      // bersarang di dalam array-of-objects lewat batas google.script.run
+      // dikenal tidak selalu ter-marshal dengan benar (bisa membuat SELURUH
+      // response gagal tanpa pesan error yang jelas di client).
+      obj[key] = (v instanceof Date) ? v.toISOString() : v;
+    });
     obj._row = i + 1; // hanya untuk keperluan internal update-by-position, TIDAK dipakai sebagai ID publik
     rows.push(obj);
   }
