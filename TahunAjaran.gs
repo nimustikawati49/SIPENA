@@ -29,6 +29,33 @@ function adminCreateAcademicYear(data) {
 }
 
 /**
+ * adminDeleteAcademicYear(tahunAjaranId)
+ * Ditolak kalau masih dipakai di GURU_MAPEL/PENUGASAN_MENGAJAR/
+ * SEKOLAH_PERIODE_AKTIF mana pun.
+ */
+function adminDeleteAcademicYear(tahunAjaranId) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_getSheet_('MASTER_TAHUN_AJARAN');
+  const ta = Utils_sheetToObjects_(sh).filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; })[0];
+  if (!ta) throw new Error('Tahun ajaran tidak ditemukan.');
+
+  const guruMapelCount = Utils_sheetToObjects_(Config_getSheet_('GURU_MAPEL')).filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; }).length;
+  const penugasanCount = Utils_sheetToObjects_(Config_getSheet_('PENUGASAN_MENGAJAR')).filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; }).length;
+  const periodeCount = Utils_sheetToObjects_(Config_getSheet_('SEKOLAH_PERIODE_AKTIF')).filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; }).length;
+
+  if (guruMapelCount > 0 || penugasanCount > 0 || periodeCount > 0) {
+    throw new Error(
+      'Tahun ajaran tidak bisa dihapus: dipakai di ' + penugasanCount + ' penugasan, ' + guruMapelCount +
+      ' data guru-mapel, dan diaktifkan di ' + periodeCount + ' sekolah.'
+    );
+  }
+
+  Utils_deleteRowById_(sh, 'tahun_ajaran_id', tahunAjaranId);
+  AuditLog_write_(auth, 'DELETE_ACADEMIC_YEAR', 'TahunAjaran', tahunAjaranId, ta.label + ' ' + ta.semester);
+  return { ok: true };
+}
+
+/**
  * adminSetActivePeriod(sekolahId, tahunAjaranId)
  * Set periode aktif SATU sekolah — tidak menyentuh sekolah lain (mandat
  * "tiap sekolah bisa aktifkan tahun ajaran di tanggal berbeda").

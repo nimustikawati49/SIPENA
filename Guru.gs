@@ -76,6 +76,46 @@ function adminUpdateTeacher(guruId, data) {
 }
 
 /**
+ * adminDeleteTeacher(guruId)
+ * Ditolak kalau guru masih punya penugasan/mapel apa pun — mandat "jangan
+ * hapus histori" berlaku begitu penugasan pernah dibuat (audit log, sync
+ * ke spreadsheet guru lain, dst. sudah mereferensikan guru_id ini).
+ * Kalau belum pernah dipakai sama sekali (baru dibuat), aman dihapus.
+ *
+ * Spreadsheet pribadi guru SENGAJA TIDAK ikut dihapus dari Drive di sini
+ * — penghapusan file lewat kode tanpa konfirmasi eksplisit di UI terlalu
+ * berisiko/tidak mudah dibatalkan. Hanya pemetaannya di RESOURCE_MAP yang
+ * dilepas; spreadsheet-nya tetap ada di Drive Superadmin kalau perlu
+ * dibersihkan manual.
+ */
+function adminDeleteTeacher(guruId) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_getSheet_('MASTER_GURU');
+  const guru = Utils_sheetToObjects_(sh).filter(function (r) { return r.guru_id === guruId; })[0];
+  if (!guru) throw new Error('Guru tidak ditemukan.');
+
+  const guruMapelCount = Utils_sheetToObjects_(Config_getSheet_('GURU_MAPEL')).filter(function (r) { return r.guru_id === guruId; }).length;
+  const penugasanCount = Utils_sheetToObjects_(Config_getSheet_('PENUGASAN_MENGAJAR')).filter(function (r) { return r.guru_id === guruId; }).length;
+
+  if (guruMapelCount > 0 || penugasanCount > 0) {
+    throw new Error(
+      'Guru tidak bisa dihapus permanen: masih punya ' + penugasanCount + ' penugasan mengajar dan ' +
+      guruMapelCount + ' data mapel. Hapus dulu penugasannya, atau ubah status guru ini jadi NONAKTIF supaya histori tetap aman.'
+    );
+  }
+
+  Utils_deleteRowById_(sh, 'guru_id', guruId);
+  const mapSheet = Config_getSheet_('RESOURCE_MAP');
+  if (Utils_findRowById_(mapSheet, 'guru_id', guruId) !== -1) {
+    Utils_deleteRowById_(mapSheet, 'guru_id', guruId);
+  }
+
+  Auth_invalidateCache_(guru.email);
+  AuditLog_write_(auth, 'DELETE_TEACHER', 'Guru', guruId, guru.email);
+  return { ok: true };
+}
+
+/**
  * adminReprovisionTeacher(guruId)
  * Coba lagi provisioning kalau gagal saat create (lihat try/catch di
  * atas). Idempoten: tidak membuat spreadsheet baru kalau RESOURCE_MAP

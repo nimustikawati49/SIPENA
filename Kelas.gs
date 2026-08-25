@@ -32,6 +32,28 @@ function adminCreateClass(data) {
   return { kelas_id: kelasId };
 }
 
+/**
+ * adminDeleteClass(kelasId)
+ * Ditolak kalau masih dipakai di PENUGASAN_MENGAJAR mana pun.
+ */
+function adminDeleteClass(kelasId) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_getSheet_('MASTER_KELAS');
+  const kelas = Utils_sheetToObjects_(sh).filter(function (r) { return r.kelas_id === kelasId; })[0];
+  if (!kelas) throw new Error('Kelas tidak ditemukan.');
+
+  const penugasanCount = Utils_sheetToObjects_(Config_getSheet_('PENUGASAN_MENGAJAR'))
+    .filter(function (r) { return r.kelas_id === kelasId; }).length;
+
+  if (penugasanCount > 0) {
+    throw new Error('Kelas tidak bisa dihapus: masih dipakai di ' + penugasanCount + ' penugasan mengajar. Hapus/ubah dulu penugasan itu.');
+  }
+
+  Utils_deleteRowById_(sh, 'kelas_id', kelasId);
+  AuditLog_write_(auth, 'DELETE_CLASS', 'Kelas', kelasId, kelas.nama_kelas);
+  return { ok: true };
+}
+
 function adminUpdateClass(kelasId, data) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   const sh = Config_getSheet_('MASTER_KELAS');

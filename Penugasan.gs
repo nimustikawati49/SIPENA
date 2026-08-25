@@ -85,6 +85,25 @@ function adminUpdateAssignment(assignmentId, data) {
   return { ok: true };
 }
 
+/**
+ * adminDeleteAssignment(assignmentId)
+ * PENUGASAN_MENGAJAR adalah record "daun" (belum ada yang mereferensikan
+ * assignment_id-nya di sheet lain), jadi aman dihapus langsung tanpa
+ * guard referensi — tapi tetap perlu Sync_teacherData_ supaya baris di
+ * spreadsheet pribadi guru ikut hilang, bukan jadi data basi.
+ */
+function adminDeleteAssignment(assignmentId) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_getSheet_('PENUGASAN_MENGAJAR');
+  const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.assignment_id === assignmentId; })[0];
+  if (!row) throw new Error('Penugasan tidak ditemukan.');
+
+  Utils_deleteRowById_(sh, 'assignment_id', assignmentId);
+  AuditLog_write_(auth, 'DELETE_ASSIGNMENT', 'Penugasan', assignmentId, row.guru_id + '/' + row.mapel_id + '/' + row.kelas_id);
+  Sync_teacherData_(row.guru_id);
+  return { ok: true };
+}
+
 function Penugasan_ensureGuruMapel_(guruId, mapelId, sekolahId, tahunAjaranId) {
   const sh = Config_getSheet_('GURU_MAPEL');
   const existing = Utils_sheetToObjects_(sh).filter(function (r) {

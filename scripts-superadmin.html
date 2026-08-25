@@ -223,11 +223,23 @@ function SuperAdmin_renderGuru() {
     { key: 'guru_id', label: 'ID' }, { key: 'email', label: 'Email' }, { key: 'nama_lengkap', label: 'Nama' },
     { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
     { key: 'jabatan', label: 'Jabatan' }, { key: 'status', label: 'Status' },
-    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_reprovision_(\'' + r.guru_id + '\')">Provisi ulang</button>'; } }
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_reprovision_(\'' + r.guru_id + '\')">Provisi ulang</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteTeacher_(\'' + r.guru_id + '\', \'' + String(r.nama_lengkap).replace(/'/g, "\\'") + '\')">Hapus</button>';
+      } }
   ], SuperAdmin.teachers, 'Belum ada guru.');
 }
 function SuperAdmin_reprovision_(guruId) {
   runServer('adminReprovisionTeacher', [guruId], { onSuccess: function (res) { SIPENA_toast(res.note || 'Provisioning selesai.'); } });
+}
+function SuperAdmin_deleteTeacher_(guruId, namaLengkap) {
+  if (!confirm('Hapus guru "' + namaLengkap + '"? Aksi ini tidak bisa dibatalkan (spreadsheet pribadinya tetap aman di Drive).')) return;
+  runServer('adminDeleteTeacher', [guruId], {
+    onSuccess: function () {
+      SIPENA_toast('Guru dihapus.');
+      runServer('adminGetTeachers', [], { onSuccess: function (rows) { SuperAdmin.teachers = rows; SuperAdmin_renderGuru(); SuperAdmin_refreshSelects(); } });
+    }
+  });
 }
 
 /* ---------- Mapel ---------- */
@@ -260,8 +272,18 @@ function SuperAdmin_wireMapel_() {
 function SuperAdmin_renderMapel() {
   SuperAdmin_table_('sp-table-mapel', [
     { key: 'mapel_id', label: 'ID' }, { key: 'kode_mapel', label: 'Kode' },
-    { key: 'nama_mapel', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' }
+    { key: 'nama_mapel', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteSubject_(\'' + r.mapel_id + '\', \'' + String(r.nama_mapel).replace(/'/g, "\\'") + '\')">Hapus</button>'; } }
   ], SuperAdmin.subjects, 'Belum ada mata pelajaran.');
+}
+function SuperAdmin_deleteSubject_(mapelId, namaMapel) {
+  if (!confirm('Hapus mata pelajaran "' + namaMapel + '"? Aksi ini tidak bisa dibatalkan.')) return;
+  runServer('adminDeleteSubject', [mapelId], {
+    onSuccess: function () {
+      SIPENA_toast('Mata pelajaran dihapus.');
+      runServer('adminGetSubjects', [], { onSuccess: function (rows) { SuperAdmin.subjects = rows; SuperAdmin_renderMapel(); SuperAdmin_refreshSelects(); } });
+    }
+  });
 }
 
 /* ---------- Kelas ---------- */
@@ -298,8 +320,18 @@ function SuperAdmin_renderKelas() {
     { key: 'kelas_id', label: 'ID' },
     { label: 'Sekolah', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'); } },
     { key: 'nama_kelas', label: 'Nama Kelas' }, { key: 'tingkat', label: 'Tingkat' },
-    { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' }
+    { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteClass_(\'' + r.kelas_id + '\', \'' + String(r.nama_kelas).replace(/'/g, "\\'") + '\')">Hapus</button>'; } }
   ], SuperAdmin.classes, 'Belum ada kelas.');
+}
+function SuperAdmin_deleteClass_(kelasId, namaKelas) {
+  if (!confirm('Hapus kelas "' + namaKelas + '"? Aksi ini tidak bisa dibatalkan.')) return;
+  runServer('adminDeleteClass', [kelasId], {
+    onSuccess: function () {
+      SIPENA_toast('Kelas dihapus.');
+      runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
+    }
+  });
 }
 
 /* ---------- Tahun Ajaran ---------- */
@@ -346,8 +378,18 @@ function SuperAdmin_wireTahunAjaran_() {
 function SuperAdmin_renderTahunAjaran() {
   SuperAdmin_table_('sp-table-ta', [
     { key: 'tahun_ajaran_id', label: 'ID' }, { key: 'label', label: 'Label' },
-    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' }
+    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAcademicYear_(\'' + r.tahun_ajaran_id + '\', \'' + String(r.label).replace(/'/g, "\\'") + ' ' + r.semester + '\')">Hapus</button>'; } }
   ], SuperAdmin.academicYears, 'Belum ada tahun ajaran.');
+}
+function SuperAdmin_deleteAcademicYear_(tahunAjaranId, label) {
+  if (!confirm('Hapus tahun ajaran "' + label + '"? Aksi ini tidak bisa dibatalkan.')) return;
+  runServer('adminDeleteAcademicYear', [tahunAjaranId], {
+    onSuccess: function () {
+      SIPENA_toast('Tahun ajaran dihapus.');
+      runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } });
+    }
+  });
 }
 
 /* ---------- Penugasan ---------- */
@@ -389,7 +431,17 @@ function SuperAdmin_renderPenugasan() {
     { key: 'assignment_id', label: 'ID' }, { key: 'nama_guru', label: 'Guru' },
     { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' },
     { label: 'Tahun Ajaran', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.academicYears, 'tahun_ajaran_id', r.tahun_ajaran_id, 'label'); } },
-    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' }
+    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAssignment_(\'' + r.assignment_id + '\')">Hapus</button>'; } }
   ], SuperAdmin.assignments, 'Belum ada penugasan.');
+}
+function SuperAdmin_deleteAssignment_(assignmentId) {
+  if (!confirm('Hapus penugasan ini? Aksi ini tidak bisa dibatalkan.')) return;
+  runServer('adminDeleteAssignment', [assignmentId], {
+    onSuccess: function () {
+      SIPENA_toast('Penugasan dihapus.');
+      runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
+    }
+  });
 }
 </script>
