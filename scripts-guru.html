@@ -108,7 +108,8 @@ function GuruApp_render_(dash) {
     '  <div class="sp-profile-info">' +
     '    <div class="sp-profile-name">' + (p.nama_lengkap || '-') + '</div>' +
     '    <div class="sp-profile-meta"><span class="sp-role-badge role-guru">Guru</span>' +
-           (p.jabatan ? ' · ' + p.jabatan : '') + (dash.nama_sekolah ? ' · ' + dash.nama_sekolah : '') +
+           (p.jabatan && String(p.jabatan).trim().toLowerCase() !== 'guru' ? ' · ' + p.jabatan : '') +
+           (dash.nama_sekolah ? ' · ' + dash.nama_sekolah : '') +
     '    </div>' +
     '  </div>' +
     '</div>';

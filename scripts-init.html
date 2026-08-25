@@ -162,6 +162,28 @@ function SIPENA_toggleCornerPanel_(triggerId, panelId) {
   }
 }
 
+/**
+ * SIPENA_toggleSidebar_(btn)
+ * Ciutkan/perluas sidebar kiri jadi ikon saja — state disimpan di
+ * localStorage supaya tetap konsisten antar reload/tab, berlaku untuk
+ * sidebar Superadmin maupun Guru (yang mana pun sedang tampil).
+ */
+function SIPENA_toggleSidebar_(btn) {
+  var sidebar = btn.closest('.sp-sidebar');
+  if (!sidebar) return;
+  var collapsed = sidebar.classList.toggle('collapsed');
+  btn.setAttribute('title', collapsed ? 'Perluas menu' : 'Ciutkan menu');
+  try { localStorage.setItem('sipena_sidebar_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+
+(function () {
+  try {
+    if (localStorage.getItem('sipena_sidebar_collapsed') === '1') {
+      document.querySelectorAll('.sp-sidebar').forEach(function (s) { s.classList.add('collapsed'); });
+    }
+  } catch (e) {}
+})();
+
 (function () {
   function show(id) {
     ['sp-loading', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
@@ -197,7 +219,7 @@ function SIPENA_toggleCornerPanel_(triggerId, panelId) {
       document.getElementById('sp-guru-name').textContent = auth.namaLengkap || auth.email;
       document.getElementById('sp-corner-guru-avatar').textContent = SIPENA_initials_(auth.namaLengkap || auth.email);
       var metaBits = ['<span class="sp-role-badge role-guru">Guru</span>'];
-      if (auth.jabatan) metaBits.push(auth.jabatan);
+      if (auth.jabatan && auth.jabatan.trim().toLowerCase() !== 'guru') metaBits.push(auth.jabatan);
       if (auth.namaSekolah) metaBits.push(auth.namaSekolah);
       document.getElementById('sp-guru-meta').innerHTML = metaBits.join(' · ');
       window.GuruApp_init();

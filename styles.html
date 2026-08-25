@@ -45,22 +45,44 @@
   .sp-sidebar{
     width: 250px; flex-shrink: 0; min-height: 100vh; position: sticky; top: 0; align-self: flex-start;
     background: var(--card); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column;
+    display: flex; flex-direction: column; transition: width .18s ease;
   }
   .sp-sidebar-brand{ display: flex; align-items: center; gap: 10px; padding: 20px; border-bottom: 1px solid var(--border); }
+  .sp-sidebar-brand-text{ min-width: 0; overflow: hidden; }
+
+  .sp-sidebar-collapse-btn{
+    margin-left: auto; flex-shrink: 0; width: 26px; height: 26px; border-radius: 8px;
+    border: 1px solid var(--border); background: none; color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sp-sidebar-collapse-btn:hover{ background: var(--bg); }
+  .sp-sidebar-collapse-btn svg{ width: 14px; height: 14px; transition: transform .18s ease; }
 
   .sp-main{ flex: 1; min-width: 0; padding: 28px 32px 60px; max-width: 1100px; }
 
   /* Navigasi utama (vertikal, di sidebar) — beda dari .sp-tabs (sub-tab
      horizontal di dalam konten, mis. Input/Rekap Nilai) meski elemen
      tombolnya sama-sama pakai class .sp-tab. */
-  .sp-nav{ display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; flex: 1; overflow-y: auto; }
+  .sp-nav{ display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; flex: 1; overflow-y: auto; overflow-x: hidden; }
   .sp-nav .sp-tab{
-    display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
     border: none; background: none; font-size: 13.5px; font-weight: 600; color: var(--text-muted); cursor: pointer;
   }
   .sp-nav .sp-tab.active{ background: var(--brand); color: var(--brand-fg); }
   .sp-nav .sp-tab:hover:not(.active){ background: var(--bg); }
+  .sp-nav-icon{ width: 18px; height: 18px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .sp-nav-icon svg{ width: 100%; height: 100%; }
+  .sp-nav-label{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---- Sidebar diciutkan (ikon saja) ---- */
+  .sp-sidebar.collapsed{ width: 72px; }
+  .sp-sidebar.collapsed .sp-sidebar-brand{ flex-direction: column; gap: 10px; padding: 16px 8px; }
+  .sp-sidebar.collapsed .sp-sidebar-brand-text{ display: none; }
+  .sp-sidebar.collapsed .sp-sidebar-collapse-btn{ margin-left: 0; }
+  .sp-sidebar.collapsed .sp-sidebar-collapse-btn svg{ transform: rotate(180deg); }
+  .sp-sidebar.collapsed .sp-nav{ padding: 14px 8px; }
+  .sp-sidebar.collapsed .sp-nav .sp-tab{ justify-content: center; padding: 10px; }
+  .sp-sidebar.collapsed .sp-nav-label{ display: none; }
 
   /* ---- Kartu profil ringkas (chip) ---- */
   .sp-profile-chip{ display: flex; align-items: center; gap: 10px; }
@@ -184,13 +206,16 @@
   /* ===== Responsive: sidebar jadi bar horizontal di layar sempit ===== */
   @media (max-width: 900px){
     #sp-admin-app, #sp-guru-app{ flex-direction: column; min-height: 0; }
-    .sp-sidebar{
+    .sp-sidebar, .sp-sidebar.collapsed{
       width: 100%; min-height: 0; position: static; flex-direction: row; flex-wrap: wrap;
       border-right: none; border-bottom: 1px solid var(--border);
     }
-    .sp-sidebar-brand{ border-bottom: none; padding: 14px 16px; }
+    .sp-sidebar-brand, .sp-sidebar.collapsed .sp-sidebar-brand{ flex-direction: row; border-bottom: none; padding: 14px 16px; }
+    .sp-sidebar-collapse-btn{ display: none; }
+    .sp-sidebar-brand-text, .sp-sidebar.collapsed .sp-sidebar-brand-text{ display: block; }
     .sp-nav{ flex-direction: row; flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px; flex: 1 1 100%; order: 3; }
-    .sp-nav .sp-tab{ width: auto; white-space: nowrap; }
+    .sp-nav .sp-tab, .sp-sidebar.collapsed .sp-nav .sp-tab{ width: auto; white-space: nowrap; justify-content: flex-start; }
+    .sp-nav-label, .sp-sidebar.collapsed .sp-nav-label{ display: inline; }
     .sp-main{ padding: 20px 16px 40px; max-width: none; }
   }
   @media (max-width: 640px){

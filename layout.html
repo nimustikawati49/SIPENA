@@ -24,26 +24,29 @@
 </div>
 
 <div id="sp-admin-app" class="hidden">
-  <div class="sp-sidebar">
+  <div class="sp-sidebar" id="sp-sidebar-admin">
     <div class="sp-sidebar-brand">
       <div class="logo">SP</div>
-      <div>
+      <div class="sp-sidebar-brand-text">
         <div class="title">SIPENA</div>
         <div class="subtitle">Panel Superadmin</div>
       </div>
+      <button type="button" class="sp-sidebar-collapse-btn" onclick="SIPENA_toggleSidebar_(this)" title="Ciutkan menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
     </div>
 
     <div class="sp-nav" id="sp-admin-tabs">
-      <button class="sp-tab active" data-tab="sekolah">Sekolah</button>
-      <button class="sp-tab" data-tab="guru">Guru</button>
-      <button class="sp-tab" data-tab="mapel">Mata Pelajaran</button>
-      <button class="sp-tab" data-tab="kelas">Kelas</button>
-      <button class="sp-tab" data-tab="siswa">Siswa</button>
-      <button class="sp-tab" data-tab="tahunajaran">Tahun Ajaran</button>
-      <button class="sp-tab" data-tab="penugasan">Penugasan Mengajar</button>
-      <button class="sp-tab" data-tab="kenaikankelas">Kenaikan Kelas</button>
-      <button class="sp-tab" data-tab="jadwal">Jadwal</button>
-      <button class="sp-tab" data-tab="auditlog">Audit Log</button>
+      <button class="sp-tab active" data-tab="sekolah" title="Sekolah"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 9h.01M15 9h.01M9 13h.01M15 13h.01"/></svg></span><span class="sp-nav-label">Sekolah</span></button>
+      <button class="sp-tab" data-tab="guru" title="Guru"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></span><span class="sp-nav-label">Guru</span></button>
+      <button class="sp-tab" data-tab="mapel" title="Mata Pelajaran"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span><span class="sp-nav-label">Mata Pelajaran</span></button>
+      <button class="sp-tab" data-tab="kelas" title="Kelas"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span class="sp-nav-label">Kelas</span></button>
+      <button class="sp-tab" data-tab="siswa" title="Siswa"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c0-3 2.5-5 6-5s6 2 6 5"/><path d="M14.5 15.2c2.7.4 4.5 2 4.5 4.8"/></svg></span><span class="sp-nav-label">Siswa</span></button>
+      <button class="sp-tab" data-tab="tahunajaran" title="Tahun Ajaran"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span><span class="sp-nav-label">Tahun Ajaran</span></button>
+      <button class="sp-tab" data-tab="penugasan" title="Penugasan Mengajar"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1M9 11h6M9 15h6"/></svg></span><span class="sp-nav-label">Penugasan Mengajar</span></button>
+      <button class="sp-tab" data-tab="kenaikankelas" title="Kenaikan Kelas"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span><span class="sp-nav-label">Kenaikan Kelas</span></button>
+      <button class="sp-tab" data-tab="jadwal" title="Jadwal"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span class="sp-nav-label">Jadwal</span></button>
+      <button class="sp-tab" data-tab="auditlog" title="Audit Log"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5l8-3z"/></svg></span><span class="sp-nav-label">Audit Log</span></button>
     </div>
 
   </div>
@@ -78,19 +81,22 @@
 </div>
 
 <div id="sp-guru-app" class="hidden">
-  <div class="sp-sidebar">
+  <div class="sp-sidebar" id="sp-sidebar-guru">
     <div class="sp-sidebar-brand">
       <div class="logo">SP</div>
-      <div>
+      <div class="sp-sidebar-brand-text">
         <div class="title">SIPENA</div>
         <div class="subtitle">Dashboard Guru</div>
       </div>
+      <button type="button" class="sp-sidebar-collapse-btn" onclick="SIPENA_toggleSidebar_(this)" title="Ciutkan menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
     </div>
 
     <div class="sp-nav" id="sp-guru-tabs">
-      <button class="sp-tab active" data-tab="dashboard">Dashboard</button>
-      <button class="sp-tab" data-tab="nilai">Nilai</button>
-      <button class="sp-tab" data-tab="jadwal">Jadwal</button>
+      <button class="sp-tab active" data-tab="dashboard" title="Dashboard"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg></span><span class="sp-nav-label">Dashboard</span></button>
+      <button class="sp-tab" data-tab="nilai" title="Nilai"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V10M10 19V5M16 19v-7M20 19H4"/></svg></span><span class="sp-nav-label">Nilai</span></button>
+      <button class="sp-tab" data-tab="jadwal" title="Jadwal"><span class="sp-nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span><span class="sp-nav-label">Jadwal</span></button>
     </div>
 
   </div>
