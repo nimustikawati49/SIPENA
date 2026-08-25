@@ -582,37 +582,95 @@ function SuperAdmin_panelPenugasan_() {
     '  <form class="sp-form" id="sp-form-penugasan">' +
     '    <div class="sp-field"><label>Guru</label><select name="guru_id" data-source="guru" required></select></div>' +
     '    <div class="sp-field"><label>Mata Pelajaran</label><select name="mapel_id" data-source="mapel" required></select></div>' +
-    '    <div class="sp-field"><label>Kelas</label><select name="kelas_id" data-source="kelas" required></select></div>' +
     '    <div class="sp-field"><label>Tahun Ajaran</label><select name="tahun_ajaran_id" data-source="tahunajaran" required></select></div>' +
     '    <div class="sp-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
+    '    <div class="sp-field" style="flex-basis:100%;">' +
+    '      <label>Kelas (centang satu atau lebih — kelas ditampilkan sesuai sekolah guru terpilih)</label>' +
+    '      <div style="margin:6px 0;">' +
+    '        <button type="button" class="sp-btn secondary" onclick="SuperAdmin_toggleAllKelasCheckbox_(true)">Pilih Semua</button> ' +
+    '        <button type="button" class="sp-btn secondary" onclick="SuperAdmin_toggleAllKelasCheckbox_(false)">Kosongkan</button>' +
+    '      </div>' +
+    '      <div id="sp-penugasan-kelas-list" style="display:flex;flex-wrap:wrap;gap:8px 16px;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--bg);">' +
+    '        <span class="msg">Pilih guru dulu untuk menampilkan daftar kelas.</span>' +
+    '      </div>' +
+    '    </div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
-    SuperAdmin_cancelEditButton_() +
+    '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditPenugasan_(this.form)">Batal Edit</button>' +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Penugasan</div>' +
     '  <div id="sp-table-penugasan"></div>' +
     '</div>';
 }
+function SuperAdmin_renderPenugasanKelasCheckboxes_(sekolahId) {
+  var container = document.getElementById('sp-penugasan-kelas-list');
+  if (!sekolahId) { container.innerHTML = '<span class="msg">Pilih guru dulu untuk menampilkan daftar kelas.</span>'; return; }
+  var classes = SuperAdmin.classes.filter(function (k) { return k.sekolah_id === sekolahId && String(k.status).toUpperCase() !== 'NONAKTIF'; });
+  if (!classes.length) { container.innerHTML = '<span class="msg">Sekolah guru ini belum punya kelas aktif.</span>'; return; }
+  classes = classes.slice().sort(function (a, b) { return String(a.nama_kelas).localeCompare(String(b.nama_kelas)); });
+  container.innerHTML = classes.map(function (k) {
+    return '<label style="display:flex;align-items:center;gap:5px;font-weight:400;font-size:13px;">' +
+      '<input type="checkbox" class="sp-penugasan-kelas-cb" value="' + k.kelas_id + '"> ' + k.nama_kelas + '</label>';
+  }).join('');
+}
+function SuperAdmin_toggleAllKelasCheckbox_(checked) {
+  document.querySelectorAll('.sp-penugasan-kelas-cb').forEach(function (cb) { cb.checked = checked; });
+}
 function SuperAdmin_wirePenugasan_() {
-  document.getElementById('sp-form-penugasan').addEventListener('submit', function (e) {
+  var form = document.getElementById('sp-form-penugasan');
+
+  form.guru_id.addEventListener('change', function () {
+    var guru = SuperAdmin.teachers.filter(function (g) { return g.guru_id === form.guru_id.value; })[0];
+    SuperAdmin_renderPenugasanKelasCheckboxes_(guru ? guru.sekolah_id : null);
+  });
+
+  // Saat mode edit (satu record), pilih kelas lain otomatis membatalkan
+  // pilihan sebelumnya — edit hanya untuk SATU penugasan, bukan batch.
+  document.getElementById('sp-penugasan-kelas-list').addEventListener('change', function (e) {
+    if (!e.target.classList || !e.target.classList.contains('sp-penugasan-kelas-cb')) return;
+    if (form.dataset.editId && e.target.checked) {
+      document.querySelectorAll('.sp-penugasan-kelas-cb').forEach(function (cb) { if (cb !== e.target) cb.checked = false; });
+    }
+  });
+
+  form.addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
     var guru = SuperAdmin.teachers.filter(function (g) { return g.guru_id === f.guru_id.value; })[0];
     if (!guru) { SIPENA_toast('Pilih guru terlebih dahulu.', 'error'); return; }
-    var data = {
-      guru_id: f.guru_id.value, mapel_id: f.mapel_id.value, kelas_id: f.kelas_id.value,
-      sekolah_id: guru.sekolah_id, tahun_ajaran_id: f.tahun_ajaran_id.value, semester: f.semester.value
-    };
+    var kelasIds = Array.prototype.slice.call(document.querySelectorAll('.sp-penugasan-kelas-cb:checked')).map(function (cb) { return cb.value; });
+    if (!kelasIds.length) { SIPENA_toast('Pilih minimal satu kelas.', 'error'); return; }
     var btn = f.querySelector('button[type="submit"]');
     var editId = f.dataset.editId;
-    runServer(editId ? 'adminUpdateAssignment' : 'adminCreateAssignment', editId ? [editId, data] : [data], {
+
+    if (editId) {
+      var data = { guru_id: f.guru_id.value, mapel_id: f.mapel_id.value, kelas_id: kelasIds[0], tahun_ajaran_id: f.tahun_ajaran_id.value, semester: f.semester.value };
+      runServer('adminUpdateAssignment', [editId, data], {
+        loadingEl: btn,
+        onSuccess: function () {
+          SIPENA_toast('Penugasan diperbarui & disinkron.');
+          SuperAdmin_clearFormEditMode_(f);
+          SuperAdmin_renderPenugasanKelasCheckboxes_(null);
+          runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
+        }
+      });
+      return;
+    }
+
+    runServer('adminCreateAssignmentBatch', [f.guru_id.value, f.mapel_id.value, kelasIds, f.tahun_ajaran_id.value, f.semester.value], {
       loadingEl: btn,
-      onSuccess: function () {
-        SIPENA_toast(editId ? 'Penugasan diperbarui & disinkron.' : 'Penugasan tersimpan & disinkron ke spreadsheet guru.');
-        SuperAdmin_clearFormEditMode_(f);
+      onSuccess: function (res) {
+        var msg = 'Penugasan tersimpan untuk ' + res.created.length + ' kelas' +
+          (res.skipped.length ? ' (dilewati ' + res.skipped.length + ' yang sudah ada sebelumnya)' : '') + '.';
+        SIPENA_toast(msg);
+        SuperAdmin_toggleAllKelasCheckbox_(false);
         runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
       }
     });
   });
+}
+function SuperAdmin_cancelEditPenugasan_(form) {
+  SuperAdmin_renderPenugasanKelasCheckboxes_(null);
+  SuperAdmin_clearFormEditMode_(form);
 }
 function SuperAdmin_editAssignment_(assignmentId) {
   var a = SuperAdmin.assignments.filter(function (r) { return r.assignment_id === assignmentId; })[0];
@@ -620,9 +678,12 @@ function SuperAdmin_editAssignment_(assignmentId) {
   var f = document.getElementById('sp-form-penugasan');
   f.guru_id.value = a.guru_id || '';
   f.mapel_id.value = a.mapel_id || '';
-  f.kelas_id.value = a.kelas_id || '';
   f.tahun_ajaran_id.value = a.tahun_ajaran_id || '';
   f.semester.value = a.semester || '';
+  var guru = SuperAdmin.teachers.filter(function (g) { return g.guru_id === a.guru_id; })[0];
+  SuperAdmin_renderPenugasanKelasCheckboxes_(guru ? guru.sekolah_id : null);
+  var cb = document.querySelector('.sp-penugasan-kelas-cb[value="' + a.kelas_id + '"]');
+  if (cb) cb.checked = true;
   SuperAdmin_setFormEditMode_(f, assignmentId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

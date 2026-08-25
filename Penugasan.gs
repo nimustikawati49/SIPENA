@@ -30,6 +30,72 @@ function Penugasan_indexBy_(rows, key) {
   return idx;
 }
 
+/**
+ * adminCreateAssignmentBatch(guruId, mapelId, kelasIds, tahunAjaranId, semester)
+ * Satu guru sering diajar di banyak kelas sekaligus untuk 1 mapel+periode
+ * (bisa 10+ kelas) — checkbox multi-pilih kelas di UI, satu kali submit.
+ * Kombinasi yang sudah ada dilewati (bukan error, supaya submit ulang
+ * dengan sebagian kelas tumpang-tindih tidak gagal total), sisanya
+ * ditulis dalam SATU batch setValues (bukan satu appendRow per kelas),
+ * lalu sinkronisasi guru dijalankan SEKALI di akhir (bukan per kelas).
+ */
+function adminCreateAssignmentBatch(guruId, mapelId, kelasIds, tahunAjaranId, semester) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  guruId = String(guruId || '').trim();
+  mapelId = String(mapelId || '').trim();
+  tahunAjaranId = String(tahunAjaranId || '').trim();
+  semester = String(semester || '').toUpperCase().trim();
+  const ids = (Array.isArray(kelasIds) ? kelasIds : []).map(function (k) { return String(k || '').trim(); }).filter(function (k) { return k; });
+
+  if (!guruId || !mapelId || !tahunAjaranId) throw new Error('Guru, mapel, dan tahun ajaran wajib diisi.');
+  if (!ids.length) throw new Error('Pilih minimal satu kelas.');
+  if (['GANJIL', 'GENAP'].indexOf(semester) === -1) throw new Error('Semester harus GANJIL atau GENAP.');
+
+  const guru = Utils_sheetToObjects_(Config_getSheet_('MASTER_GURU')).filter(function (r) { return r.guru_id === guruId; })[0];
+  if (!guru) throw new Error('Guru tidak ditemukan.');
+
+  Penugasan_ensureGuruMapel_(guruId, mapelId, guru.sekolah_id, tahunAjaranId);
+
+  const sh = Config_getSheet_('PENUGASAN_MENGAJAR');
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h || '').toLowerCase().trim(); });
+
+  const existingKeys = {};
+  Utils_sheetToObjects_(sh).forEach(function (r) {
+    existingKeys[[r.guru_id, r.mapel_id, r.kelas_id, r.tahun_ajaran_id, r.semester].join('|')] = true;
+  });
+
+  const newRows = [];
+  const created = [];
+  const skipped = [];
+  ids.forEach(function (kelasId) {
+    const key = [guruId, mapelId, kelasId, tahunAjaranId, semester].join('|');
+    if (existingKeys[key]) { skipped.push(kelasId); return; }
+    existingKeys[key] = true; // cegah duplikat dalam batch yang sama juga (kalau id terkirim dobel)
+    const obj = {
+      assignment_id: Utils_newId_('PN'), guru_id: guruId, mapel_id: mapelId, kelas_id: kelasId,
+      sekolah_id: guru.sekolah_id, tahun_ajaran_id: tahunAjaranId, semester: semester, status: 'AKTIF'
+    };
+    newRows.push(header.map(function (k) { return obj[k] === undefined ? '' : obj[k]; }));
+    created.push(kelasId);
+  });
+
+  if (newRows.length) {
+    const startRow = sh.getLastRow() + 1;
+    sh.getRange(startRow, 1, newRows.length, header.length).setValues(newRows);
+  }
+
+  if (created.length) {
+    AuditLog_write_(
+      auth, 'CREATE_ASSIGNMENT_BATCH', 'Penugasan', guruId + '/' + mapelId,
+      'kelas: ' + created.join(', ') + (skipped.length ? ' | dilewati (sudah ada): ' + skipped.join(', ') : '')
+    );
+    Sync_teacherData_(guruId);
+  }
+
+  return { created: created, skipped: skipped };
+}
+
 function adminCreateAssignment(data) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   const guruId = String(data && data.guru_id || '').trim();
