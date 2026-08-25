@@ -83,8 +83,8 @@ function Kelas_rombelPrefix_(jenjang, tingkat, programKeahlian) {
  * Kelas_computeRombelPlan_(params)
  * params: { sekolah_id, jenjang, tingkat, jumlah_rombel, program_keahlian? }
  * Hitung rencana tanpa menulis apa pun — dipakai baik untuk preview
- * (adminPreviewRombel/Batch) maupun sebelum eksekusi nyata
- * (adminGenerateRombel/Batch), supaya preview yang dilihat Superadmin
+ * (adminPreviewRombelBatch) maupun sebelum eksekusi nyata
+ * (adminGenerateRombelBatch), supaya preview yang dilihat Superadmin
  * PERSIS sama dengan yang akan dieksekusi.
  *
  * Proteksi duplikat: rombel yang hurufnya sudah terpakai (dalam scope
@@ -203,20 +203,10 @@ function Kelas_applyRombelPlans_(auth, plans) {
   });
 }
 
-function adminPreviewRombel(params) {
-  Security_requireRole_(['SUPERADMIN']);
-  return Kelas_computeRombelPlan_(params);
-}
-
-function adminGenerateRombel(params) {
-  const auth = Security_requireRole_(['SUPERADMIN']);
-  const plan = Kelas_computeRombelPlan_(params);
-  Kelas_applyRombelPlans_(auth, [plan]);
-  return plan;
-}
-
 /**
  * adminPreviewRombelBatch / adminGenerateRombelBatch
+ * Ini satu-satunya jalur generator di UI — "satu tingkat" hanyalah kasus
+ * khusus entries dengan 1 baris, jadi tidak perlu endpoint terpisah.
  * entries: [{ tingkat, jumlah_rombel, program_keahlian? }, ...] — satu
  * sekolah+jenjang, beberapa tingkat sekaligus ("Generate Semua Rombel").
  */
