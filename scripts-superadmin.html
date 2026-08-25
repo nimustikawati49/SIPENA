@@ -13,7 +13,8 @@ var SP_TINGKAT_OPTIONS_ = {
 function SuperAdmin_init() {
   document.body.classList.add('sp-app-mode');
   document.getElementById('sp-admin-app').classList.remove('hidden');
-  document.getElementById('sp-admin-email').textContent = (window.SIPENA.auth && window.SIPENA.auth.email) || '-';
+  // sp-admin-name/sp-admin-avatar (profile chip) sudah diisi oleh
+  // scripts-init.html sebelum fungsi ini dipanggil.
 
   document.querySelectorAll('#sp-admin-tabs .sp-tab').forEach(function (btn) {
     btn.addEventListener('click', function () { SuperAdmin_showTab(btn.getAttribute('data-tab')); });
