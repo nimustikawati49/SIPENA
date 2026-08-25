@@ -37,6 +37,25 @@ function Nilai_getAssessmentLabel_(semester) {
   return semester === 'GENAP' ? 'ASAT' : 'ASAS';
 }
 
+/**
+ * Nilai_ensureNilaiAkhirSheet_(ss)
+ * Sheet NILAI_AKHIR sudah ada untuk guru yang diprovisi setelah modul ini
+ * dirilis, dan untuk guru lama setelah Superadmin menjalankan
+ * adminMigrateNilaiAkhirSheets() (Diag.gs) sekali. Kalau BELUM ada dan
+ * gagal dibuat di sini (mis. akun guru tidak punya izin Drive untuk
+ * insertSheet di file yang dimiliki Superadmin — beda dari sekadar
+ * baca/tulis sel), lempar pesan jelas alih-alih exception mentah Google.
+ */
+function Nilai_ensureNilaiAkhirSheet_(ss) {
+  const existing = ss.getSheetByName('NILAI_AKHIR');
+  if (existing) return existing;
+  try {
+    return Config_ensureGuruSheet_(ss, 'NILAI_AKHIR');
+  } catch (e) {
+    throw new Error('Modul Nilai Akhir belum siap untuk akun Anda. Minta Superadmin menjalankan migrasi sheet Nilai Akhir.');
+  }
+}
+
 function Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester) {
   const row = Utils_sheetToObjects_(ss.getSheetByName('PENGATURAN')).filter(function (r) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
@@ -80,7 +99,7 @@ function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nil
  * seperti Nilai_getSettings_ di atas).
  */
 function Nilai_getBobotConfig_(sekolahId) {
-  const sh = Config_getSheet_('PENGATURAN_BOBOT_NILAI');
+  const sh = Config_getSheet_(CONFIG_BOBOT_NILAI_SHEET_);
   const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.sekolah_id === sekolahId; })[0];
   if (!row) return Object.assign({}, NILAI_BOBOT_DEFAULT_);
   return {
@@ -146,7 +165,7 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
   Nilai_validateScope_(kelasId, mapelId, tahunAjaranId, semester);
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  Config_ensureGuruSheet_(ss, 'NILAI_AKHIR');
+  Nilai_ensureNilaiAkhirSheet_(ss);
 
   const students = Utils_sheetToObjects_(ss.getSheetByName('SISWA')).filter(function (r) {
     return r.kelas_id === kelasId && String(r.status).toUpperCase() !== 'NONAKTIF';
@@ -226,7 +245,7 @@ function saveMyGradeSheetBatch(kelasId, mapelId, tahunAjaranId, semester, rows) 
   });
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  Config_ensureGuruSheet_(ss, 'NILAI_AKHIR');
+  Nilai_ensureNilaiAkhirSheet_(ss);
 
   const sh = ss.getSheetByName('NILAI');
   const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); });
@@ -478,7 +497,7 @@ function getMyGradeRecap(kelasId, mapelId, tahunAjaranId, semester) {
   Nilai_validateScope_(kelasId, mapelId, tahunAjaranId, semester);
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  Config_ensureGuruSheet_(ss, 'NILAI_AKHIR');
+  Nilai_ensureNilaiAkhirSheet_(ss);
   const students = Utils_sheetToObjects_(ss.getSheetByName('SISWA')).filter(function (r) {
     return r.kelas_id === kelasId && String(r.status).toUpperCase() !== 'NONAKTIF';
   });

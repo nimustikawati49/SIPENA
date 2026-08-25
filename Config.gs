@@ -60,9 +60,23 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   JADWAL_MENGAJAR: ['jadwal_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'status'],
   REQUEST_JADWAL_PERUBAHAN: ['request_id', 'guru_id', 'jadwal_id_terkait', 'perubahan_json', 'alasan', 'requested_at', 'status', 'processed_by', 'processed_at', 'catatan'],
   SYNC_QUEUE: ['queue_id', 'guru_id', 'status', 'attempt', 'last_error', 'created_at', 'updated_at'],
-  AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description'],
-  PENGATURAN_BOBOT_NILAI: ['sekolah_id', 'bobot_harian', 'bobot_pts', 'bobot_akhir_semester', 'mode_perhitungan', 'decimal_places', 'updated_at', 'updated_by']
+  AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
 };
+
+// PENGATURAN_BOBOT_NILAI SENGAJA TIDAK dimasukkan ke CONFIG_CENTRAL_SCHEMA_
+// di atas — semua entri di sana di-ensure (dibuat kalau belum ada) pada
+// SETIAP panggilan Config_getSheet_(), termasuk dari getAuth() yang
+// dipanggil oleh SEMUA user (guru maupun superadmin) di setiap load
+// halaman. Kalau guru yang PERTAMA kali memicu pembuatan sheet baru itu,
+// dan akun guru tidak punya izin Drive untuk operasi struktural
+// (insertSheet) di spreadsheet central — beda dengan sekadar
+// baca/tulis sel di sheet yang SUDAH ada — getAuth() gagal total untuk
+// SEMUA orang (bukan cuma fitur bobot nilai). Sheet ini murni domain
+// Superadmin, jadi dibuat LAZY hanya dari adminSaveBobotNilai (Sekolah.gs)
+// lewat Config_ensureCentralSheet_ di bawah — selalu berjalan sebagai
+// Superadmin yang mengelola filenya sendiri.
+const CONFIG_BOBOT_NILAI_SHEET_ = 'PENGATURAN_BOBOT_NILAI';
+const CONFIG_BOBOT_NILAI_HEADERS_ = ['sekolah_id', 'bobot_harian', 'bobot_pts', 'bobot_akhir_semester', 'mode_perhitungan', 'decimal_places', 'updated_at', 'updated_by'];
 
 // Kolom "kode" yang HARUS selalu tersimpan sebagai teks, bukan angka —
 // Google Sheets otomatis membuang nol di depan (mis. "001" jadi 1) untuk
@@ -223,6 +237,24 @@ function Config_ensureGuruSheet_(ss, sheetName) {
   if (sh) return sh;
   const headers = CONFIG_GURU_OPERATIONAL_SCHEMA_[sheetName];
   sh = ss.insertSheet(sheetName);
+  sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+  sh.setFrozenRows(1);
+  sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
+  return sh;
+}
+
+/**
+ * Config_ensureCentralSheet_(name, headers)
+ * Sama seperti Config_ensureGuruSheet_ tapi untuk spreadsheet central —
+ * dipakai HANYA oleh fungsi yang sudah pasti berjalan sebagai Superadmin
+ * (lihat catatan di CONFIG_BOBOT_NILAI_SHEET_ di atas), supaya operasi
+ * struktural (insertSheet) tidak pernah dicoba dari konteks eksekusi guru.
+ */
+function Config_ensureCentralSheet_(name, headers) {
+  const ss = Config_getCentralSpreadsheet_();
+  let sh = ss.getSheetByName(name);
+  if (sh) return sh;
+  sh = ss.insertSheet(name);
   sh.getRange(1, 1, 1, headers.length).setValues([headers]);
   sh.setFrozenRows(1);
   sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');

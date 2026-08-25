@@ -112,7 +112,7 @@ function adminSaveBobotNilai(sekolahId, bobotHarian, bobotPts, bobotAkhirSemeste
   decimalPlaces = Number(decimalPlaces);
   if (isNaN(decimalPlaces) || decimalPlaces < 0 || decimalPlaces > 4) throw new Error('Angka desimal harus 0–4.');
 
-  const sh = Config_getSheet_('PENGATURAN_BOBOT_NILAI');
+  const sh = Config_ensureCentralSheet_(CONFIG_BOBOT_NILAI_SHEET_, CONFIG_BOBOT_NILAI_HEADERS_);
   const existing = Utils_sheetToObjects_(sh).filter(function (r) { return r.sekolah_id === sekolahId; })[0];
   const patch = {
     bobot_harian: bobotHarian, bobot_pts: bobotPts, bobot_akhir_semester: bobotAkhirSemester,

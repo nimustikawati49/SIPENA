@@ -366,12 +366,29 @@ function SuperAdmin_panelGuru_() {
     '  <div class="sp-section-title">Daftar Guru</div>' +
     '  <div id="sp-table-guru" style="margin-bottom:28px;"></div>' +
 
+    '  <div class="sp-section-title">Migrasi Modul Nilai Akhir</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Sekali klik: siapkan sheet "Nilai Akhir" di spreadsheet guru yang sudah ada sebelum modul ini dirilis (guru baru sudah otomatis dapat). Aman dijalankan berkali-kali.</div>' +
+    '  <button type="button" class="sp-btn secondary" id="sp-btn-migrate-nilai-akhir" style="margin-bottom:28px;">Migrasi Sheet Nilai Akhir</button>' +
+
     '  <div class="sp-section-title">Sinkronisasi Gagal</div>' +
     '  <div class="msg" style="margin:-6px 0 10px;">Kalau update data guru (penugasan/siswa/jadwal) gagal tersinkron ke spreadsheet pribadinya (mis. spreadsheet terhapus/kuota Drive habis), muncul di sini — aksi admin yang memicunya tetap berhasil, cuma sinkronisasi guru itu yang tertunda. Klik "Coba Lagi" setelah masalahnya diperbaiki (mis. provisi ulang di atas).</div>' +
     '  <div id="sp-sync-queue-table"></div>' +
     '</div>';
 }
 function SuperAdmin_wireGuru_() {
+  document.getElementById('sp-btn-migrate-nilai-akhir').addEventListener('click', function () {
+    var btn = this;
+    runServer('adminMigrateNilaiAkhirSheets', [], {
+      loadingEl: btn,
+      onSuccess: function (res) {
+        var msg = res.migrated + ' dari ' + res.total + ' spreadsheet guru disiapkan.';
+        if (res.failed.length) msg += ' ' + res.failed.length + ' gagal (cek console).';
+        SIPENA_toast(msg, res.failed.length ? 'error' : 'ok');
+        if (res.failed.length) console.error('adminMigrateNilaiAkhirSheets failed:', res.failed);
+      }
+    });
+  });
+
   document.getElementById('sp-form-guru').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
