@@ -117,6 +117,19 @@ function Utils_findRowById_(sh, idColName, idValue) {
 }
 
 /**
+ * Utils_deleteRowById_(sh, idColName, idValue)
+ * Hapus satu baris berdasarkan kolom ID. Melempar Error kalau tidak
+ * ditemukan — pemanggil (mis. adminDeleteSchool) yang menentukan apakah
+ * boleh hard-delete atau harus dicegah karena masih direferensikan
+ * record lain.
+ */
+function Utils_deleteRowById_(sh, idColName, idValue) {
+  const rowNum = Utils_findRowById_(sh, idColName, idValue);
+  if (rowNum === -1) throw new Error('Data tidak ditemukan.');
+  sh.deleteRow(rowNum);
+}
+
+/**
  * Utils_updateRowByHeader_(sh, rowNum, patch)
  * Update sebagian kolom (patch = {kolom: nilai}) pada baris rowNum,
  * sisanya tidak tersentuh. Selalu header-indexed.

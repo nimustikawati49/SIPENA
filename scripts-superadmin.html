@@ -169,8 +169,19 @@ function SuperAdmin_wireSekolah_() {
 function SuperAdmin_renderSekolah() {
   SuperAdmin_table_('sp-table-sekolah', [
     { key: 'sekolah_id', label: 'ID' }, { key: 'npsn', label: 'NPSN' },
-    { key: 'nama_sekolah', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' }
+    { key: 'nama_sekolah', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_deleteSchool_(\'' + r.sekolah_id + '\', \'' + String(r.nama_sekolah).replace(/'/g, "\\'") + '\')">Hapus</button>'; } }
   ], SuperAdmin.schools, 'Belum ada sekolah.');
+}
+
+function SuperAdmin_deleteSchool_(sekolahId, namaSekolah) {
+  if (!confirm('Hapus sekolah "' + namaSekolah + '"? Aksi ini tidak bisa dibatalkan.')) return;
+  runServer('adminDeleteSchool', [sekolahId], {
+    onSuccess: function () {
+      SIPENA_toast('Sekolah dihapus.');
+      runServer('adminGetSchools', [], { onSuccess: function (rows) { SuperAdmin.schools = rows; SuperAdmin_renderSekolah(); SuperAdmin_refreshSelects(); } });
+    }
+  });
 }
 
 /* ---------- Guru ---------- */

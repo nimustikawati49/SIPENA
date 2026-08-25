@@ -36,6 +36,36 @@ function adminCreateSchool(data) {
   return { sekolah_id: sekolahId };
 }
 
+/**
+ * adminDeleteSchool(sekolahId)
+ * Hard-delete HANYA kalau sekolah belum dipakai guru/kelas mana pun —
+ * kalau sudah, tolak dan minta pengguna nonaktifkan (status) atau
+ * pindahkan dulu referensinya, supaya tidak ada guru_id/kelas_id yang
+ * jadi yatim menunjuk sekolah_id yang sudah tidak ada.
+ */
+function adminDeleteSchool(sekolahId) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_getSheet_('MASTER_SEKOLAH');
+  const sekolah = Utils_sheetToObjects_(sh).filter(function (r) { return r.sekolah_id === sekolahId; })[0];
+  if (!sekolah) throw new Error('Sekolah tidak ditemukan.');
+
+  const guruCount = Utils_sheetToObjects_(Config_getSheet_('MASTER_GURU'))
+    .filter(function (r) { return r.sekolah_id === sekolahId; }).length;
+  const kelasCount = Utils_sheetToObjects_(Config_getSheet_('MASTER_KELAS'))
+    .filter(function (r) { return r.sekolah_id === sekolahId; }).length;
+
+  if (guruCount > 0 || kelasCount > 0) {
+    throw new Error(
+      'Sekolah tidak bisa dihapus: masih dipakai oleh ' + guruCount + ' guru dan ' + kelasCount +
+      ' kelas. Pindahkan/hapus dulu data itu, atau nonaktifkan saja sekolah ini (ubah status).'
+    );
+  }
+
+  Utils_deleteRowById_(sh, 'sekolah_id', sekolahId);
+  AuditLog_write_(auth, 'DELETE_SCHOOL', 'Sekolah', sekolahId, sekolah.nama_sekolah);
+  return { ok: true };
+}
+
 function adminUpdateSchool(sekolahId, data) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   const sh = Config_getSheet_('MASTER_SEKOLAH');
