@@ -24,16 +24,30 @@
 </div>
 
 <div id="sp-admin-app" class="hidden">
-  <div class="sp-topbar">
-    <div class="sp-topbar-brand">
+  <div class="sp-sidebar">
+    <div class="sp-sidebar-brand">
       <div class="logo">SP</div>
       <div>
         <div class="title">SIPENA</div>
         <div class="subtitle">Panel Superadmin</div>
       </div>
     </div>
-    <div class="sp-topbar-right">
-      <button class="sp-btn secondary" id="sp-btn-open-db" type="button">Buka Database Pusat</button>
+
+    <div class="sp-nav" id="sp-admin-tabs">
+      <button class="sp-tab active" data-tab="sekolah">Sekolah</button>
+      <button class="sp-tab" data-tab="guru">Guru</button>
+      <button class="sp-tab" data-tab="mapel">Mata Pelajaran</button>
+      <button class="sp-tab" data-tab="kelas">Kelas</button>
+      <button class="sp-tab" data-tab="siswa">Siswa</button>
+      <button class="sp-tab" data-tab="tahunajaran">Tahun Ajaran</button>
+      <button class="sp-tab" data-tab="penugasan">Penugasan Mengajar</button>
+      <button class="sp-tab" data-tab="kenaikankelas">Kenaikan Kelas</button>
+      <button class="sp-tab" data-tab="jadwal">Jadwal</button>
+      <button class="sp-tab" data-tab="auditlog">Audit Log</button>
+    </div>
+
+    <div class="sp-sidebar-footer">
+      <button class="sp-btn secondary" id="sp-btn-open-db" type="button" style="width:100%;margin-bottom:12px;">Buka Database Pusat</button>
       <div class="sp-profile-chip">
         <div class="sp-avatar" id="sp-admin-avatar">SA</div>
         <div class="sp-profile-info">
@@ -44,34 +58,30 @@
     </div>
   </div>
 
-  <div class="sp-tabs" id="sp-admin-tabs">
-    <button class="sp-tab active" data-tab="sekolah">Sekolah</button>
-    <button class="sp-tab" data-tab="guru">Guru</button>
-    <button class="sp-tab" data-tab="mapel">Mata Pelajaran</button>
-    <button class="sp-tab" data-tab="kelas">Kelas</button>
-    <button class="sp-tab" data-tab="siswa">Siswa</button>
-    <button class="sp-tab" data-tab="tahunajaran">Tahun Ajaran</button>
-    <button class="sp-tab" data-tab="penugasan">Penugasan Mengajar</button>
-    <button class="sp-tab" data-tab="kenaikankelas">Kenaikan Kelas</button>
-    <button class="sp-tab" data-tab="jadwal">Jadwal</button>
-    <button class="sp-tab" data-tab="auditlog">Audit Log</button>
-  </div>
-
-  <div class="sp-panels" id="sp-admin-panels">
-    <!-- diisi scripts-superadmin.html -->
+  <div class="sp-main">
+    <div class="sp-panels" id="sp-admin-panels">
+      <!-- diisi scripts-superadmin.html -->
+    </div>
   </div>
 </div>
 
 <div id="sp-guru-app" class="hidden">
-  <div class="sp-topbar">
-    <div class="sp-topbar-brand">
+  <div class="sp-sidebar">
+    <div class="sp-sidebar-brand">
       <div class="logo">SP</div>
       <div>
         <div class="title">SIPENA</div>
         <div class="subtitle">Dashboard Guru</div>
       </div>
     </div>
-    <div class="sp-topbar-right">
+
+    <div class="sp-nav" id="sp-guru-tabs">
+      <button class="sp-tab active" data-tab="dashboard">Dashboard</button>
+      <button class="sp-tab" data-tab="nilai">Nilai</button>
+      <button class="sp-tab" data-tab="jadwal">Jadwal</button>
+    </div>
+
+    <div class="sp-sidebar-footer">
       <div class="sp-profile-chip">
         <div class="sp-avatar" id="sp-guru-avatar">-</div>
         <div class="sp-profile-info">
@@ -82,21 +92,17 @@
     </div>
   </div>
 
-  <div class="sp-tabs" id="sp-guru-tabs">
-    <button class="sp-tab active" data-tab="dashboard">Dashboard</button>
-    <button class="sp-tab" data-tab="nilai">Nilai</button>
-    <button class="sp-tab" data-tab="jadwal">Jadwal</button>
-  </div>
-
-  <div class="sp-panels">
-    <div class="sp-panel active" id="sp-guru-panel-dashboard">
-      <!-- diisi scripts-guru.html -->
-    </div>
-    <div class="sp-panel" id="sp-guru-panel-nilai">
-      <!-- diisi scripts-nilai.html -->
-    </div>
-    <div class="sp-panel" id="sp-guru-panel-jadwal">
-      <!-- diisi scripts-jadwal.html -->
+  <div class="sp-main">
+    <div class="sp-panels">
+      <div class="sp-panel active" id="sp-guru-panel-dashboard">
+        <!-- diisi scripts-guru.html -->
+      </div>
+      <div class="sp-panel" id="sp-guru-panel-nilai">
+        <!-- diisi scripts-nilai.html -->
+      </div>
+      <div class="sp-panel" id="sp-guru-panel-jadwal">
+        <!-- diisi scripts-jadwal.html -->
+      </div>
     </div>
   </div>
 </div>

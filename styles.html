@@ -38,19 +38,34 @@
   .msg.danger{ color: var(--danger); }
   .hidden{ display: none !important; }
 
-  /* ===== Admin/Guru app shell (dipakai setelah body.sp-app-mode aktif) ===== */
+  /* ===== Admin/Guru app shell — sidebar kiri + konten utama ===== */
   body.sp-app-mode{ display: block; padding: 0; align-items: unset; justify-content: unset; }
-  #sp-admin-app, #sp-guru-app{ max-width: 1100px; margin: 0 auto; padding: 0 24px 60px; }
-  .sp-topbar{
-    position: sticky; top: 0; z-index: 40;
-    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
-    padding: 16px 0; margin: 0 0 22px; border-bottom: 1px solid var(--border);
-    background: var(--bg);
-  }
-  .sp-topbar-brand{ display: flex; align-items: center; gap: 10px; }
-  .sp-topbar-right{ display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  #sp-admin-app, #sp-guru-app{ display: flex; align-items: flex-start; min-height: 100vh; }
 
-  /* ---- Kartu profil ringkas (chip) di topbar ---- */
+  .sp-sidebar{
+    width: 250px; flex-shrink: 0; min-height: 100vh; position: sticky; top: 0; align-self: flex-start;
+    background: var(--card); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .sp-sidebar-brand{ display: flex; align-items: center; gap: 10px; padding: 20px; border-bottom: 1px solid var(--border); }
+  .sp-sidebar-footer{ padding: 16px 20px; border-top: 1px solid var(--border); }
+  .sp-sidebar-footer .sp-profile-info{ text-align: left; }
+  .sp-sidebar-footer .sp-profile-meta{ justify-content: flex-start; }
+
+  .sp-main{ flex: 1; min-width: 0; padding: 28px 32px 60px; max-width: 1100px; }
+
+  /* Navigasi utama (vertikal, di sidebar) — beda dari .sp-tabs (sub-tab
+     horizontal di dalam konten, mis. Input/Rekap Nilai) meski elemen
+     tombolnya sama-sama pakai class .sp-tab. */
+  .sp-nav{ display: flex; flex-direction: column; gap: 2px; padding: 14px 12px; flex: 1; overflow-y: auto; }
+  .sp-nav .sp-tab{
+    display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 8px;
+    border: none; background: none; font-size: 13.5px; font-weight: 600; color: var(--text-muted); cursor: pointer;
+  }
+  .sp-nav .sp-tab.active{ background: var(--brand); color: var(--brand-fg); }
+  .sp-nav .sp-tab:hover:not(.active){ background: var(--bg); }
+
+  /* ---- Kartu profil ringkas (chip) ---- */
   .sp-profile-chip{ display: flex; align-items: center; gap: 10px; }
   .sp-avatar{
     width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
@@ -129,25 +144,30 @@
   /* ===== Cetak (Phase 7) ===== */
   .sp-print-only{ display: none; }
   @media print {
-    body.sp-printing .sp-topbar,
-    body.sp-printing .sp-tabs,
+    body.sp-printing .sp-sidebar,
     body.sp-printing #sp-rekap-filter,
     body.sp-printing #sp-rekap-actions,
     body.sp-printing .sp-pending{ display: none !important; }
     body.sp-printing .sp-print-only{ display: block; }
-    body.sp-printing #sp-admin-app, body.sp-printing #sp-guru-app{ max-width: none; padding: 0; }
+    body.sp-printing .sp-main{ max-width: none; padding: 0; }
     body.sp-printing table.sp-table{ font-size: 11px; }
     body.sp-printing{ background: #fff; color: #000; }
   }
 
-  /* ===== Responsive (ponsel/tablet sempit) ===== */
+  /* ===== Responsive: sidebar jadi bar horizontal di layar sempit ===== */
+  @media (max-width: 900px){
+    #sp-admin-app, #sp-guru-app{ flex-direction: column; min-height: 0; }
+    .sp-sidebar{
+      width: 100%; min-height: 0; position: static; flex-direction: row; flex-wrap: wrap;
+      border-right: none; border-bottom: 1px solid var(--border);
+    }
+    .sp-sidebar-brand{ border-bottom: none; padding: 14px 16px; }
+    .sp-nav{ flex-direction: row; flex-wrap: nowrap; overflow-x: auto; padding: 8px 12px; flex: 1 1 100%; order: 3; }
+    .sp-nav .sp-tab{ width: auto; white-space: nowrap; }
+    .sp-sidebar-footer{ border-top: none; padding: 10px 16px; margin-left: auto; }
+    .sp-main{ padding: 20px 16px 40px; max-width: none; }
+  }
   @media (max-width: 640px){
-    #sp-admin-app, #sp-guru-app{ padding: 0 14px 40px; }
-    .sp-topbar{ padding: 12px 0; }
-    .sp-topbar-right{ width: 100%; justify-content: space-between; }
-    .sp-profile-info, .sp-profile-meta{ text-align: left; justify-content: flex-start; }
-    .sp-tabs{ gap: 2px; }
-    .sp-tab{ padding: 8px 10px; font-size: 12.5px; }
     .sp-form{ padding: 12px; gap: 8px; }
     .sp-field{ flex: 1 1 100%; }
     .sp-field input, .sp-field select{ width: 100%; min-width: 0; }
