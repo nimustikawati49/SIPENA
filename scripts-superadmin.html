@@ -343,7 +343,14 @@ function SuperAdmin_panelMapel_() {
     '  <form class="sp-form" id="sp-form-mapel">' +
     '    <div class="sp-field"><label>Kode</label><input name="kode_mapel"></div>' +
     '    <div class="sp-field"><label>Nama Mapel</label><input name="nama_mapel" required></div>' +
-    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang"><option value="">Semua</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option></select></div>' +
+    '    <div class="sp-field"><label>Jenjang (kosongkan = semua jenjang)</label>' +
+    '      <div style="display:flex;gap:12px;padding-top:8px;">' +
+    '        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="sp-mapel-jenjang" value="SD"> SD</label>' +
+    '        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="sp-mapel-jenjang" value="SMP"> SMP</label>' +
+    '        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="sp-mapel-jenjang" value="SMA"> SMA</label>' +
+    '        <label style="display:flex;align-items:center;gap:4px;font-weight:400;"><input type="checkbox" class="sp-mapel-jenjang" value="SMK"> SMK</label>' +
+    '      </div>' +
+    '    </div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
     SuperAdmin_cancelEditButton_() +
     '  </form>' +
@@ -351,11 +358,18 @@ function SuperAdmin_panelMapel_() {
     '  <div id="sp-table-mapel"></div>' +
     '</div>';
 }
+function SuperAdmin_getMapelJenjangChecked_(form) {
+  return Array.prototype.slice.call(form.querySelectorAll('.sp-mapel-jenjang:checked')).map(function (cb) { return cb.value; });
+}
+function SuperAdmin_setMapelJenjangChecked_(form, jenjangCsv) {
+  var selected = String(jenjangCsv || '').split(',').map(function (j) { return j.trim(); });
+  form.querySelectorAll('.sp-mapel-jenjang').forEach(function (cb) { cb.checked = selected.indexOf(cb.value) !== -1; });
+}
 function SuperAdmin_wireMapel_() {
   document.getElementById('sp-form-mapel').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
-    var data = { kode_mapel: f.kode_mapel.value, nama_mapel: f.nama_mapel.value, jenjang: f.jenjang.value };
+    var data = { kode_mapel: f.kode_mapel.value, nama_mapel: f.nama_mapel.value, jenjang: SuperAdmin_getMapelJenjangChecked_(f) };
     var btn = f.querySelector('button[type="submit"]');
     var editId = f.dataset.editId;
     runServer(editId ? 'adminUpdateSubject' : 'adminCreateSubject', editId ? [editId, data] : [data], {
@@ -374,14 +388,16 @@ function SuperAdmin_editSubject_(mapelId) {
   var f = document.getElementById('sp-form-mapel');
   f.kode_mapel.value = m.kode_mapel || '';
   f.nama_mapel.value = m.nama_mapel || '';
-  f.jenjang.value = m.jenjang || '';
+  SuperAdmin_setMapelJenjangChecked_(f, m.jenjang);
   SuperAdmin_setFormEditMode_(f, mapelId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function SuperAdmin_renderMapel() {
   SuperAdmin_table_('sp-table-mapel', [
     { key: 'mapel_id', label: 'ID' }, { key: 'kode_mapel', label: 'Kode' },
-    { key: 'nama_mapel', label: 'Nama' }, { key: 'jenjang', label: 'Jenjang' }, { key: 'status', label: 'Status' },
+    { key: 'nama_mapel', label: 'Nama' },
+    { label: 'Jenjang', render: function (r) { return r.jenjang ? String(r.jenjang).split(',').join(', ') : 'Semua'; } },
+    { key: 'status', label: 'Status' },
     { label: 'Aksi', render: function (r) {
         return '<button class="sp-btn secondary" onclick="SuperAdmin_editSubject_(\'' + r.mapel_id + '\')">Edit</button> ' +
           '<button class="sp-btn secondary" onclick="SuperAdmin_deleteSubject_(\'' + r.mapel_id + '\', \'' + String(r.nama_mapel).replace(/'/g, "\\'") + '\')">Hapus</button>';

@@ -6,6 +6,31 @@ function adminGetSubjects() {
   return Utils_sheetToObjects_(sh).map(function (r) { delete r._row; return r; });
 }
 
+/**
+ * Mapel_normalizeJenjang_(input)
+ * Sebuah mapel (mis. "Informatika") bisa berlaku di lebih dari satu
+ * jenjang sekaligus (SD-SMP-SMA-SMK) — dulu field ini single-select
+ * sehingga mapel lintas-jenjang terpaksa diduplikasi jadi beberapa
+ * mapel_id berbeda. `input` boleh array (dari checkbox multi-pilih di
+ * UI) atau string comma-separated; disimpan sebagai string
+ * comma-separated terurut ("SD,SMP,SMA,SMK"), kosong = berlaku semua
+ * jenjang. Variasi "sekolah tertentu mulai dari kelas berapa" TIDAK
+ * diatur di sini — itu domain Penugasan Mengajar (per sekolah, per
+ * kelas), bukan properti mapel itu sendiri.
+ */
+function Mapel_normalizeJenjang_(input) {
+  if (input === undefined) return undefined;
+  const valid = ['SD', 'SMP', 'SMA', 'SMK'];
+  const arr = Array.isArray(input) ? input : String(input || '').split(',');
+  const cleaned = arr.map(function (j) { return String(j || '').toUpperCase().trim(); }).filter(function (j) { return j; });
+  cleaned.forEach(function (j) {
+    if (valid.indexOf(j) === -1) throw new Error('Jenjang "' + j + '" tidak valid.');
+  });
+  const uniq = cleaned.filter(function (j, i) { return cleaned.indexOf(j) === i; });
+  uniq.sort(function (a, b) { return valid.indexOf(a) - valid.indexOf(b); });
+  return uniq.join(',');
+}
+
 function adminCreateSubject(data) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   const nama = String(data && data.nama_mapel || '').trim();
@@ -17,7 +42,7 @@ function adminCreateSubject(data) {
     mapel_id: mapelId,
     kode_mapel: data.kode_mapel || '',
     nama_mapel: nama,
-    jenjang: String(data.jenjang || '').toUpperCase(),
+    jenjang: Mapel_normalizeJenjang_(data.jenjang) || '',
     status: 'AKTIF'
   });
 
@@ -59,9 +84,10 @@ function adminUpdateSubject(mapelId, data) {
   if (rowNum === -1) throw new Error('Mata pelajaran tidak ditemukan.');
 
   const patch = {};
-  ['kode_mapel', 'nama_mapel', 'jenjang', 'status'].forEach(function (k) {
+  ['kode_mapel', 'nama_mapel', 'status'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
+  if (data.jenjang !== undefined) patch.jenjang = Mapel_normalizeJenjang_(data.jenjang);
   Utils_updateRowByHeader_(sh, rowNum, patch);
 
   AuditLog_write_(auth, 'UPDATE_SUBJECT', 'Mapel', mapelId, JSON.stringify(patch));
