@@ -593,7 +593,6 @@ function SuperAdmin_panelPenugasan_() {
     '    <div class="sp-field"><label>Guru</label><select name="guru_id" data-source="guru" required></select></div>' +
     '    <div class="sp-field"><label>Mata Pelajaran</label><select name="mapel_id" data-source="mapel" required></select></div>' +
     '    <div class="sp-field"><label>Tahun Ajaran</label><select name="tahun_ajaran_id" data-source="tahunajaran" required></select></div>' +
-    '    <div class="sp-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
     '    <div class="sp-field" style="flex-basis:100%;">' +
     '      <label>Kelas (centang satu atau lebih — kelas ditampilkan sesuai sekolah guru terpilih)</label>' +
     '      <div style="margin:6px 0;">' +
@@ -653,7 +652,7 @@ function SuperAdmin_wirePenugasan_() {
     var editId = f.dataset.editId;
 
     if (editId) {
-      var data = { guru_id: f.guru_id.value, mapel_id: f.mapel_id.value, kelas_id: kelasIds[0], tahun_ajaran_id: f.tahun_ajaran_id.value, semester: f.semester.value };
+      var data = { guru_id: f.guru_id.value, mapel_id: f.mapel_id.value, kelas_id: kelasIds[0], tahun_ajaran_id: f.tahun_ajaran_id.value };
       runServer('adminUpdateAssignment', [editId, data], {
         loadingEl: btn,
         onSuccess: function () {
@@ -666,7 +665,7 @@ function SuperAdmin_wirePenugasan_() {
       return;
     }
 
-    runServer('adminCreateAssignmentBatch', [f.guru_id.value, f.mapel_id.value, kelasIds, f.tahun_ajaran_id.value, f.semester.value], {
+    runServer('adminCreateAssignmentBatch', [f.guru_id.value, f.mapel_id.value, kelasIds, f.tahun_ajaran_id.value], {
       loadingEl: btn,
       onSuccess: function (res) {
         var msg = 'Penugasan tersimpan untuk ' + res.created.length + ' kelas' +
@@ -689,7 +688,6 @@ function SuperAdmin_editAssignment_(assignmentId) {
   f.guru_id.value = a.guru_id || '';
   f.mapel_id.value = a.mapel_id || '';
   f.tahun_ajaran_id.value = a.tahun_ajaran_id || '';
-  f.semester.value = a.semester || '';
   var guru = SuperAdmin.teachers.filter(function (g) { return g.guru_id === a.guru_id; })[0];
   SuperAdmin_renderPenugasanKelasCheckboxes_(guru ? guru.sekolah_id : null);
   var cb = document.querySelector('.sp-penugasan-kelas-cb[value="' + a.kelas_id + '"]');
@@ -793,17 +791,50 @@ function SuperAdmin_confirmRombelBatch_() {
   });
 }
 
+/**
+ * SuperAdmin_tahunAjaranLabel_(id)
+ * "2026/2027 - GANJIL" — gabungan label+semester, dipakai di mana pun
+ * tahun_ajaran_id ditampilkan supaya semester tidak perlu kolom/field
+ * terpisah (satu tahun_ajaran_id sudah pasti satu semester tertentu).
+ */
+function SuperAdmin_tahunAjaranLabel_(id) {
+  var t = SuperAdmin.academicYears.filter(function (r) { return r.tahun_ajaran_id === id; })[0];
+  return t ? (t.label + ' - ' + t.semester) : id;
+}
+
+/**
+ * SuperAdmin_renderPenugasan()
+ * Dikelompokkan per sekolah (bukan tabel datar) supaya Superadmin yang
+ * mengelola banyak sekolah tidak bingung guru siapa milik sekolah mana.
+ */
 function SuperAdmin_renderPenugasan() {
-  SIPENA_table_('sp-table-penugasan', [
-    { key: 'assignment_id', label: 'ID' }, { key: 'nama_guru', label: 'Guru' },
-    { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' },
-    { label: 'Tahun Ajaran', render: function (r) { return SuperAdmin_labelFromId_(SuperAdmin.academicYears, 'tahun_ajaran_id', r.tahun_ajaran_id, 'label'); } },
-    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' },
-    { label: 'Aksi', render: function (r) {
-        return '<button class="sp-btn secondary" onclick="SuperAdmin_editAssignment_(\'' + r.assignment_id + '\')">Edit</button> ' +
-          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAssignment_(\'' + r.assignment_id + '\')">Hapus</button>';
-      } }
-  ], SuperAdmin.assignments, 'Belum ada penugasan.');
+  var el = document.getElementById('sp-table-penugasan');
+  if (!SuperAdmin.assignments.length) { el.innerHTML = '<div class="sp-empty">Belum ada penugasan.</div>'; return; }
+
+  var bySekolah = {};
+  SuperAdmin.assignments.forEach(function (r) {
+    if (!bySekolah[r.sekolah_id]) bySekolah[r.sekolah_id] = [];
+    bySekolah[r.sekolah_id].push(r);
+  });
+
+  var sekolahIds = Object.keys(bySekolah).sort(function (a, b) {
+    return SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', a, 'nama_sekolah')
+      .localeCompare(SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', b, 'nama_sekolah'));
+  });
+
+  el.innerHTML = sekolahIds.map(function (sid) {
+    var namaSekolah = SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', sid, 'nama_sekolah') || '(Sekolah tidak diketahui)';
+    var body = bySekolah[sid].map(function (r) {
+      return '<tr><td>' + r.nama_guru + '</td><td>' + r.nama_mapel + '</td><td>' + r.nama_kelas + '</td>' +
+        '<td>' + SuperAdmin_tahunAjaranLabel_(r.tahun_ajaran_id) + '</td><td>' + r.status + '</td>' +
+        '<td><button class="sp-btn secondary" onclick="SuperAdmin_editAssignment_(\'' + r.assignment_id + '\')">Edit</button> ' +
+        '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAssignment_(\'' + r.assignment_id + '\')">Hapus</button></td></tr>';
+    }).join('');
+    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' +
+      '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+      '<th>Guru</th><th>Mapel</th><th>Kelas</th><th>Tahun Ajaran</th><th>Status</th><th>Aksi</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table></div>';
+  }).join('');
 }
 function SuperAdmin_deleteAssignment_(assignmentId) {
   if (!confirm('Hapus penugasan ini? Aksi ini tidak bisa dibatalkan.')) return;
@@ -827,18 +858,30 @@ function SuperAdmin_panelSiswa_() {
     '    <div class="sp-field"><label>Nama Lengkap</label><input name="nama_lengkap" required></div>' +
     '    <div class="sp-field"><label>Jenis Kelamin</label><select name="jenis_kelamin"><option value="">Pilih</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></div>' +
     '    <div class="sp-field"><label>Tahun Masuk</label><input name="tahun_masuk" placeholder="2026"></div>' +
+    '    <div class="sp-field"><label>Status</label><select name="status"><option value="AKTIF">AKTIF</option><option value="NONAKTIF">NONAKTIF</option><option value="PINDAH_KELUAR">PINDAH_KELUAR</option><option value="LULUS">LULUS</option><option value="ALUMNI">ALUMNI</option></select></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
     '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditSiswa_(this.form)">Batal Edit</button>' +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Siswa</div>' +
     '  <div id="sp-table-siswa" style="margin-bottom:28px;"></div>' +
 
+    '  <div class="sp-section-title">Import Siswa (Massal)</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Pilih sekolah, lalu tempel data dari Excel/Sheets — kolom: NIS, Nama Lengkap, Jenis Kelamin (L/P), Nama Kelas, dipisah Tab, satu siswa per baris. Bisa sekaligus untuk beberapa kelas/tingkat (mis. kelas 7-9). Kalau sekolah sudah punya tahun ajaran aktif, siswa langsung masuk roster kelasnya masing-masing.</div>' +
+    '  <div class="sp-form" style="flex-direction:column;align-items:stretch;">' +
+    '    <div class="sp-field"><label>Sekolah</label><select id="sp-import-sekolah" data-source="sekolah" required></select></div>' +
+    '    <div class="sp-field">' +
+    '      <label>Data Siswa (tempel di sini)</label>' +
+    '      <textarea id="sp-import-textarea" rows="7" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:monospace;font-size:12.5px;" placeholder="1234\tAhmad Fauzi\tL\t7A\n1235\tSiti Aminah\tP\t7A\n1236\tBudi Santoso\tL\t7B"></textarea>' +
+    '    </div>' +
+    '    <button type="button" class="sp-btn" onclick="SuperAdmin_previewImport_()">Lihat Preview</button>' +
+    '  </div>' +
+    '  <div id="sp-import-preview" class="hidden" style="margin:14px 0 28px;"></div>' +
+
     '  <div class="sp-section-title">Kelola Siswa per Kelas</div>' +
     '  <div class="sp-form">' +
     '    <div class="sp-field"><label>Sekolah</label><select id="sp-enroll-sekolah" data-source="sekolah" required></select></div>' +
     '    <div class="sp-field"><label>Kelas</label><select id="sp-enroll-kelas" required><option value="">Pilih sekolah dulu</option></select></div>' +
     '    <div class="sp-field"><label>Tahun Ajaran</label><select id="sp-enroll-ta" data-source="tahunajaran" required></select></div>' +
-    '    <div class="sp-field"><label>Semester</label><select id="sp-enroll-semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
     '    <button type="button" class="sp-btn" onclick="SuperAdmin_loadEnrollment_()">Tampilkan</button>' +
     '  </div>' +
     '  <div id="sp-enroll-box" class="hidden">' +
@@ -867,7 +910,7 @@ function SuperAdmin_wireSiswa_() {
     var btn = f.querySelector('button[type="submit"]');
 
     if (editId) {
-      var patch = { nis: f.nis.value, nisn: f.nisn.value, nama_lengkap: f.nama_lengkap.value, jenis_kelamin: f.jenis_kelamin.value, tahun_masuk: f.tahun_masuk.value };
+      var patch = { nis: f.nis.value, nisn: f.nisn.value, nama_lengkap: f.nama_lengkap.value, jenis_kelamin: f.jenis_kelamin.value, tahun_masuk: f.tahun_masuk.value, status: f.status.value };
       runServer('adminUpdateStudent', [editId, patch], {
         loadingEl: btn,
         onSuccess: function () {
@@ -889,6 +932,10 @@ function SuperAdmin_wireSiswa_() {
 
   document.getElementById('sp-enroll-sekolah').addEventListener('change', function () {
     SuperAdmin_refreshEnrollKelasOptions_(this.value);
+  });
+
+  document.getElementById('sp-import-textarea').addEventListener('keydown', function (e) {
+    if (e.key === 'Tab') { e.preventDefault(); var s = this.selectionStart; this.value = this.value.slice(0, s) + '\t' + this.value.slice(this.selectionEnd); this.selectionStart = this.selectionEnd = s + 1; }
   });
 }
 
@@ -925,6 +972,7 @@ function SuperAdmin_editSiswa_(siswaId) {
   f.nama_lengkap.value = s.nama_lengkap || '';
   f.jenis_kelamin.value = s.jenis_kelamin || '';
   f.tahun_masuk.value = s.tahun_masuk || '';
+  f.status.value = s.status || 'AKTIF';
   SuperAdmin_setFormEditMode_(f, siswaId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -939,15 +987,81 @@ function SuperAdmin_deleteSiswa_(siswaId, nama) {
   });
 }
 
+/* ---- Import Siswa (Massal) ---- */
+function SuperAdmin_previewImport_() {
+  var sekolahId = document.getElementById('sp-import-sekolah').value;
+  var raw = document.getElementById('sp-import-textarea').value;
+  if (!sekolahId) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
+  var lines = raw.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l; });
+  if (!lines.length) { SIPENA_toast('Tempel data siswa dulu.', 'error'); return; }
+
+  var kelasByName = {};
+  SuperAdmin.classes.filter(function (k) { return k.sekolah_id === sekolahId; }).forEach(function (k) {
+    kelasByName[String(k.nama_kelas).toUpperCase().trim()] = k;
+  });
+
+  var valid = [];
+  var errors = [];
+  lines.forEach(function (line, i) {
+    var cols = line.indexOf('\t') !== -1 ? line.split('\t') : line.split(',');
+    if (cols.length < 4) { errors.push('Baris ' + (i + 1) + ': format tidak lengkap (butuh 4 kolom: NIS, Nama, JK, Kelas).'); return; }
+
+    var nis = cols[0].trim(), nama = cols[1].trim(), jk = cols[2].trim().toUpperCase(), kelasName = cols[3].trim();
+    if (!nama) { errors.push('Baris ' + (i + 1) + ': nama kosong.'); return; }
+    if (['L', 'P'].indexOf(jk) === -1) { errors.push('Baris ' + (i + 1) + ' (' + nama + '): jenis kelamin harus L atau P.'); return; }
+    var kelas = kelasByName[kelasName.toUpperCase()];
+    if (!kelas) { errors.push('Baris ' + (i + 1) + ' (' + nama + '): kelas "' + kelasName + '" tidak ditemukan di sekolah ini.'); return; }
+
+    valid.push({ nis: nis, nama_lengkap: nama, jenis_kelamin: jk, kelas_id: kelas.kelas_id, nama_kelas: kelas.nama_kelas });
+  });
+
+  window.SuperAdmin._importCtx = { sekolahId: sekolahId, rows: valid };
+  SuperAdmin_renderImportPreview_(valid, errors);
+}
+
+function SuperAdmin_renderImportPreview_(valid, errors) {
+  var el = document.getElementById('sp-import-preview');
+  var html = '';
+  if (errors.length) {
+    html += '<div class="msg danger" style="margin-bottom:10px;">' + errors.length + ' baris bermasalah (dilewati):<br>' + errors.join('<br>') + '</div>';
+  }
+  if (!valid.length) {
+    html += '<div class="sp-empty">Tidak ada baris valid untuk diimport.</div>';
+  } else {
+    var body = valid.map(function (r) {
+      return '<tr><td>' + (r.nis || '-') + '</td><td>' + r.nama_lengkap + '</td><td>' + r.jenis_kelamin + '</td><td>' + r.nama_kelas + '</td></tr>';
+    }).join('');
+    html += '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>NIS</th><th>Nama</th><th>JK</th><th>Kelas</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
+      '<div style="margin-top:12px;display:flex;gap:10px;">' +
+      '<button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-import-preview\').classList.add(\'hidden\')">Batal</button>' +
+      '<button type="button" class="sp-btn" onclick="SuperAdmin_confirmImport_()">Import ' + valid.length + ' Siswa</button>' +
+      '</div>';
+  }
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+function SuperAdmin_confirmImport_() {
+  var ctx = window.SuperAdmin._importCtx;
+  if (!ctx || !ctx.rows.length) return;
+  runServer('adminImportStudents', [ctx.sekolahId, ctx.rows], {
+    onSuccess: function (res) {
+      SIPENA_toast(res.created + ' siswa berhasil diimport' + (res.enrolled ? ', ' + res.enrolled + ' langsung masuk roster kelas' : '') + (res.warning ? ' — ' + res.warning : '') + '.');
+      document.getElementById('sp-import-preview').classList.add('hidden');
+      document.getElementById('sp-import-textarea').value = '';
+      runServer('adminGetStudents', [], { onSuccess: function (rows) { SuperAdmin.students = rows; SuperAdmin_renderSiswa(); } });
+    }
+  });
+}
+
 /* ---- Kelola Siswa per Kelas ---- */
 function SuperAdmin_loadEnrollment_() {
   var kelasId = document.getElementById('sp-enroll-kelas').value;
   var tahunAjaranId = document.getElementById('sp-enroll-ta').value;
-  var semester = document.getElementById('sp-enroll-semester').value;
-  if (!kelasId || !tahunAjaranId || !semester) { SIPENA_toast('Lengkapi kelas, tahun ajaran, dan semester dulu.', 'error'); return; }
+  if (!kelasId || !tahunAjaranId) { SIPENA_toast('Lengkapi kelas dan tahun ajaran dulu.', 'error'); return; }
 
-  window.SuperAdmin._enrollCtx = { kelasId: kelasId, tahunAjaranId: tahunAjaranId, semester: semester };
-  runServer('adminGetEnrollment', [kelasId, tahunAjaranId, semester], {
+  window.SuperAdmin._enrollCtx = { kelasId: kelasId, tahunAjaranId: tahunAjaranId };
+  runServer('adminGetEnrollment', [kelasId, tahunAjaranId], {
     onSuccess: function (res) {
       document.getElementById('sp-enroll-box').classList.remove('hidden');
       SuperAdmin_renderEnrollCandidates_(res.not_enrolled);
@@ -974,7 +1088,7 @@ function SuperAdmin_confirmEnroll_() {
   if (!ctx) return;
   var ids = Array.prototype.slice.call(document.querySelectorAll('.sp-enroll-cb:checked')).map(function (cb) { return cb.value; });
   if (!ids.length) { SIPENA_toast('Pilih minimal satu siswa.', 'error'); return; }
-  runServer('adminEnrollStudents', [ctx.kelasId, ctx.tahunAjaranId, ctx.semester, ids], {
+  runServer('adminEnrollStudents', [ctx.kelasId, ctx.tahunAjaranId, ids], {
     onSuccess: function (res) {
       SIPENA_toast(res.added.length + ' siswa ditambahkan ke kelas' + (res.skipped.length ? ' (' + res.skipped.length + ' sudah ada sebelumnya)' : '') + '.');
       SuperAdmin_loadEnrollment_();

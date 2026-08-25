@@ -116,6 +116,20 @@ function adminSetActivePeriod(sekolahId, tahunAjaranId) {
   return { ok: true };
 }
 
+/**
+ * TahunAjaran_getSemester_(tahunAjaranId)
+ * Satu tahun_ajaran_id SUDAH menyatakan satu label+semester spesifik
+ * (mis. "2026/2027 - GANJIL"), jadi semester tidak perlu diminta lagi
+ * secara terpisah di form Penugasan/Kelola Siswa — cukup diturunkan
+ * dari sini di server, satu sumber kebenaran, tidak bisa mismatch.
+ */
+function TahunAjaran_getSemester_(tahunAjaranId) {
+  const row = Utils_sheetToObjects_(Config_getSheet_('MASTER_TAHUN_AJARAN'))
+    .filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; })[0];
+  if (!row) throw new Error('Tahun ajaran tidak ditemukan.');
+  return row.semester;
+}
+
 function TahunAjaran_getActivePeriod_(sekolahId) {
   const sh = Config_getSheet_('SEKOLAH_PERIODE_AKTIF');
   const rows = Utils_sheetToObjects_(sh);

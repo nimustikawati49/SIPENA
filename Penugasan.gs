@@ -31,25 +31,28 @@ function Penugasan_indexBy_(rows, key) {
 }
 
 /**
- * adminCreateAssignmentBatch(guruId, mapelId, kelasIds, tahunAjaranId, semester)
+ * adminCreateAssignmentBatch(guruId, mapelId, kelasIds, tahunAjaranId)
  * Satu guru sering diajar di banyak kelas sekaligus untuk 1 mapel+periode
  * (bisa 10+ kelas) — checkbox multi-pilih kelas di UI, satu kali submit.
+ * Semester TIDAK diminta lagi dari client — satu tahun_ajaran_id sudah
+ * berarti satu label+semester spesifik (mis. "2026/2027 - GANJIL"),
+ * jadi diturunkan lewat TahunAjaran_getSemester_ (satu sumber kebenaran,
+ * tidak bisa mismatch dengan tahun ajaran yang dipilih).
  * Kombinasi yang sudah ada dilewati (bukan error, supaya submit ulang
  * dengan sebagian kelas tumpang-tindih tidak gagal total), sisanya
  * ditulis dalam SATU batch setValues (bukan satu appendRow per kelas),
  * lalu sinkronisasi guru dijalankan SEKALI di akhir (bukan per kelas).
  */
-function adminCreateAssignmentBatch(guruId, mapelId, kelasIds, tahunAjaranId, semester) {
+function adminCreateAssignmentBatch(guruId, mapelId, kelasIds, tahunAjaranId) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   guruId = String(guruId || '').trim();
   mapelId = String(mapelId || '').trim();
   tahunAjaranId = String(tahunAjaranId || '').trim();
-  semester = String(semester || '').toUpperCase().trim();
   const ids = (Array.isArray(kelasIds) ? kelasIds : []).map(function (k) { return String(k || '').trim(); }).filter(function (k) { return k; });
 
   if (!guruId || !mapelId || !tahunAjaranId) throw new Error('Guru, mapel, dan tahun ajaran wajib diisi.');
   if (!ids.length) throw new Error('Pilih minimal satu kelas.');
-  if (['GANJIL', 'GENAP'].indexOf(semester) === -1) throw new Error('Semester harus GANJIL atau GENAP.');
+  const semester = TahunAjaran_getSemester_(tahunAjaranId);
 
   const guru = Utils_sheetToObjects_(Config_getSheet_('MASTER_GURU')).filter(function (r) { return r.guru_id === guruId; })[0];
   if (!guru) throw new Error('Guru tidak ditemukan.');
@@ -103,12 +106,11 @@ function adminCreateAssignment(data) {
   const kelasId = String(data && data.kelas_id || '').trim();
   const sekolahId = String(data && data.sekolah_id || '').trim();
   const tahunAjaranId = String(data && data.tahun_ajaran_id || '').trim();
-  const semester = String(data && data.semester || '').toUpperCase().trim();
 
   if (!guruId || !mapelId || !kelasId || !sekolahId || !tahunAjaranId) {
     throw new Error('Guru, mapel, kelas, sekolah, dan tahun ajaran wajib diisi.');
   }
-  if (['GANJIL', 'GENAP'].indexOf(semester) === -1) throw new Error('Semester harus GANJIL atau GENAP.');
+  const semester = TahunAjaran_getSemester_(tahunAjaranId);
 
   Penugasan_ensureGuruMapel_(guruId, mapelId, sekolahId, tahunAjaranId);
 
@@ -158,9 +160,8 @@ function adminUpdateAssignment(assignmentId, data) {
     const mapelId = String(data.mapel_id || row.mapel_id).trim();
     const kelasId = String(data.kelas_id || row.kelas_id).trim();
     const tahunAjaranId = String(data.tahun_ajaran_id || row.tahun_ajaran_id).trim();
-    const semester = String(data.semester || row.semester).toUpperCase().trim();
     if (!guruId || !mapelId || !kelasId || !tahunAjaranId) throw new Error('Guru, mapel, kelas, dan tahun ajaran wajib diisi.');
-    if (['GANJIL', 'GENAP'].indexOf(semester) === -1) throw new Error('Semester harus GANJIL atau GENAP.');
+    const semester = TahunAjaran_getSemester_(tahunAjaranId);
 
     const guru = Utils_sheetToObjects_(Config_getSheet_('MASTER_GURU')).filter(function (r) { return r.guru_id === guruId; })[0];
     if (!guru) throw new Error('Guru tidak ditemukan.');
