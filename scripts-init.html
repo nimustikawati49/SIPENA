@@ -6,18 +6,37 @@ window.SIPENA = window.SIPENA || {};
  * Satu wrapper untuk semua panggilan google.script.run — pusat toast/error
  * handling, supaya tidak diulang inline di tiap tombol (perbaikan atas
  * pola SAG yang menulis withSuccessHandler/withFailureHandler berulang
- * di setiap handler).
+ * di setiap handler). Juga pusat indikator "sedang memproses" — baik
+ * indikator global (dipakai user supaya tidak refresh halaman saat masih
+ * menunggu database pusat) maupun spinner per-tombol kalau opts.loadingEl
+ * diberikan.
  */
 function runServer(fnName, args, opts) {
   opts = opts || {};
-  if (opts.loadingEl) opts.loadingEl.disabled = true;
+  SIPENA_pendingStart_();
+
+  var originalBtnHtml = null;
+  if (opts.loadingEl) {
+    opts.loadingEl.disabled = true;
+    originalBtnHtml = opts.loadingEl.innerHTML;
+    opts.loadingEl.innerHTML = '<span class="sp-btn-spinner"></span>Memproses...';
+  }
+
+  function finish() {
+    SIPENA_pendingEnd_();
+    if (opts.loadingEl) {
+      opts.loadingEl.disabled = false;
+      if (originalBtnHtml !== null) opts.loadingEl.innerHTML = originalBtnHtml;
+    }
+  }
+
   var runner = google.script.run
     .withSuccessHandler(function (res) {
-      if (opts.loadingEl) opts.loadingEl.disabled = false;
+      finish();
       if (opts.onSuccess) opts.onSuccess(res);
     })
     .withFailureHandler(function (err) {
-      if (opts.loadingEl) opts.loadingEl.disabled = false;
+      finish();
       var msg = err && err.message ? err.message : String(err);
       if (opts.onError) { opts.onError(msg); } else { SIPENA_toast(msg, 'error'); }
     });
@@ -30,6 +49,53 @@ function SIPENA_toast(message, kind) {
   el.textContent = message;
   document.body.appendChild(el);
   setTimeout(function () { el.remove(); }, 4000);
+}
+
+/**
+ * Indikator global "sedang memproses ke/dari database pusat... N detik".
+ * Terhitung sebagai counter (bukan boolean) karena beberapa panggilan bisa
+ * berjalan bersamaan (mis. SuperAdmin_loadAll menembak 6 sekaligus saat
+ * panel dibuka) — indikator baru hilang saat SEMUA panggilan selesai.
+ */
+var SIPENA_pendingCount_ = 0;
+var SIPENA_pendingTimer_ = null;
+var SIPENA_pendingStartedAt_ = null;
+
+function SIPENA_pendingEl_() {
+  var el = document.getElementById('sp-pending');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sp-pending';
+    el.className = 'sp-pending';
+    el.innerHTML = '<span class="sp-pending-spinner"></span><span id="sp-pending-text"></span>';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function SIPENA_pendingStart_() {
+  SIPENA_pendingCount_++;
+  var el = SIPENA_pendingEl_();
+  el.classList.add('visible');
+  if (!SIPENA_pendingTimer_) {
+    SIPENA_pendingStartedAt_ = Date.now();
+    var tick = function () {
+      var secs = Math.max(0, Math.floor((Date.now() - SIPENA_pendingStartedAt_) / 1000));
+      var textEl = document.getElementById('sp-pending-text');
+      if (textEl) textEl.textContent = 'Menghubungi database pusat… ' + secs + ' detik';
+    };
+    tick();
+    SIPENA_pendingTimer_ = setInterval(tick, 1000);
+  }
+}
+
+function SIPENA_pendingEnd_() {
+  SIPENA_pendingCount_ = Math.max(0, SIPENA_pendingCount_ - 1);
+  if (SIPENA_pendingCount_ === 0) {
+    var el = document.getElementById('sp-pending');
+    if (el) el.classList.remove('visible');
+    if (SIPENA_pendingTimer_) { clearInterval(SIPENA_pendingTimer_); SIPENA_pendingTimer_ = null; }
+  }
 }
 
 (function () {
@@ -66,13 +132,13 @@ function SIPENA_toast(message, kind) {
   }
 
   function bootApp() {
-    google.script.run
-      .withSuccessHandler(renderAuth)
-      .withFailureHandler(function (err) {
-        document.getElementById('sp-error-msg').textContent = err && err.message ? err.message : String(err);
+    runServer('getAuth', [], {
+      onSuccess: renderAuth,
+      onError: function (msg) {
+        document.getElementById('sp-error-msg').textContent = msg;
         show('sp-error');
-      })
-      .getAuth();
+      }
+    });
   }
 
   document.addEventListener('DOMContentLoaded', bootApp);
