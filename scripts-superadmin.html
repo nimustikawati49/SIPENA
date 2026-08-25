@@ -3,6 +3,13 @@ var SuperAdmin = {
   schools: [], teachers: [], subjects: [], classes: [], academicYears: [], assignments: []
 };
 
+var SP_TINGKAT_OPTIONS_ = {
+  SD: ['1', '2', '3', '4', '5', '6'],
+  SMP: ['7', '8', '9'],
+  SMA: ['10', '11', '12'],
+  SMK: ['10', '11', '12']
+};
+
 function SuperAdmin_init() {
   document.body.classList.add('sp-app-mode');
   document.getElementById('sp-admin-app').classList.remove('hidden');
@@ -143,7 +150,8 @@ function SuperAdmin_buildPanels() {
     SuperAdmin_panelMapel_() +
     SuperAdmin_panelKelas_() +
     SuperAdmin_panelTahunAjaran_() +
-    SuperAdmin_panelPenugasan_();
+    SuperAdmin_panelPenugasan_() +
+    SuperAdmin_panelRombel_();
 
   SuperAdmin_wireSekolah_();
   SuperAdmin_wireGuru_();
@@ -151,6 +159,7 @@ function SuperAdmin_buildPanels() {
   SuperAdmin_wireKelas_();
   SuperAdmin_wireTahunAjaran_();
   SuperAdmin_wirePenugasan_();
+  SuperAdmin_wireRombel_();
 }
 
 /* ---------- Sekolah ---------- */
@@ -601,6 +610,197 @@ function SuperAdmin_editAssignment_(assignmentId) {
   SuperAdmin_setFormEditMode_(f, assignmentId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+/* ---------- Generator Rombel ---------- */
+function SuperAdmin_tingkatOptions_(jenjang) {
+  var opts = SP_TINGKAT_OPTIONS_[jenjang] || [];
+  if (!opts.length) return '<option value="">-</option>';
+  return opts.map(function (t) { return '<option value="' + t + '">' + t + '</option>'; }).join('');
+}
+
+function SuperAdmin_panelRombel_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-rombel">' +
+    '  <div class="sp-section-title">Generate Satu Tingkat</div>' +
+    '  <form class="sp-form" id="sp-form-rombel-single">' +
+    '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
+    '    <div class="sp-field"><label>Jenjang</label><select name="jenjang" id="sp-rombel-jenjang" required>' +
+    '      <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
+    '    </select></div>' +
+    '    <div class="sp-field"><label>Tingkat</label><select name="tingkat" id="sp-rombel-tingkat" required><option value="">Pilih jenjang dulu</option></select></div>' +
+    '    <div class="sp-field hidden" id="sp-rombel-smk-field"><label>Program/Konsentrasi Keahlian</label><input name="program_keahlian" placeholder="TKJ"></div>' +
+    '    <div class="sp-field"><label>Jumlah Rombel</label><input name="jumlah_rombel" type="number" min="1" max="26" value="1" style="min-width:80px;" required></div>' +
+    '    <button class="sp-btn" type="submit">Lihat Preview</button>' +
+    '  </form>' +
+    '  <div id="sp-rombel-preview" class="hidden" style="margin-bottom:28px;"></div>' +
+
+    '  <div class="sp-section-title">Generate Banyak Tingkat Sekaligus</div>' +
+    '  <div class="sp-form" style="flex-direction:column;align-items:stretch;">' +
+    '    <div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+    '      <div class="sp-field"><label>Sekolah</label><select id="sp-rombel-batch-sekolah" data-source="sekolah" required></select></div>' +
+    '      <div class="sp-field"><label>Jenjang</label><select id="sp-rombel-batch-jenjang" required>' +
+    '        <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
+    '      </select></div>' +
+    '    </div>' +
+    '    <div id="sp-rombel-batch-rows" style="margin-top:8px;"></div>' +
+    '    <div><button type="button" class="sp-btn secondary" onclick="SuperAdmin_addRombelBatchRow_()">+ Tambah Baris Tingkat</button></div>' +
+    '  </div>' +
+    '  <button type="button" class="sp-btn" style="margin-top:10px;" onclick="SuperAdmin_previewRombelBatch_()">Lihat Preview Semua</button>' +
+    '  <div id="sp-rombel-batch-preview" class="hidden" style="margin-top:16px;"></div>' +
+    '</div>';
+}
+
+function SuperAdmin_wireRombel_() {
+  document.getElementById('sp-rombel-jenjang').addEventListener('change', function () {
+    var jenjang = this.value;
+    document.getElementById('sp-rombel-tingkat').innerHTML = SuperAdmin_tingkatOptions_(jenjang);
+    document.getElementById('sp-rombel-smk-field').classList.toggle('hidden', jenjang !== 'SMK');
+  });
+
+  document.getElementById('sp-form-rombel-single').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var params = {
+      sekolah_id: f.sekolah_id.value, jenjang: f.jenjang.value, tingkat: f.tingkat.value,
+      jumlah_rombel: parseInt(f.jumlah_rombel.value, 10),
+      program_keahlian: f.program_keahlian ? f.program_keahlian.value : ''
+    };
+    var btn = f.querySelector('button[type="submit"]');
+    runServer('adminPreviewRombel', [params], {
+      loadingEl: btn,
+      onSuccess: function (plan) {
+        window.SuperAdmin._singleRombelParams = params;
+        SuperAdmin_renderRombelSinglePreview_(plan);
+      }
+    });
+  });
+
+  document.getElementById('sp-rombel-batch-jenjang').addEventListener('change', function () {
+    var jenjang = this.value;
+    document.querySelectorAll('#sp-rombel-batch-rows .sp-rombel-batch-row').forEach(function (row) {
+      row.querySelector('.sp-rb-tingkat').innerHTML = SuperAdmin_tingkatOptions_(jenjang);
+      row.querySelector('.sp-rb-smk-field').classList.toggle('hidden', jenjang !== 'SMK');
+    });
+  });
+
+  SuperAdmin_addRombelBatchRow_();
+}
+
+function SuperAdmin_renderRombelSinglePreview_(plan) {
+  var el = document.getElementById('sp-rombel-preview');
+  var html = '<div class="sp-form" style="flex-direction:column;align-items:stretch;">';
+  html += '<div style="font-weight:700;margin-bottom:4px;">Preview: ' + plan.prefix.trim() + ' — ' + plan.jumlah_rombel + ' rombel</div>';
+  if (plan.existing.length) html += '<div class="msg">Sudah ada (' + plan.existing.length + '): ' + plan.existing.join(', ') + '</div>';
+  if (plan.to_create.length) {
+    html += '<div class="msg" style="color:var(--ok);font-weight:600;">Akan dibuat (' + plan.to_create.length + '): ' + plan.to_create.join(' | ') + '</div>';
+  } else {
+    html += '<div class="msg">Tidak ada rombel baru yang perlu dibuat — semua sudah ada.</div>';
+  }
+  if (plan.to_deactivate.length) {
+    html += '<div class="msg danger">Melebihi jumlah rombel baru, akan DINONAKTIFKAN (bukan dihapus — siswa/nilai/penugasan/jadwal/histori yang sudah ada tetap aman): ' +
+      plan.to_deactivate.map(function (d) { return d.nama_kelas; }).join(', ') + '</div>';
+  }
+  if (plan.conflicts.length) {
+    html += '<div class="msg danger">Nama bentrok dengan kelas lain yang sudah ada di sekolah ini, dilewati: ' + plan.conflicts.join(', ') + '</div>';
+  }
+  html += '<div style="display:flex;gap:10px;margin-top:12px;">';
+  html += '<button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-rombel-preview\').classList.add(\'hidden\')">Batal</button>';
+  if (plan.to_create.length || plan.to_deactivate.length) {
+    html += '<button type="button" class="sp-btn" onclick="SuperAdmin_confirmRombelSingle_()">Buat ' + plan.to_create.length + ' Rombel</button>';
+  }
+  html += '</div></div>';
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+function SuperAdmin_confirmRombelSingle_() {
+  var params = window.SuperAdmin._singleRombelParams;
+  if (!params) return;
+  runServer('adminGenerateRombel', [params], {
+    onSuccess: function () {
+      SIPENA_toast('Rombel berhasil diproses.');
+      document.getElementById('sp-rombel-preview').classList.add('hidden');
+      runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
+    }
+  });
+}
+
+function SuperAdmin_addRombelBatchRow_() {
+  var container = document.getElementById('sp-rombel-batch-rows');
+  var jenjang = document.getElementById('sp-rombel-batch-jenjang').value;
+  var row = document.createElement('div');
+  row.className = 'sp-rombel-batch-row';
+  row.style.cssText = 'display:flex;gap:10px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;';
+  row.innerHTML =
+    '<div class="sp-field"><label>Tingkat</label><select class="sp-rb-tingkat">' + SuperAdmin_tingkatOptions_(jenjang) + '</select></div>' +
+    '<div class="sp-field"><label>Jumlah Rombel</label><input class="sp-rb-jumlah" type="number" min="1" max="26" value="1" style="min-width:80px;"></div>' +
+    '<div class="sp-field sp-rb-smk-field' + (jenjang === 'SMK' ? '' : ' hidden') + '"><label>Program Keahlian</label><input class="sp-rb-program" placeholder="TKJ"></div>' +
+    '<button type="button" class="sp-btn secondary" onclick="this.closest(\'.sp-rombel-batch-row\').remove()">Hapus Baris</button>';
+  container.appendChild(row);
+}
+
+function SuperAdmin_previewRombelBatch_() {
+  var sekolahId = document.getElementById('sp-rombel-batch-sekolah').value;
+  var jenjang = document.getElementById('sp-rombel-batch-jenjang').value;
+  if (!sekolahId || !jenjang) { SIPENA_toast('Pilih sekolah dan jenjang dulu.', 'error'); return; }
+
+  var entries = [];
+  document.querySelectorAll('#sp-rombel-batch-rows .sp-rombel-batch-row').forEach(function (row) {
+    var programEl = row.querySelector('.sp-rb-program');
+    entries.push({
+      tingkat: row.querySelector('.sp-rb-tingkat').value,
+      jumlah_rombel: parseInt(row.querySelector('.sp-rb-jumlah').value, 10),
+      program_keahlian: programEl ? programEl.value : ''
+    });
+  });
+  if (!entries.length) { SIPENA_toast('Tambah minimal satu baris tingkat.', 'error'); return; }
+
+  runServer('adminPreviewRombelBatch', [sekolahId, jenjang, entries], {
+    onSuccess: function (plans) {
+      window.SuperAdmin._batchRombel = { sekolah_id: sekolahId, jenjang: jenjang, entries: entries };
+      SuperAdmin_renderRombelBatchPreview_(plans);
+    }
+  });
+}
+
+function SuperAdmin_renderRombelBatchPreview_(plans) {
+  var el = document.getElementById('sp-rombel-batch-preview');
+  var totalCreate = 0, totalDeactivate = 0;
+  var html = '<div class="sp-form" style="flex-direction:column;align-items:stretch;">';
+  plans.forEach(function (plan) {
+    totalCreate += plan.to_create.length;
+    totalDeactivate += plan.to_deactivate.length;
+    html += '<div style="padding:10px 0;border-bottom:1px solid var(--border);">';
+    html += '<div style="font-weight:700;">' + plan.prefix.trim() + ' — ' + plan.jumlah_rombel + ' rombel</div>';
+    if (plan.existing.length) html += '<div class="msg">Sudah ada: ' + plan.existing.join(', ') + '</div>';
+    html += plan.to_create.length
+      ? '<div class="msg" style="color:var(--ok);">Akan dibuat: ' + plan.to_create.join(' | ') + '</div>'
+      : '<div class="msg">Tidak ada rombel baru.</div>';
+    if (plan.to_deactivate.length) html += '<div class="msg danger">Dinonaktifkan (data aman): ' + plan.to_deactivate.map(function (d) { return d.nama_kelas; }).join(', ') + '</div>';
+    if (plan.conflicts.length) html += '<div class="msg danger">Bentrok, dilewati: ' + plan.conflicts.join(', ') + '</div>';
+    html += '</div>';
+  });
+  html += '<div style="display:flex;gap:10px;margin-top:12px;">';
+  html += '<button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-rombel-batch-preview\').classList.add(\'hidden\')">Batal</button>';
+  if (totalCreate || totalDeactivate) {
+    html += '<button type="button" class="sp-btn" onclick="SuperAdmin_confirmRombelBatch_()">Generate Semua Rombel (' + totalCreate + ' kelas baru)</button>';
+  }
+  html += '</div></div>';
+  el.innerHTML = html;
+  el.classList.remove('hidden');
+}
+
+function SuperAdmin_confirmRombelBatch_() {
+  var ctx = window.SuperAdmin._batchRombel;
+  if (!ctx) return;
+  runServer('adminGenerateRombelBatch', [ctx.sekolah_id, ctx.jenjang, ctx.entries], {
+    onSuccess: function () {
+      SIPENA_toast('Semua rombel berhasil diproses.');
+      document.getElementById('sp-rombel-batch-preview').classList.add('hidden');
+      runServer('adminGetClasses', [], { onSuccess: function (rows) { SuperAdmin.classes = rows; SuperAdmin_renderKelas(); SuperAdmin_refreshSelects(); } });
+    }
+  });
+}
+
 function SuperAdmin_renderPenugasan() {
   SuperAdmin_table_('sp-table-penugasan', [
     { key: 'assignment_id', label: 'ID' }, { key: 'nama_guru', label: 'Guru' },
