@@ -57,6 +57,18 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
 };
 
+// Kolom "kode" yang HARUS selalu tersimpan sebagai teks, bukan angka —
+// Google Sheets otomatis membuang nol di depan (mis. "001" jadi 1) untuk
+// sel berformat default begitu isinya terlihat seperti angka. NPSN, NIP,
+// NUPTK, dan kode mapel di Indonesia lazim berawalan nol, jadi ini bukan
+// isu kosmetik. Lihat Config_ensureTextFormatColumns_.
+const CONFIG_TEXT_FORMAT_COLUMNS_ = {
+  MASTER_SEKOLAH: ['npsn'],
+  MASTER_GURU: ['nip', 'nuptk'],
+  MASTER_MAPEL: ['kode_mapel'],
+  MASTER_KELAS: ['tingkat']
+};
+
 // Sheet yang dibuat di spreadsheet PRIBADI tiap guru saat provisioning
 // (bukan sheet central). Lihat Guru.gs: Guru_provisionSpreadsheet_.
 const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
@@ -128,5 +140,40 @@ function Config_ensureCentralSchema_() {
 
 function Config_getSheet_(name) {
   Config_ensureCentralSchema_();
+  Config_ensureTextFormatColumns_();
   return Config_getCentralSpreadsheet_().getSheetByName(name);
+}
+
+/**
+ * Config_ensureTextFormatColumns_()
+ * Terapkan format Plain text ("@") ke seluruh kolom "kode" (lihat
+ * CONFIG_TEXT_FORMAT_COLUMNS_) sekali saja, ditandai lewat Script
+ * Property (bukan CacheService yang kedaluwarsa) supaya tidak perlu buka
+ * spreadsheet & scan header di setiap request setelah yang pertama.
+ * Bump nama property (_V1 -> _V2) kalau nanti menambah kolom baru ke
+ * daftar itu, supaya migrasi jalan ulang untuk kolom yang baru saja.
+ */
+function Config_ensureTextFormatColumns_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('TEXT_FORMAT_APPLIED_V1')) return;
+
+  const ss = Config_getCentralSpreadsheet_();
+  Object.keys(CONFIG_TEXT_FORMAT_COLUMNS_).forEach(function (sheetName) {
+    const sh = ss.getSheetByName(sheetName);
+    if (!sh) return;
+    Config_applyTextFormat_(sh, CONFIG_TEXT_FORMAT_COLUMNS_[sheetName]);
+  });
+
+  props.setProperty('TEXT_FORMAT_APPLIED_V1', '1');
+}
+
+function Config_applyTextFormat_(sh, colNames) {
+  if (!colNames || !colNames.length) return;
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h || '').toLowerCase().trim(); });
+  colNames.forEach(function (colName) {
+    const idx = header.indexOf(colName);
+    if (idx === -1) return;
+    sh.getRange(1, idx + 1, sh.getMaxRows(), 1).setNumberFormat('@');
+  });
 }
