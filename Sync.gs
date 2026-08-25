@@ -1,9 +1,10 @@
-// Sync.gs — dorong data master (profil, mapel, penugasan, kelas) ke
-// spreadsheet pribadi guru setelah ada perubahan di central. Phase 2:
-// sinkron langsung, 1 guru per panggilan. Antrian+retry untuk sinkronisasi
-// massal (mis. kenaikan kelas ke puluhan guru sekaligus) adalah Phase 8 —
-// untuk sekarang kegagalan dicatat ke _LOG_ERROR_ dan tidak menggagalkan
-// aksi admin yang memicunya.
+// Sync.gs — dorong data master (profil, mapel, penugasan, kelas, siswa,
+// jadwal) ke spreadsheet pribadi guru setelah ada perubahan di central.
+// 1 guru per panggilan. Kegagalan (mis. spreadsheet guru dihapus/kuota
+// Drive habis) TIDAK menggagalkan aksi admin yang memicunya (kenaikan
+// kelas ke puluhan guru dkk. tetap lanjut ke guru lain) — dicatat ke
+// SYNC_QUEUE (Phase 8) supaya Superadmin bisa lihat & retry manual dari
+// UI, bukan cuma tenggelam di _LOG_ERROR_.
 
 function Sync_teacherData_(guruId) {
   try {
@@ -17,9 +18,70 @@ function Sync_teacherData_(guruId) {
     Sync_rewriteSiswa_(ss, guruId);
     Sync_rewriteJadwal_(ss, guruId);
     Dashboard_invalidateCache_(guruId);
+    Sync_clearQueueEntry_(guruId);
   } catch (e) {
     Utils_logError_('SYNC_TEACHER_DATA_' + guruId, e);
+    Sync_enqueueFailure_(guruId, e);
   }
+}
+
+/**
+ * Sync_enqueueFailure_(guruId, err)
+ * Satu baris PENDING per guru (bukan menumpuk baris baru tiap gagal) —
+ * kalau sudah ada entri PENDING untuk guru ini, cukup naikkan attempt +
+ * update pesan error & waktu.
+ */
+function Sync_enqueueFailure_(guruId, err) {
+  try {
+    const sh = Config_getSheet_('SYNC_QUEUE');
+    const existing = Utils_sheetToObjects_(sh).filter(function (r) {
+      return r.guru_id === guruId && r.status === 'PENDING';
+    })[0];
+    const msg = String(err && err.message ? err.message : err).substring(0, 300);
+    const now = new Date();
+    if (existing) {
+      Utils_updateRowByHeader_(sh, existing._row, { attempt: Number(existing.attempt || 0) + 1, last_error: msg, updated_at: now });
+    } else {
+      Utils_appendRowByHeader_(sh, { queue_id: Utils_newId_('SQ'), guru_id: guruId, status: 'PENDING', attempt: 1, last_error: msg, created_at: now, updated_at: now });
+    }
+  } catch (e2) { /* jangan sampai pencatatan antrian ikut menggagalkan proses utama */ }
+}
+
+function Sync_clearQueueEntry_(guruId) {
+  try {
+    const sh = Config_getSheet_('SYNC_QUEUE');
+    const existing = Utils_sheetToObjects_(sh).filter(function (r) {
+      return r.guru_id === guruId && r.status === 'PENDING';
+    })[0];
+    if (existing) Utils_updateRowByHeader_(sh, existing._row, { status: 'RESOLVED', updated_at: new Date() });
+  } catch (e) {}
+}
+
+function adminGetSyncQueue() {
+  Security_requireRole_(['SUPERADMIN']);
+  const guruById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_GURU')), 'guru_id');
+  return Utils_sheetToObjects_(Config_getSheet_('SYNC_QUEUE'))
+    .filter(function (r) { return r.status === 'PENDING'; })
+    .map(function (r) {
+      delete r._row;
+      return Object.assign({}, r, { nama_guru: (guruById[r.guru_id] || {}).nama_lengkap || r.guru_id });
+    })
+    .sort(function (a, b) { return new Date(b.updated_at) - new Date(a.updated_at); });
+}
+
+/**
+ * adminRetrySyncQueue(guruId)
+ * Panggil ulang Sync_teacherData_ untuk satu guru — kalau berhasil,
+ * Sync_clearQueueEntry_ di dalamnya otomatis menandai entri PENDING jadi
+ * RESOLVED (tidak perlu logika terpisah di sini).
+ */
+function adminRetrySyncQueue(guruId) {
+  Security_requireRole_(['SUPERADMIN']);
+  Sync_teacherData_(guruId);
+  const stillPending = Utils_sheetToObjects_(Config_getSheet_('SYNC_QUEUE')).some(function (r) {
+    return r.guru_id === guruId && r.status === 'PENDING';
+  });
+  return { ok: !stillPending };
 }
 
 function Sync_findGuru_(guruId) {

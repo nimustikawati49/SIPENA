@@ -42,6 +42,12 @@ function SuperAdmin_showTab(tabId) {
   document.querySelectorAll('#sp-admin-panels .sp-panel').forEach(function (p) {
     p.classList.toggle('active', p.id === 'sp-panel-' + tabId);
   });
+  // Audit log dimuat malas (baru saat tab dibuka), bukan di loadAll —
+  // datanya tidak dibutuhkan tab lain dan bisa sampai 300 baris.
+  if (tabId === 'auditlog' && !window.SuperAdmin._auditLogLoaded) {
+    window.SuperAdmin._auditLogLoaded = true;
+    SuperAdmin_loadAuditLog_();
+  }
 }
 
 function SuperAdmin_loadAll() {
@@ -54,6 +60,29 @@ function SuperAdmin_loadAll() {
   runServer('adminGetStudents', [], { onSuccess: function (rows) { SuperAdmin.students = rows; SuperAdmin_renderSiswa(); } });
   runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
   SuperAdmin_loadJadwalRequests_();
+  SuperAdmin_loadSyncQueue_();
+}
+
+/* ---- Sinkronisasi Gagal (Phase 8) ---- */
+function SuperAdmin_loadSyncQueue_() {
+  runServer('adminGetSyncQueue', [], { onSuccess: SuperAdmin_renderSyncQueue_ });
+}
+
+function SuperAdmin_renderSyncQueue_(rows) {
+  SIPENA_table_('sp-sync-queue-table', [
+    { key: 'nama_guru', label: 'Guru' }, { key: 'attempt', label: 'Percobaan' }, { key: 'last_error', label: 'Error Terakhir' },
+    { label: 'Waktu', render: function (r) { return new Date(r.updated_at).toLocaleString('id-ID'); } },
+    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="SuperAdmin_retrySync_(\'' + r.guru_id + '\')">Coba Lagi</button>'; } }
+  ], rows, 'Tidak ada sinkronisasi yang gagal.');
+}
+
+function SuperAdmin_retrySync_(guruId) {
+  runServer('adminRetrySyncQueue', [guruId], {
+    onSuccess: function (res) {
+      SIPENA_toast(res.ok ? 'Sinkronisasi berhasil.' : 'Masih gagal — lihat error terbaru di tabel.');
+      SuperAdmin_loadSyncQueue_();
+    }
+  });
 }
 
 /* ================= helper umum ================= */
@@ -151,7 +180,8 @@ function SuperAdmin_buildPanels() {
     SuperAdmin_panelPenugasan_() +
     SuperAdmin_panelKenaikanKelas_() +
     SuperAdmin_panelJadwal_() +
-    SuperAdmin_panelSiswa_();
+    SuperAdmin_panelSiswa_() +
+    SuperAdmin_panelAuditLog_();
 
   SuperAdmin_wireSekolah_();
   SuperAdmin_wireGuru_();
@@ -256,7 +286,11 @@ function SuperAdmin_panelGuru_() {
     '    <div class="msg hidden" id="sp-guru-edit-note" style="flex-basis:100%;margin:0;">Mode edit: sekolah &amp; email tidak bisa diubah di sini.</div>' +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Guru</div>' +
-    '  <div id="sp-table-guru"></div>' +
+    '  <div id="sp-table-guru" style="margin-bottom:28px;"></div>' +
+
+    '  <div class="sp-section-title">Sinkronisasi Gagal</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Kalau update data guru (penugasan/siswa/jadwal) gagal tersinkron ke spreadsheet pribadinya (mis. spreadsheet terhapus/kuota Drive habis), muncul di sini — aksi admin yang memicunya tetap berhasil, cuma sinkronisasi guru itu yang tertunda. Klik "Coba Lagi" setelah masalahnya diperbaiki (mis. provisi ulang di atas).</div>' +
+    '  <div id="sp-sync-queue-table"></div>' +
     '</div>';
 }
 function SuperAdmin_wireGuru_() {
@@ -1181,15 +1215,30 @@ function SuperAdmin_panelSiswa_() {
     '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditSiswa_(this.form)">Batal Edit</button>' +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Siswa</div>' +
+    '  <button type="button" class="sp-btn secondary" style="margin-bottom:8px;" onclick="SuperAdmin_exportSiswaExcel_()">Export Excel</button>' +
     '  <div id="sp-table-siswa" style="margin-bottom:28px;"></div>' +
 
+    '  <div class="sp-section-title">Ringkasan Siswa</div>' +
+    '  <div class="sp-form">' +
+    '    <div class="sp-field"><label>Sekolah</label><select id="sp-stats-sekolah" data-source="sekolah" required></select></div>' +
+    '    <button type="button" class="sp-btn secondary" onclick="SuperAdmin_loadStudentStats_()">Tampilkan</button>' +
+    '  </div>' +
+    '  <div id="sp-stats-box" style="margin-bottom:28px;"></div>' +
+
     '  <div class="sp-section-title">Import Siswa (Massal)</div>' +
-    '  <div class="msg" style="margin:-6px 0 10px;">Pilih sekolah, lalu tempel data dari Excel/Sheets — kolom: NIS, Nama Lengkap, Jenis Kelamin (L/P), Nama Kelas, dipisah Tab, satu siswa per baris. Bisa sekaligus untuk beberapa kelas/tingkat (mis. kelas 7-9). Kalau sekolah sudah punya tahun ajaran aktif, siswa langsung masuk roster kelasnya masing-masing.</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Pilih sekolah, lalu unduh template Excel, isi (Kelas, NIS, Nama Lengkap, Jenis Kelamin), dan unggah kembali — atau tempel langsung dari Excel/Sheets. Bisa sekaligus untuk beberapa kelas/tingkat (mis. kelas 7-9) dalam satu file/tempel. Kalau sekolah sudah punya tahun ajaran aktif, siswa langsung masuk roster kelasnya masing-masing.</div>' +
     '  <div class="sp-form" style="flex-direction:column;align-items:stretch;">' +
     '    <div class="sp-field"><label>Sekolah</label><select id="sp-import-sekolah" data-source="sekolah" required></select></div>' +
+    '    <div>' +
+    '      <button type="button" class="sp-btn secondary" onclick="SuperAdmin_downloadImportTemplate_()">Unduh Template Excel</button>' +
+    '    </div>' +
     '    <div class="sp-field">' +
-    '      <label>Data Siswa (tempel di sini)</label>' +
-    '      <textarea id="sp-import-textarea" rows="7" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:monospace;font-size:12.5px;" placeholder="1234\tAhmad Fauzi\tL\t7A\n1235\tSiti Aminah\tP\t7A\n1236\tBudi Santoso\tL\t7B"></textarea>' +
+    '      <label>Unggah File Excel Terisi (.xlsx)</label>' +
+    '      <input type="file" id="sp-import-file" accept=".xlsx,.xls,.csv">' +
+    '    </div>' +
+    '    <div class="sp-field">' +
+    '      <label>Atau tempel data manual di sini (Kelas, NIS, Nama Lengkap, Jenis Kelamin — dipisah Tab)</label>' +
+    '      <textarea id="sp-import-textarea" rows="6" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);font-family:monospace;font-size:12.5px;" placeholder="7A\t1234\tAhmad Fauzi\tL\n7A\t1235\tSiti Aminah\tP\n7B\t1236\tBudi Santoso\tL"></textarea>' +
     '    </div>' +
     '    <button type="button" class="sp-btn" onclick="SuperAdmin_previewImport_()">Lihat Preview</button>' +
     '  </div>' +
@@ -1280,6 +1329,18 @@ function SuperAdmin_renderSiswa() {
   ], SuperAdmin.students, 'Belum ada siswa.');
 }
 
+function SuperAdmin_exportSiswaExcel_() {
+  if (!SuperAdmin.students.length) { SIPENA_toast('Belum ada siswa untuk diexport.', 'error'); return; }
+  var aoa = [['NIS', 'NISN', 'Nama Lengkap', 'Sekolah', 'JK', 'Status']];
+  SuperAdmin.students.forEach(function (r) {
+    aoa.push([r.nis || '', r.nisn || '', r.nama_lengkap, SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', r.sekolah_id, 'nama_sekolah'), r.jenis_kelamin || '', r.status]);
+  });
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Daftar Siswa');
+  XLSX.writeFile(wb, 'Daftar_Siswa_SIPENA.xlsx');
+}
+
 function SuperAdmin_editSiswa_(siswaId) {
   var s = SuperAdmin.students.filter(function (r) { return r.siswa_id === siswaId; })[0];
   if (!s) return;
@@ -1305,13 +1366,108 @@ function SuperAdmin_deleteSiswa_(siswaId, nama) {
   });
 }
 
+/* ---- Ringkasan Siswa ---- */
+function SuperAdmin_loadStudentStats_() {
+  var sekolahId = document.getElementById('sp-stats-sekolah').value;
+  if (!sekolahId) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
+  runServer('adminGetStudentStats', [sekolahId], { onSuccess: SuperAdmin_renderStudentStats_ });
+}
+
+function SuperAdmin_renderStudentStats_(stats) {
+  var el = document.getElementById('sp-stats-box');
+  var html = '<div class="sp-form" style="flex-direction:column;align-items:stretch;">';
+  html += '<div style="display:flex;gap:24px;flex-wrap:wrap;margin-bottom:10px;">';
+  html += '<div><div style="font-size:24px;font-weight:700;color:var(--brand);">' + stats.total_siswa_aktif + '</div><div class="sp-detail-label">Total Siswa Aktif</div></div>';
+  html += '<div><div style="font-size:24px;font-weight:700;color:var(--brand);">' + stats.total_terdaftar_kelas + '</div><div class="sp-detail-label">Terdaftar di Kelas (Periode Aktif)</div></div>';
+  html += '</div>';
+
+  if (!stats.ada_periode_aktif) {
+    html += '<div class="msg danger">Sekolah ini belum punya tahun ajaran aktif — aktifkan dulu di tab Tahun Ajaran supaya breakdown per kelas/tingkat bisa dihitung.</div>';
+  } else if (stats.total_siswa_aktif !== stats.total_terdaftar_kelas) {
+    html += '<div class="msg danger">Selisih ' + Math.abs(stats.total_siswa_aktif - stats.total_terdaftar_kelas) + ' siswa — ada siswa aktif yang belum di-enroll ke kelas mana pun untuk periode ini. Cek "Kelola Siswa per Kelas".</div>';
+  }
+
+  if (stats.per_tingkat.length) {
+    html += '<div style="margin-top:8px;font-weight:600;font-size:13px;">Per Tingkat</div>';
+    html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:6px 0 10px;">' + stats.per_tingkat.map(function (t) {
+      return '<div><div style="font-size:18px;font-weight:700;">' + t.jumlah + '</div><div class="sp-detail-label">Tingkat ' + t.tingkat + '</div></div>';
+    }).join('') + '</div>';
+
+    html += '<div style="font-weight:600;font-size:13px;">Per Kelas</div>';
+    html += '<div class="sp-table-wrap" style="margin-top:6px;"><table class="sp-table"><thead><tr><th>Kelas</th><th>Tingkat</th><th>Jumlah Siswa</th></tr></thead><tbody>' +
+      stats.per_kelas.map(function (k) { return '<tr><td>' + k.nama_kelas + '</td><td>' + k.tingkat + '</td><td>' + k.jumlah + '</td></tr>'; }).join('') +
+      '</tbody></table></div>';
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
 /* ---- Import Siswa (Massal) ---- */
+
+/**
+ * SuperAdmin_downloadImportTemplate_()
+ * Buat file .xlsx template langsung di browser (SheetJS) — tidak perlu
+ * round-trip ke server. Kolom SENGAJA Kelas dulu (bukan NIS/Nama) supaya
+ * kalau diisi/diurutkan per kelas di Excel, hasilnya tetap konsisten
+ * dengan cara preview mengelompokkan (per kelas).
+ */
+function SuperAdmin_downloadImportTemplate_() {
+  var sekolahId = document.getElementById('sp-import-sekolah').value;
+  var classNames = SuperAdmin.classes.filter(function (k) { return k.sekolah_id === sekolahId; })
+    .map(function (k) { return k.nama_kelas; }).sort();
+  var contohKelas = classNames.length ? classNames[0] : '7A';
+
+  var aoa = [
+    ['Kelas', 'NIS', 'Nama Lengkap', 'Jenis Kelamin (L/P)'],
+    [contohKelas, '1234', 'Contoh Nama Siswa', 'L']
+  ];
+  if (classNames.length) {
+    aoa.push(['— Kelas yang tersedia di sekolah ini: ' + classNames.join(', ') + ' —', '', '', '']);
+  }
+
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 14 }, { wch: 12 }, { wch: 28 }, { wch: 18 }];
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Import Siswa');
+  XLSX.writeFile(wb, 'Template_Import_Siswa_SIPENA.xlsx');
+}
+
 function SuperAdmin_previewImport_() {
   var sekolahId = document.getElementById('sp-import-sekolah').value;
-  var raw = document.getElementById('sp-import-textarea').value;
   if (!sekolahId) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
+
+  var fileInput = document.getElementById('sp-import-file');
+  if (fileInput.files && fileInput.files[0]) {
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false });
+      SuperAdmin_processImportRows_(sekolahId, rows.map(function (r) { return r.map(function (c) { return String(c === undefined ? '' : c); }); }));
+    };
+    reader.readAsArrayBuffer(fileInput.files[0]);
+    return;
+  }
+
+  var raw = document.getElementById('sp-import-textarea').value;
   var lines = raw.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(function (l) { return l; });
-  if (!lines.length) { SIPENA_toast('Tempel data siswa dulu.', 'error'); return; }
+  if (!lines.length) { SIPENA_toast('Unggah file atau tempel data siswa dulu.', 'error'); return; }
+  var rows = lines.map(function (line) { return line.indexOf('\t') !== -1 ? line.split('\t') : line.split(','); });
+  SuperAdmin_processImportRows_(sekolahId, rows);
+}
+
+/**
+ * SuperAdmin_processImportRows_(sekolahId, rows)
+ * rows: array-of-array [Kelas, NIS, Nama, JK]. Baris pertama dilewati
+ * kalau memang header (dikenali dari kata "kelas"/"nis" di kolom
+ * pertama/kedua, case-insensitive) supaya template yang diunduh lalu
+ * diunggah lagi tidak perlu dihapus headernya manual.
+ */
+function SuperAdmin_processImportRows_(sekolahId, rows) {
+  if (rows.length && String(rows[0][0] || '').toUpperCase().indexOf('KELAS') !== -1) rows = rows.slice(1);
+  // Lewati baris keterangan "— Kelas yang tersedia ... —" dari template
+  // (baris itu diawali karakter "—" di kolom pertama).
+  rows = rows.filter(function (r) { return String((r && r[0]) || '').trim().indexOf('—') !== 0; });
 
   var kelasByName = {};
   SuperAdmin.classes.filter(function (k) { return k.sekolah_id === sekolahId; }).forEach(function (k) {
@@ -1320,17 +1476,18 @@ function SuperAdmin_previewImport_() {
 
   var valid = [];
   var errors = [];
-  lines.forEach(function (line, i) {
-    var cols = line.indexOf('\t') !== -1 ? line.split('\t') : line.split(',');
-    if (cols.length < 4) { errors.push('Baris ' + (i + 1) + ': format tidak lengkap (butuh 4 kolom: NIS, Nama, JK, Kelas).'); return; }
+  rows.forEach(function (cols, i) {
+    if (!cols || cols.every(function (c) { return !String(c || '').trim(); })) return; // baris kosong
+    if (cols.length < 4) { errors.push('Baris ' + (i + 1) + ': format tidak lengkap (butuh 4 kolom: Kelas, NIS, Nama, JK).'); return; }
 
-    var nis = cols[0].trim(), nama = cols[1].trim(), jk = cols[2].trim().toUpperCase(), kelasName = cols[3].trim();
+    var kelasName = String(cols[0] || '').trim(), nis = String(cols[1] || '').trim(),
+      nama = String(cols[2] || '').trim(), jk = String(cols[3] || '').trim().toUpperCase();
     if (!nama) { errors.push('Baris ' + (i + 1) + ': nama kosong.'); return; }
     if (['L', 'P'].indexOf(jk) === -1) { errors.push('Baris ' + (i + 1) + ' (' + nama + '): jenis kelamin harus L atau P.'); return; }
     var kelas = kelasByName[kelasName.toUpperCase()];
     if (!kelas) { errors.push('Baris ' + (i + 1) + ' (' + nama + '): kelas "' + kelasName + '" tidak ditemukan di sekolah ini.'); return; }
 
-    valid.push({ nis: nis, nama_lengkap: nama, jenis_kelamin: jk, kelas_id: kelas.kelas_id, nama_kelas: kelas.nama_kelas });
+    valid.push({ nis: nis, nama_lengkap: nama, jenis_kelamin: jk, kelas_id: kelas.kelas_id, nama_kelas: kelas.nama_kelas, tingkat: kelas.tingkat });
   });
 
   window.SuperAdmin._importCtx = { sekolahId: sekolahId, rows: valid };
@@ -1345,16 +1502,44 @@ function SuperAdmin_renderImportPreview_(valid, errors) {
   }
   if (!valid.length) {
     html += '<div class="sp-empty">Tidak ada baris valid untuk diimport.</div>';
-  } else {
-    var body = valid.map(function (r) {
-      return '<tr><td>' + (r.nis || '-') + '</td><td>' + r.nama_lengkap + '</td><td>' + r.jenis_kelamin + '</td><td>' + r.nama_kelas + '</td></tr>';
-    }).join('');
-    html += '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>NIS</th><th>Nama</th><th>JK</th><th>Kelas</th></tr></thead><tbody>' + body + '</tbody></table></div>' +
-      '<div style="margin-top:12px;display:flex;gap:10px;">' +
-      '<button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-import-preview\').classList.add(\'hidden\')">Batal</button>' +
-      '<button type="button" class="sp-btn" onclick="SuperAdmin_confirmImport_()">Import ' + valid.length + ' Siswa</button>' +
-      '</div>';
+    el.innerHTML = html;
+    el.classList.remove('hidden');
+    return;
   }
+
+  // Sortir & kelompokkan per kelas, plus ringkasan per tingkat, supaya
+  // Superadmin bisa langsung mencocokkan jumlah sebelum konfirmasi.
+  var byKelas = {};
+  var byTingkat = {};
+  valid.forEach(function (r) {
+    if (!byKelas[r.nama_kelas]) byKelas[r.nama_kelas] = [];
+    byKelas[r.nama_kelas].push(r);
+    var t = r.tingkat || '?';
+    byTingkat[t] = (byTingkat[t] || 0) + 1;
+  });
+  var kelasNames = Object.keys(byKelas).sort();
+  var tingkatKeys = Object.keys(byTingkat).sort();
+
+  html += '<div class="sp-form" style="flex-direction:column;align-items:stretch;">';
+  html += '<div style="font-weight:700;margin-bottom:4px;">Total: ' + valid.length + ' siswa, ' + kelasNames.length + ' kelas</div>';
+  html += '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;">' + tingkatKeys.map(function (t) {
+    return '<div><div style="font-size:16px;font-weight:700;">' + byTingkat[t] + '</div><div class="sp-detail-label">Tingkat ' + t + '</div></div>';
+  }).join('') + '</div>';
+
+  kelasNames.forEach(function (kelasName) {
+    var rowsForKelas = byKelas[kelasName];
+    html += '<div style="padding:8px 0;border-top:1px solid var(--border);">';
+    html += '<div style="font-weight:600;font-size:13px;margin-bottom:4px;">' + kelasName + ' (' + rowsForKelas.length + ' siswa)</div>';
+    html += '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>NIS</th><th>Nama</th><th>JK</th></tr></thead><tbody>' +
+      rowsForKelas.map(function (r) { return '<tr><td>' + (r.nis || '-') + '</td><td>' + r.nama_lengkap + '</td><td>' + r.jenis_kelamin + '</td></tr>'; }).join('') +
+      '</tbody></table></div></div>';
+  });
+
+  html += '<div style="display:flex;gap:10px;margin-top:12px;">' +
+    '<button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-import-preview\').classList.add(\'hidden\')">Batal</button>' +
+    '<button type="button" class="sp-btn" onclick="SuperAdmin_confirmImport_()">Import ' + valid.length + ' Siswa</button>' +
+    '</div></div>';
+
   el.innerHTML = html;
   el.classList.remove('hidden');
 }
@@ -1367,7 +1552,9 @@ function SuperAdmin_confirmImport_() {
       SIPENA_toast(res.created + ' siswa berhasil diimport' + (res.enrolled ? ', ' + res.enrolled + ' langsung masuk roster kelas' : '') + (res.warning ? ' — ' + res.warning : '') + '.');
       document.getElementById('sp-import-preview').classList.add('hidden');
       document.getElementById('sp-import-textarea').value = '';
+      document.getElementById('sp-import-file').value = '';
       runServer('adminGetStudents', [], { onSuccess: function (rows) { SuperAdmin.students = rows; SuperAdmin_renderSiswa(); } });
+      if (document.getElementById('sp-stats-sekolah').value === ctx.sekolahId) SuperAdmin_loadStudentStats_();
     }
   });
 }
@@ -1426,5 +1613,28 @@ function SuperAdmin_unenroll_(riwayatId) {
   runServer('adminUpdateEnrollmentStatus', [riwayatId, 'NONAKTIF'], {
     onSuccess: function () { SIPENA_toast('Siswa dikeluarkan dari kelas.'); SuperAdmin_loadEnrollment_(); }
   });
+}
+
+/* ---------- Audit Log (Phase 9) ---------- */
+function SuperAdmin_panelAuditLog_() {
+  return '' +
+    '<div class="sp-panel" id="sp-panel-auditlog">' +
+    '  <div class="sp-section-title">Audit Log</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Mencatat aksi administratif (tambah/ubah/hapus, sinkronisasi, kenaikan kelas, dsb.) — 300 entri terakhir. Ini bukan pengganti pengujian isolasi antar-akun (butuh login sungguhan sebagai guru berbeda untuk itu, tidak bisa disimulasikan dari satu sesi).</div>' +
+    '  <button type="button" class="sp-btn secondary" style="margin-bottom:10px;" onclick="SuperAdmin_loadAuditLog_()">Muat Ulang</button>' +
+    '  <div id="sp-auditlog-table"></div>' +
+    '</div>';
+}
+
+function SuperAdmin_loadAuditLog_() {
+  runServer('getAuditLog', [300], { onSuccess: SuperAdmin_renderAuditLog_ });
+}
+
+function SuperAdmin_renderAuditLog_(rows) {
+  SIPENA_table_('sp-auditlog-table', [
+    { label: 'Waktu', render: function (r) { return new Date(r.timestamp).toLocaleString('id-ID'); } },
+    { key: 'email', label: 'Email' }, { key: 'action', label: 'Aksi' }, { key: 'module', label: 'Modul' },
+    { key: 'record_id', label: 'Record' }, { key: 'description', label: 'Detail' }
+  ], rows, 'Belum ada aktivitas tercatat.');
 }
 </script>

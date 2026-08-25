@@ -46,6 +46,11 @@ function NilaiApp_markup_() {
     '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Periode)</label><select id="sp-rekap-penugasan" style="min-width:280px;" required></select></div>' +
     '    <button type="button" class="sp-btn" onclick="NilaiApp_loadRecap_()">Tampilkan Rekap</button>' +
     '  </div>' +
+    '  <div id="sp-rekap-actions" class="hidden" style="margin-bottom:10px;display:flex;gap:10px;">' +
+    '    <button type="button" class="sp-btn secondary" onclick="NilaiApp_exportRecapExcel_()">Export Excel</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="NilaiApp_printRecap_()">Cetak</button>' +
+    '  </div>' +
+    '  <div id="sp-rekap-print-head" class="sp-print-only hidden"></div>' +
     '  <div id="sp-rekap-table"></div>' +
     '</div>';
 }
@@ -173,6 +178,7 @@ function NilaiApp_showHistory_(nilaiId) {
 function NilaiApp_loadRecap_() {
   var p = NilaiApp_selectedPenugasan_('sp-rekap-penugasan');
   if (!p) { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
+  window.NilaiApp._rekapPenugasan = p;
   runServer('getMyGradeRecap', [p.kelas_id, p.mapel_id, p.tahun_ajaran_id, p.semester], {
     onSuccess: function (rows) { NilaiApp_renderRecap_(rows); }
   });
@@ -180,12 +186,21 @@ function NilaiApp_loadRecap_() {
 
 function NilaiApp_renderRecap_(rows) {
   var el = document.getElementById('sp-rekap-table');
+  document.getElementById('sp-rekap-actions').classList.add('hidden');
   if (!rows.length) { el.innerHTML = '<div class="sp-empty">Belum ada siswa di kelas ini.</div>'; return; }
 
   var jenisSet = {};
   rows.forEach(function (r) { r.nilai.forEach(function (n) { jenisSet[n.jenis_nilai] = true; }); });
   var jenisList = Object.keys(jenisSet);
   if (!jenisList.length) { el.innerHTML = '<div class="sp-empty">Belum ada nilai yang diinput untuk kelas/mapel/periode ini.</div>'; return; }
+
+  window.NilaiApp._rekapRows = rows;
+  window.NilaiApp._rekapJenisList = jenisList;
+  document.getElementById('sp-rekap-actions').classList.remove('hidden');
+  var p = window.NilaiApp._rekapPenugasan;
+  document.getElementById('sp-rekap-print-head').innerHTML =
+    '<h2 style="margin:0 0 2px;">Rekap Nilai — ' + p.nama_mapel + '</h2>' +
+    '<div style="margin:0 0 16px;color:#555;">Kelas ' + p.nama_kelas + ' &middot; ' + p.semester + '</div>';
 
   var thead = '<tr><th>NIS</th><th>Nama</th>' + jenisList.map(function (j) { return '<th>' + j + '</th>'; }).join('') + '</tr>';
   var tbody = rows.map(function (r) {
@@ -201,5 +216,47 @@ function NilaiApp_renderRecap_(rows) {
 
   el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>' +
     '<div class="msg">Format sel: nilai murni / nilai katrol.</div>';
+}
+
+/**
+ * NilaiApp_exportRecapExcel_()
+ * Bangun .xlsx langsung di browser (SheetJS) dari rekap yang sedang
+ * tampil — tidak perlu round-trip ke server, datanya sudah ada di
+ * window.NilaiApp._rekapRows/_rekapJenisList (Phase 7: Export Nilai).
+ */
+function NilaiApp_exportRecapExcel_() {
+  var rows = window.NilaiApp._rekapRows, jenisList = window.NilaiApp._rekapJenisList, p = window.NilaiApp._rekapPenugasan;
+  if (!rows || !jenisList) { SIPENA_toast('Tampilkan rekap dulu.', 'error'); return; }
+
+  var aoa = [['NIS', 'Nama'].concat(jenisList)];
+  rows.forEach(function (r) {
+    var byJenis = {};
+    r.nilai.forEach(function (n) { byJenis[n.jenis_nilai] = n; });
+    var row = [r.nis || '-', r.nama_lengkap];
+    jenisList.forEach(function (j) {
+      var n = byJenis[j];
+      row.push(n ? (n.nilai_murni + (n.nilai_katrol !== '' ? ' / ' + n.nilai_katrol : '')) : '-');
+    });
+    aoa.push(row);
+  });
+
+  var ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 12 }, { wch: 26 }].concat(jenisList.map(function () { return { wch: 14 }; }));
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Rekap Nilai');
+  XLSX.writeFile(wb, 'Rekap_Nilai_' + p.nama_mapel + '_' + p.nama_kelas + '.xlsx');
+}
+
+/**
+ * NilaiApp_printRecap_()
+ * Cetak lewat window.print() bawaan browser + CSS @media print (lihat
+ * styles.html: .sp-print-only / .sp-hide-print) yang menyembunyikan
+ * topbar/tab/form dan cuma menampilkan judul + tabel rekap.
+ */
+function NilaiApp_printRecap_() {
+  if (!window.NilaiApp._rekapRows) { SIPENA_toast('Tampilkan rekap dulu.', 'error'); return; }
+  document.body.classList.add('sp-printing');
+  window.print();
+  document.body.classList.remove('sp-printing');
 }
 </script>

@@ -126,6 +126,20 @@
   .sp-toast-ok{ background: var(--ok); }
   .sp-toast-error{ background: var(--danger); }
 
+  /* ===== Cetak (Phase 7) ===== */
+  .sp-print-only{ display: none; }
+  @media print {
+    body.sp-printing .sp-topbar,
+    body.sp-printing .sp-tabs,
+    body.sp-printing #sp-rekap-filter,
+    body.sp-printing #sp-rekap-actions,
+    body.sp-printing .sp-pending{ display: none !important; }
+    body.sp-printing .sp-print-only{ display: block; }
+    body.sp-printing #sp-admin-app, body.sp-printing #sp-guru-app{ max-width: none; padding: 0; }
+    body.sp-printing table.sp-table{ font-size: 11px; }
+    body.sp-printing{ background: #fff; color: #000; }
+  }
+
   /* ===== Responsive (ponsel/tablet sempit) ===== */
   @media (max-width: 640px){
     #sp-admin-app, #sp-guru-app{ padding: 0 14px 40px; }

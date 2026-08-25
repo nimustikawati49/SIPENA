@@ -59,6 +59,7 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   REQUEST_KENAIKAN_KELAS: ['request_id', 'sekolah_id', 'tahun_ajaran_lama', 'tahun_ajaran_baru', 'mapping_json', 'requested_by', 'requested_at', 'status', 'processed_by', 'processed_at', 'notes'],
   JADWAL_MENGAJAR: ['jadwal_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'status'],
   REQUEST_JADWAL_PERUBAHAN: ['request_id', 'guru_id', 'jadwal_id_terkait', 'perubahan_json', 'alasan', 'requested_at', 'status', 'processed_by', 'processed_at', 'catatan'],
+  SYNC_QUEUE: ['queue_id', 'guru_id', 'status', 'attempt', 'last_error', 'created_at', 'updated_at'],
   AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
 };
 

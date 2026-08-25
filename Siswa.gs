@@ -152,6 +152,60 @@ function adminImportStudents(sekolahId, rows) {
 }
 
 /**
+ * adminGetStudentStats(sekolahId)
+ * Total siswa AKTIF (identitas, MASTER_SISWA) vs total yang BENAR-BENAR
+ * terdaftar di suatu kelas untuk periode aktif sekolah (RIWAYAT_KELAS) —
+ * dua angka ini beda berarti ada siswa yang identitasnya sudah dibuat
+ * tapi belum di-enroll ke kelas mana pun, tanda pendataan belum
+ * lengkap. Plus breakdown per tingkat & per kelas untuk verifikasi
+ * jumlah setelah import massal/kenaikan kelas.
+ */
+function adminGetStudentStats(sekolahId) {
+  Security_requireRole_(['SUPERADMIN']);
+  sekolahId = String(sekolahId || '').trim();
+  if (!sekolahId) throw new Error('Sekolah wajib dipilih.');
+
+  const totalSiswaAktif = Utils_sheetToObjects_(Config_getSheet_('MASTER_SISWA')).filter(function (r) {
+    return r.sekolah_id === sekolahId && String(r.status).toUpperCase() === 'AKTIF';
+  }).length;
+
+  const periode = TahunAjaran_getActivePeriod_(sekolahId);
+  const perKelas = [];
+  const perTingkatMap = {};
+  let totalTerdaftarKelas = 0;
+
+  if (periode) {
+    const kelasById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_KELAS')), 'kelas_id');
+    const riwayat = Utils_sheetToObjects_(Config_getSheet_('RIWAYAT_KELAS')).filter(function (r) {
+      return r.sekolah_id === sekolahId && r.tahun_ajaran_id === periode.tahun_ajaran_id &&
+        r.semester === periode.semester && String(r.status).toUpperCase() === 'AKTIF';
+    });
+
+    const kelasCounts = {};
+    riwayat.forEach(function (r) { kelasCounts[r.kelas_id] = (kelasCounts[r.kelas_id] || 0) + 1; });
+
+    Object.keys(kelasCounts).forEach(function (kelasId) {
+      const k = kelasById[kelasId] || {};
+      const tingkat = String(k.tingkat || '?');
+      perKelas.push({ kelas_id: kelasId, nama_kelas: k.nama_kelas || kelasId, tingkat: tingkat, jumlah: kelasCounts[kelasId] });
+      perTingkatMap[tingkat] = (perTingkatMap[tingkat] || 0) + kelasCounts[kelasId];
+      totalTerdaftarKelas += kelasCounts[kelasId];
+    });
+    perKelas.sort(function (a, b) { return String(a.nama_kelas).localeCompare(String(b.nama_kelas)); });
+  }
+
+  const perTingkat = Object.keys(perTingkatMap).sort().map(function (t) { return { tingkat: t, jumlah: perTingkatMap[t] }; });
+
+  return {
+    total_siswa_aktif: totalSiswaAktif,
+    total_terdaftar_kelas: totalTerdaftarKelas,
+    ada_periode_aktif: !!periode,
+    per_tingkat: perTingkat,
+    per_kelas: perKelas
+  };
+}
+
+/**
  * adminGetEnrollment(kelasId, tahunAjaranId)
  * Dua daftar untuk UI "Kelola Siswa per Kelas": siswa yang SUDAH aktif
  * di kelas+periode ini, dan siswa sekolah yang sama yang BELUM (kandidat
