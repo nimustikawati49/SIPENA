@@ -33,6 +33,12 @@ function getMyDashboard() {
   const sekolah = Utils_sheetToObjects_(Config_getSheet_('MASTER_SEKOLAH'))
     .filter(function (r) { return r.sekolah_id === profil.sekolah_id; })[0];
 
+  const todayHari = Dashboard_todayHari_();
+  const jadwalHariIni = Utils_sheetToObjects_(ss.getSheetByName('JADWAL'))
+    .filter(function (r) { return r.hari === todayHari && String(r.status).toUpperCase() === 'AKTIF'; })
+    .map(Dashboard_stripRow_)
+    .sort(function (a, b) { return String(a.jam_mulai).localeCompare(String(b.jam_mulai)); });
+
   const result = {
     profil: profil,
     nama_sekolah: sekolah ? sekolah.nama_sekolah : '-',
@@ -43,7 +49,10 @@ function getMyDashboard() {
     },
     mapel: mapel,
     kelas: kelas,
-    penugasan: penugasan
+    penugasan: penugasan,
+    hari_ini: todayHari,
+    jadwal_hari_ini: jadwalHariIni,
+    nilai_completion: Dashboard_computeGradeCompletion_(ss)
   };
 
   try { cache.put(cacheKey, JSON.stringify(result), 300); } catch (e) { /* > 100KB, lewati cache */ }
@@ -86,4 +95,78 @@ function Dashboard_stripRow_(obj) {
   const copy = Object.assign({}, obj);
   delete copy._row;
   return copy;
+}
+
+/**
+ * Dashboard_todayHari_()
+ * "SENIN".."SABTU"/"MINGGU" berdasarkan timezone SCRIPT (Asia/Makassar),
+ * bukan format locale bawaan (Utilities.formatDate 'EEEE' tidak bisa
+ * dipastikan bahasa Indonesia) — dihitung dari nomor hari ISO (1=Senin..
+ * 7=Minggu) supaya hasilnya selalu konsisten.
+ */
+function Dashboard_todayHari_() {
+  const names = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+  const isoDay = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'u'));
+  return names[isoDay % 7];
+}
+
+/**
+ * Dashboard_computeGradeCompletion_(ss)
+ * Untuk tiap (kelas+mapel+tahun_ajaran+semester) yang SUDAH mulai diisi
+ * nilainya: kumpulkan jenis_nilai yang pernah diinput di scope itu
+ * ("jenis yang diharapkan" — bukan diasumsikan dari luar, murni dari
+ * apa yang guru sendiri sudah mulai kerjakan), lalu untuk tiap siswa di
+ * kelas itu cek apakah SEMUA jenis itu sudah terisi. Siswa yang belum
+ * lengkap disertakan dengan daftar jenis_nilai spesifik yang masih
+ * kosong — dasar tampilan ringkasan + detail di dashboard guru.
+ */
+function Dashboard_computeGradeCompletion_(ss) {
+  const siswaByKelas = {};
+  Utils_sheetToObjects_(ss.getSheetByName('SISWA')).forEach(function (s) {
+    if (String(s.status).toUpperCase() === 'NONAKTIF') return;
+    if (!siswaByKelas[s.kelas_id]) siswaByKelas[s.kelas_id] = [];
+    siswaByKelas[s.kelas_id].push(s);
+  });
+
+  const scopes = {};
+  Utils_sheetToObjects_(ss.getSheetByName('NILAI')).forEach(function (r) {
+    const scopeKey = [r.kelas_id, r.mapel_id, r.tahun_ajaran_id, r.semester].join('|');
+    if (!scopes[scopeKey]) {
+      scopes[scopeKey] = { kelas_id: r.kelas_id, mapel_id: r.mapel_id, jenisSet: {}, bySiswa: {} };
+    }
+    const sc = scopes[scopeKey];
+    sc.jenisSet[r.jenis_nilai] = true;
+    if (r.nilai_murni !== '' && r.nilai_murni !== undefined && r.nilai_murni !== null) {
+      if (!sc.bySiswa[r.siswa_id]) sc.bySiswa[r.siswa_id] = {};
+      sc.bySiswa[r.siswa_id][r.jenis_nilai] = true;
+    }
+  });
+
+  const mapelNameById = {};
+  Utils_sheetToObjects_(ss.getSheetByName('MAPEL')).forEach(function (m) { mapelNameById[m.mapel_id] = m.nama_mapel; });
+  const kelasNameById = {};
+  Utils_sheetToObjects_(ss.getSheetByName('KELAS')).forEach(function (k) { kelasNameById[k.kelas_id] = k.nama_kelas; });
+
+  return Object.keys(scopes).map(function (scopeKey) {
+    const sc = scopes[scopeKey];
+    const jenisList = Object.keys(sc.jenisSet);
+    const siswaKelas = siswaByKelas[sc.kelas_id] || [];
+
+    let lengkap = 0;
+    const siswaBelum = [];
+    siswaKelas.forEach(function (s) {
+      const done = sc.bySiswa[s.siswa_id] || {};
+      const jenisBelum = jenisList.filter(function (j) { return !done[j]; });
+      if (jenisBelum.length === 0) { lengkap++; } else { siswaBelum.push({ siswa_id: s.siswa_id, nama_lengkap: s.nama_lengkap, jenis_belum: jenisBelum }); }
+    });
+
+    return {
+      kelas_id: sc.kelas_id, nama_kelas: kelasNameById[sc.kelas_id] || sc.kelas_id,
+      mapel_id: sc.mapel_id, nama_mapel: mapelNameById[sc.mapel_id] || sc.mapel_id,
+      jenis_nilai_list: jenisList, total_siswa: siswaKelas.length, siswa_lengkap: lengkap,
+      persentase: siswaKelas.length ? Math.round((lengkap / siswaKelas.length) * 100) : 0,
+      siswa_belum: siswaBelum
+    };
+  }).filter(function (r) { return r.total_siswa > 0 && r.jenis_nilai_list.length > 0; })
+    .sort(function (a, b) { return a.persentase - b.persentase; });
 }
