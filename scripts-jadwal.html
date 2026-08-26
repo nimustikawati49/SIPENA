@@ -13,7 +13,7 @@ function JadwalGuruApp_init() {
 function JadwalGuruApp_markup_() {
   return '' +
     '<div class="sp-section-title">Jadwal Mengajar Saya</div>' +
-    '<div class="msg" style="margin:-6px 0 10px;">Jadwal resmi dikelola Superadmin. Kalau perlu diubah, ajukan lewat tombol "Ajukan Perubahan" — perubahan baru berlaku setelah disetujui.</div>' +
+    '<div class="msg" style="margin:-6px 0 10px;">Jadwal resmi dikelola Superadmin — klik kartu jadwal untuk mengajukan perubahan, perubahan baru berlaku setelah disetujui.</div>' +
     '<div id="sp-guru-jadwal-table"></div>' +
 
     '<div id="sp-guru-jadwal-form-box" class="hidden" style="margin-top:16px;">' +
@@ -42,13 +42,50 @@ function JadwalGuruApp_load_() {
   });
 }
 
+var JADWAL_GURU_HARI_URUTAN_ = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+
+function JadwalGuruApp_todayHari_() {
+  var names = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+  return names[new Date().getDay()];
+}
+
+function JadwalGuruApp_todayDateLabel_() {
+  var d = new Date();
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  return dd + '/' + mm;
+}
+
+/**
+ * JadwalGuruApp_render_(rows)
+ * Kartu mingguan (Senin—Sabtu), kolom hari ini disorot — kartu berisi
+ * Kelas/Mapel/Jam, klik kartu untuk ajukan perubahan (menggantikan
+ * tombol per-baris supaya tampilan tetap ringkas).
+ */
 function JadwalGuruApp_render_(rows) {
-  SIPENA_table_('sp-guru-jadwal-table', [
-    { key: 'hari', label: 'Hari' },
-    { label: 'Jam', render: function (r) { return r.jam_mulai + ' - ' + r.jam_selesai; } },
-    { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' }, { key: 'ruangan', label: 'Ruangan' },
-    { label: 'Aksi', render: function (r) { return '<button class="sp-btn secondary" onclick="JadwalGuruApp_openRequestForm_(\'' + r.jadwal_id + '\')">Ajukan Perubahan</button>'; } }
-  ], rows, 'Belum ada jadwal — hubungi Superadmin.');
+  var el = document.getElementById('sp-guru-jadwal-table');
+  if (!rows.length) { el.innerHTML = '<div class="sp-empty">Belum ada jadwal — hubungi Superadmin.</div>'; return; }
+
+  var byHari = {};
+  rows.forEach(function (r) { (byHari[r.hari] = byHari[r.hari] || []).push(r); });
+  var todayHari = JadwalGuruApp_todayHari_();
+  var todayLabel = JadwalGuruApp_todayDateLabel_();
+
+  el.innerHTML = '<div class="sp-jadwal-week">' + JADWAL_GURU_HARI_URUTAN_.map(function (hari) {
+    var isToday = hari === todayHari;
+    var entries = (byHari[hari] || []).slice().sort(function (a, b) { return String(a.jam_mulai).localeCompare(String(b.jam_mulai)); });
+    var cardsHtml = entries.map(function (r) {
+      return '<div class="sp-jadwal-card" onclick="JadwalGuruApp_openRequestForm_(\'' + r.jadwal_id + '\')" title="Klik untuk ajukan perubahan">' +
+        '<div class="sp-jadwal-card-kelas">' + r.nama_kelas + '</div>' +
+        '<div class="sp-jadwal-card-mapel">' + r.nama_mapel + '</div>' +
+        '<div class="sp-jadwal-card-jam">' + r.jam_mulai + '–' + r.jam_selesai + '</div>' +
+        '</div>';
+    }).join('');
+    return '<div class="sp-jadwal-day' + (isToday ? ' sp-jadwal-day-today' : '') + '">' +
+      '<div class="sp-jadwal-day-head">' + GuruApp_hariLabel_(hari) + (isToday ? '<div class="sp-jadwal-day-date">' + todayLabel + '</div>' : '') + '</div>' +
+      '<div class="sp-jadwal-day-body">' + cardsHtml + '</div>' +
+      '</div>';
+  }).join('') + '</div>';
 }
 
 function JadwalGuruApp_openRequestForm_(jadwalId) {
