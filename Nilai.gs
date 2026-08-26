@@ -45,10 +45,14 @@ function Nilai_getAssessmentLabel_(semester) {
  * ada) supaya kolom baru yang ditambahkan ke skema NILAI_AKHIR di rilis
  * berikutnya (mis. nilai_kktp/kategori/status_ketercapaian) ikut
  * ditambahkan ke sheet guru yang SUDAH punya NILAI_AKHIR dari rilis
- * sebelumnya — itu operasi tulis SEL biasa (Config_ensureGuruSheetColumns_),
- * aman dari konteks guru. try/catch di sini murni untuk jalur
- * insertSheet (sheet yang BENAR-BENAR belum ada), yang bisa ditolak izin
- * Drive untuk akun guru — lempar pesan jelas alih-alih exception mentah.
+ * sebelumnya. try/catch di sini menutupi KEDUA jalur — insertSheet (sheet
+ * belum ada sama sekali) MAUPUN tulis kolom header di sheet yang sudah
+ * ada (keduanya terbukti bisa ditolak izin Drive untuk akun guru
+ * tertentu, tidak cuma insertSheet seperti dugaan awal) — lempar pesan
+ * jelas alih-alih exception mentah. NILAI_AKHIR wajib ada supaya guru
+ * bisa pakai modul Nilai sama sekali, jadi di sini SENGAJA tetap
+ * memblokir (beda dari Config_ensureGuruSheetColumnsSafe_ yang dipakai
+ * untuk kolom opsional dengan fallback default, lihat Nilai_getSettings_).
  */
 function Nilai_ensureNilaiAkhirSheet_(ss) {
   try {
@@ -59,7 +63,7 @@ function Nilai_ensureNilaiAkhirSheet_(ss) {
 }
 
 function Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester) {
-  const sh = Config_ensureGuruSheetColumns_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
+  const sh = Config_ensureGuruSheetColumnsSafe_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
   const row = Utils_sheetToObjects_(sh).filter(function (r) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
   })[0];
@@ -82,7 +86,7 @@ function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nil
   sumberNilaiRapor = sumberNilaiRapor === 'KATROL' ? 'KATROL' : 'MURNI';
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  const sh = Config_ensureGuruSheetColumns_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
+  const sh = Config_ensureGuruSheetColumnsSafe_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
   const existing = Utils_sheetToObjects_(sh).filter(function (r) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
   })[0];

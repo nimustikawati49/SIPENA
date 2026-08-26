@@ -286,8 +286,19 @@ function Config_ensureGuruSheet_(ss, sheetName) {
  * menggeser kolom lama) — dipakai untuk sheet operasional guru yang
  * SUDAH ADA tapi skemanya bertambah kolom di rilis berikutnya (mis.
  * NILAI_AKHIR dapat kolom nilai_kktp/kategori/status_ketercapaian,
- * PENGATURAN dapat kolom sumber_nilai_rapor). Cuma menulis sel header,
- * bukan insertSheet — aman dari konteks eksekusi guru mana pun.
+ * PENGATURAN dapat kolom sumber_nilai_rapor).
+ *
+ * CATATAN PENTING (revisi): sebelumnya diasumsikan operasi tulis SEL
+ * biasa (bukan insertSheet) selalu aman dari eksekusi guru. Terbukti
+ * SALAH di produksi — sebagian akun guru bisa menulis ke baris DATA yang
+ * sudah pernah mereka tulis sebelumnya, tapi menolak tulis ke SEL HEADER
+ * baris 1 (operasi yang belum pernah mereka lakukan di sheet itu) dengan
+ * exception permission yang sama seperti insertSheet. Jadi fungsi ini
+ * TIDAK BOLEH dipanggil langsung dari konteks guru tanpa try/catch —
+ * pemanggil guru WAJIB pakai Config_ensureGuruSheetColumnsSafe_ di bawah
+ * (degradasi diam-diam) kalau kolom itu punya default yang aman, atau
+ * bungkus sendiri dengan pesan jelas kalau kolom itu wajib ada (pola
+ * Nilai_ensureNilaiAkhirSheet_/Katrol_ensureHistorySheet_).
  */
 function Config_ensureGuruSheetColumns_(sh, sheetName) {
   const headers = CONFIG_GURU_OPERATIONAL_SCHEMA_[sheetName];
@@ -299,6 +310,24 @@ function Config_ensureGuruSheetColumns_(sh, sheetName) {
     sh.getRange(1, lastCol + 1, 1, missing.length).setFontWeight('bold');
   }
   return sh;
+}
+
+/**
+ * Config_ensureGuruSheetColumnsSafe_(sh, sheetName)
+ * Versi tidak-pernah-throw dari Config_ensureGuruSheetColumns_ — dipakai
+ * untuk kolom OPSIONAL yang pemanggilnya sudah punya fallback default
+ * kalau kolom itu belum ada (mis. sumber_nilai_rapor default 'MURNI').
+ * Kalau tulis header gagal (izin Drive akun guru), diam-diam dilewati —
+ * guru tetap bisa pakai fitur inti (lihat/simpan nilai), cuma fitur yang
+ * butuh kolom baru itu jalan dengan nilai default sampai Superadmin
+ * menjalankan migrasi.
+ */
+function Config_ensureGuruSheetColumnsSafe_(sh, sheetName) {
+  try {
+    return Config_ensureGuruSheetColumns_(sh, sheetName);
+  } catch (e) {
+    return sh;
+  }
 }
 
 /**
