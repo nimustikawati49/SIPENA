@@ -1,5 +1,5 @@
 <script>
-var NilaiApp = { initialized: false, penugasan: [], currentContext: null, students: [], original: {}, dirty: {} };
+var NilaiApp = { initialized: false, penugasan: [], currentContext: null, students: [], original: {}, dirty: {}, focusCol: '' };
 
 var NILAI_HARIAN_JENIS = ['tgs1', 'tgs2', 'tgs3', 'uh1', 'uh2', 'uh3'];
 
@@ -46,6 +46,8 @@ function NilaiApp_markup_() {
     '    </form>' +
     '  </div>' +
 
+    '  <div id="sp-nilai-col-toggle" class="hidden" style="margin-bottom:10px;"></div>' +
+    '  <div id="sp-nilai-completeness" class="hidden msg" style="margin:-4px 0 10px;"></div>' +
     '  <div id="sp-nilai-table"></div>' +
     '  <button type="button" class="sp-btn hidden" id="sp-nilai-save-btn" style="margin-top:14px;" onclick="NilaiApp_saveGrades_()">Simpan Perubahan</button>' +
 
@@ -175,51 +177,140 @@ function NilaiApp_gradeColumns_() {
   ];
 }
 
+/**
+ * NilaiApp_renderColToggle_()
+ * Pil "Semua" + satu pil per jenis nilai — pilih satu untuk fokus entri
+ * cepat (sembunyikan kolom lain supaya tidak perlu geser ke samping),
+ * atau "Semua" untuk lihat/edit semua kolom seperti biasa.
+ */
+function NilaiApp_renderColToggle_() {
+  var box = document.getElementById('sp-nilai-col-toggle');
+  var cols = NilaiApp_gradeColumns_();
+  var pills = [{ key: '', label: 'Semua' }].concat(cols);
+  box.classList.remove('hidden');
+  box.innerHTML = pills.map(function (c) {
+    var active = NilaiApp.focusCol === c.key;
+    return '<button type="button" class="sp-btn' + (active ? '' : ' secondary') + '" style="margin:0 6px 6px 0;padding:6px 14px;font-size:12.5px;" ' +
+      'onclick="NilaiApp_setFocusCol_(\'' + c.key + '\')">' + c.label + '</button>';
+  }).join('');
+}
+
+function NilaiApp_setFocusCol_(key) {
+  NilaiApp.focusCol = key;
+  NilaiApp_renderColToggle_();
+  NilaiApp_renderGradeTable_();
+}
+
 function NilaiApp_renderGradeTable_() {
   var el = document.getElementById('sp-nilai-table');
   var students = NilaiApp.students;
   if (!students.length) { el.innerHTML = '<div class="sp-empty">Belum ada siswa aktif di kelas ini. Hubungi Superadmin untuk mengelola roster.</div>'; return; }
 
-  var cols = NilaiApp_gradeColumns_();
+  NilaiApp_renderColToggle_();
+
+  var allCols = NilaiApp_gradeColumns_();
+  var focused = !!NilaiApp.focusCol;
+  var cols = focused ? allCols.filter(function (c) { return c.key === NilaiApp.focusCol; }) : allCols;
+
   var thead = '<tr><th class="sp-sticky-col sp-sticky-col-1">No</th><th class="sp-sticky-col sp-sticky-col-2">NIS</th><th class="sp-sticky-col sp-sticky-col-3">Nama</th>' +
     cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') +
-    '<th>Rata-rata Harian</th><th>Nilai Akhir (Murni)</th><th>Nilai Akhir (Katrol)</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th></tr>';
+    (focused
+      ? '<th>Nilai Akhir</th>'
+      : '<th>Rata-rata Harian</th><th>Nilai Akhir (Murni)</th><th>Nilai Akhir (Katrol)</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th>') +
+    '</tr>';
 
   var rows = students.map(function (s, i) {
     var pindahanNote = s.dari_sekolah_asal ? ' <span class="msg" style="margin:0;">(dari sekolah asal)</span>' : '';
     var cells = cols.map(function (c) {
+      var cv = NilaiApp_valueFor_(s.siswa_id, c.key);
       return '<td><input type="number" min="0" max="100" step="0.01" class="sp-nilai-input" ' +
-        'data-siswa="' + s.siswa_id + '" data-col="' + c.key + '" value="' + (s[c.key] !== '' ? s[c.key] : '') + '" ' +
+        'data-siswa="' + s.siswa_id + '" data-col="' + c.key + '" data-row-index="' + i + '" value="' + (cv !== '' && cv !== null && cv !== undefined ? cv : '') + '" ' +
         'style="width:70px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);"></td>';
     }).join('');
-    return '<tr id="sp-nilai-row-' + s.siswa_id + '">' +
+    var belumTercapai = s.status_ketercapaian === 'BELUM_TERCAPAI';
+    var isDirty = !!NilaiApp.dirty[s.siswa_id];
+    var extraCols = focused
+      ? '<td id="sp-nilai-akhir-' + s.siswa_id + '">' + NilaiApp_fmt_(s.nilai_akhir_murni) + '</td>'
+      : '<td id="sp-nilai-rata-' + s.siswa_id + '">' + NilaiApp_fmt_(s.rata_rata_harian) + '</td>' +
+        '<td id="sp-nilai-akhir-' + s.siswa_id + '">' + NilaiApp_fmt_(s.nilai_akhir_murni) + '</td>' +
+        '<td>' + (s.nilai_akhir_katrol !== '' ? NilaiApp_fmt_(s.nilai_akhir_katrol) : '-') + '</td>' +
+        '<td id="sp-nilai-status-' + s.siswa_id + '">' + NilaiApp_statusBadge_(s.status_nilai) + '</td>' +
+        '<td>' + (s.nilai_kktp !== '' ? s.nilai_kktp : '-') + '</td>' +
+        '<td>' + (s.kategori || '-') + '</td>' +
+        '<td>' + NilaiApp_ketercapaianBadge_(s.status_ketercapaian) + '</td>';
+    var rowClasses = [belumTercapai ? 'sp-row-belum-tercapai' : '', isDirty ? 'sp-row-dirty' : ''].filter(Boolean).join(' ');
+    return '<tr id="sp-nilai-row-' + s.siswa_id + '"' + (rowClasses ? ' class="' + rowClasses + '"' : '') + '>' +
       '<td class="sp-sticky-col sp-sticky-col-1">' + (i + 1) + '</td>' +
       '<td class="sp-sticky-col sp-sticky-col-2">' + (s.nis || '-') + '</td>' +
       '<td class="sp-sticky-col sp-sticky-col-3">' + s.nama_lengkap + pindahanNote + '</td>' +
-      cells +
-      '<td id="sp-nilai-rata-' + s.siswa_id + '">' + NilaiApp_fmt_(s.rata_rata_harian) + '</td>' +
-      '<td id="sp-nilai-akhir-' + s.siswa_id + '">' + NilaiApp_fmt_(s.nilai_akhir_murni) + '</td>' +
-      '<td>' + (s.nilai_akhir_katrol !== '' ? NilaiApp_fmt_(s.nilai_akhir_katrol) : '-') + '</td>' +
-      '<td id="sp-nilai-status-' + s.siswa_id + '">' + NilaiApp_statusBadge_(s.status_nilai) + '</td>' +
-      '<td>' + (s.nilai_kktp !== '' ? s.nilai_kktp : '-') + '</td>' +
-      '<td>' + (s.kategori || '-') + '</td>' +
-      '<td>' + NilaiApp_ketercapaianBadge_(s.status_ketercapaian) + '</td>' +
+      cells + extraCols +
       '</tr>';
   }).join('');
 
   el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + rows + '</tbody></table></div>' +
-    '<div class="msg">Kosongkan sel untuk siswa yang belum memiliki nilai jenis itu — jangan diisi 0. Rata-rata Harian &amp; Nilai Akhir dihitung otomatis saat mengetik, klik "Simpan Perubahan" untuk menyimpan ke database.</div>';
+    '<div class="msg">Kosongkan sel untuk siswa yang belum memiliki nilai jenis itu — jangan diisi 0. Rata-rata Harian &amp; Nilai Akhir dihitung otomatis saat mengetik. Tempel (paste) sekumpulan nilai dari Excel ke satu sel untuk mengisi ke bawah otomatis. Baris kuning = status ketercapaian di bawah KKTP. Klik "Simpan Perubahan" untuk menyimpan ke database.</div>';
+
+  NilaiApp_updateCompleteness_();
 
   el.querySelectorAll('.sp-nilai-input').forEach(function (input) {
     input.addEventListener('input', NilaiApp_onCellInput_);
     input.addEventListener('keydown', NilaiApp_onCellKeydown_);
+    input.addEventListener('paste', NilaiApp_onCellPaste_);
   });
+
+  Object.keys(NilaiApp.dirty).forEach(NilaiApp_recomputeRow_);
 }
 
 function NilaiApp_fmt_(v) {
   if (v === '' || v === null || v === undefined || isNaN(v)) return '-';
   var places = (NilaiApp.currentContext.bobotConfig && NilaiApp.currentContext.bobotConfig.decimal_places) || 2;
   return Number(v).toFixed(places);
+}
+
+/**
+ * NilaiApp_updateCompleteness_()
+ * Hitung dari kolom yang SEDANG TAMPIL saja (satu jenis kalau fokus,
+ * semua jenis kalau "Semua") — supaya angkanya relevan dengan apa yang
+ * sedang dikerjakan guru, bukan gabungan semua kolom ekstra kembar.
+ */
+function NilaiApp_updateCompleteness_() {
+  var box = document.getElementById('sp-nilai-completeness');
+  var allCols = NilaiApp_gradeColumns_();
+  var cols = NilaiApp.focusCol ? allCols.filter(function (c) { return c.key === NilaiApp.focusCol; }) : allCols;
+  var total = 0, filled = 0;
+  NilaiApp.students.forEach(function (s) {
+    cols.forEach(function (c) {
+      total++;
+      var v = NilaiApp_valueFor_(s.siswa_id, c.key);
+      if (v !== '' && v !== null && v !== undefined) filled++;
+    });
+  });
+  var pct = total ? Math.round((filled / total) * 100) : 0;
+  box.classList.remove('hidden');
+  box.textContent = 'Kelengkapan: ' + filled + '/' + total + ' (' + pct + '%) · Kosong: ' + (total - filled);
+}
+
+/**
+ * NilaiApp_onCellPaste_(e)
+ * Tempel sekumpulan nilai (mis. dari kolom Excel, dipisah baris baru)
+ * ke satu sel — otomatis mengisi sel yang sama di baris-baris berikutnya
+ * pada kolom yang sama, bukan cuma sel yang ditempel.
+ */
+function NilaiApp_onCellPaste_(e) {
+  var text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text || text.indexOf('\n') === -1 && text.indexOf('\t') === -1) return; // paste satu nilai biasa, biarkan default
+  e.preventDefault();
+
+  var values = text.split(/\r?\n/).map(function (line) { return line.split('\t')[0].trim(); }).filter(function (v, idx, arr) { return !(v === '' && idx === arr.length - 1); });
+  var startIndex = Number(e.target.getAttribute('data-row-index'));
+  var col = e.target.getAttribute('data-col');
+
+  values.forEach(function (v, offset) {
+    var target = document.querySelector('.sp-nilai-input[data-col="' + col + '"][data-row-index="' + (startIndex + offset) + '"]');
+    if (!target) return;
+    target.value = v;
+    target.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 
 function NilaiApp_statusBadge_(status) {
@@ -287,6 +378,7 @@ function NilaiApp_onCellInput_(e) {
   if (row) row.classList.add('sp-row-dirty');
 
   NilaiApp_recomputeRow_(siswaId);
+  NilaiApp_updateCompleteness_();
 }
 
 function NilaiApp_valueFor_(siswaId, col) {
