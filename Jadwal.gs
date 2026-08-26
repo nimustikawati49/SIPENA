@@ -9,6 +9,30 @@ function Jadwal_validateJam_(v) {
 }
 
 /**
+ * Jadwal_normalizeJam_(v)
+ * jam_mulai/jam_selesai HARUS tersimpan sebagai teks "HH:MM" — tapi
+ * kolom yang pernah ke-format Time oleh Sheets (mis. terisi manual lewat
+ * UI Sheets sebelum kolomnya dipaksa format teks) membuat setValues()
+ * berikutnya ikut dikonversi jadi serial tanggal/jam, lalu
+ * Utils_sheetToObjects_ men-toISOString()-kan-nya jadi string aneh
+ * ("1899-12-30T02:17:24.000Z"). Fungsi ini menormalkan APAPUN bentuknya
+ * (Date mentah, ISO string korup, atau "HH:MM" yang sudah benar) balik
+ * ke "HH:MM" di timezone spreadsheet central — dipakai di setiap titik
+ * baca supaya data lama yang sudah kadung korup tetap tampil benar,
+ * sekaligus jadi jaring pengaman kalau Config_ensureTextFormatColumns_
+ * belum sempat membersihkan sumber datanya.
+ */
+function Jadwal_normalizeJam_(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const s = String(v);
+  if (Jadwal_validateJam_(s)) return s;
+  const d = (v instanceof Date) ? v : new Date(s);
+  if (isNaN(d.getTime())) return '';
+  const tz = Config_getCentralSpreadsheet_().getSpreadsheetTimeZone();
+  return Utilities.formatDate(d, tz, 'HH:mm');
+}
+
+/**
  * Jadwal_isBentrok_(guruId, hari, jamMulai, jamSelesai, tahunAjaranId, semester, excludeJadwalId)
  * Cek tumpang tindih jam pada guru+hari+periode yang sama — perbandingan
  * string "HH:MM" valid secara leksikografis untuk overlap check.
@@ -29,7 +53,9 @@ function Jadwal_enrichWithNames_(rows) {
     return Object.assign({}, r, {
       nama_guru: (guruById[r.guru_id] || {}).nama_lengkap || '-',
       nama_mapel: (mapelById[r.mapel_id] || {}).nama_mapel || '-',
-      nama_kelas: (kelasById[r.kelas_id] || {}).nama_kelas || '-'
+      nama_kelas: (kelasById[r.kelas_id] || {}).nama_kelas || '-',
+      jam_mulai: Jadwal_normalizeJam_(r.jam_mulai),
+      jam_selesai: Jadwal_normalizeJam_(r.jam_selesai)
     });
   });
 }
@@ -119,7 +145,12 @@ function adminDeleteSchedule(jadwalId) {
 function getMySchedule() {
   const auth = Security_requireRole_(['GURU']);
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  return Utils_sheetToObjects_(ss.getSheetByName('JADWAL')).map(function (r) { delete r._row; return r; });
+  return Utils_sheetToObjects_(ss.getSheetByName('JADWAL')).map(function (r) {
+    delete r._row;
+    r.jam_mulai = Jadwal_normalizeJam_(r.jam_mulai);
+    r.jam_selesai = Jadwal_normalizeJam_(r.jam_selesai);
+    return r;
+  });
 }
 
 /**

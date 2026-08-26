@@ -20,8 +20,8 @@ function JadwalGuruApp_markup_() {
     '  <div class="sp-section-title" style="font-size:14px;">Ajukan Perubahan Jadwal</div>' +
     '  <form class="sp-form" id="sp-form-jadwal-request">' +
     '    <div class="sp-field"><label>Hari</label><select name="hari" required><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
-    '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="time" required></div>' +
-    '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="time" required></div>' +
+    '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
+    '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
     '    <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
     '    <div class="sp-field" style="flex-basis:100%;"><label>Alasan Pengajuan</label><input name="alasan" style="width:100%;" required></div>' +
     '    <button class="sp-btn" type="submit">Kirim Pengajuan</button>' +
@@ -42,50 +42,17 @@ function JadwalGuruApp_load_() {
   });
 }
 
-var JADWAL_GURU_HARI_URUTAN_ = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
-
-function JadwalGuruApp_todayHari_() {
-  var names = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
-  return names[new Date().getDay()];
-}
-
-function JadwalGuruApp_todayDateLabel_() {
-  var d = new Date();
-  var dd = String(d.getDate()).padStart(2, '0');
-  var mm = String(d.getMonth() + 1).padStart(2, '0');
-  return dd + '/' + mm;
-}
-
 /**
  * JadwalGuruApp_render_(rows)
  * Kartu mingguan (Senin—Sabtu), kolom hari ini disorot — kartu berisi
- * Kelas/Mapel/Jam, klik kartu untuk ajukan perubahan (menggantikan
- * tombol per-baris supaya tampilan tetap ringkas).
+ * Kelas/Mapel/Jam, klik kartu untuk ajukan perubahan. Pakai renderer
+ * mingguan bersama (SIPENA_weekScheduleGridHtml_, scripts-init.html)
+ * yang juga dipakai dashboard guru, supaya keduanya konsisten.
  */
 function JadwalGuruApp_render_(rows) {
   var el = document.getElementById('sp-guru-jadwal-table');
   if (!rows.length) { el.innerHTML = '<div class="sp-empty">Belum ada jadwal — hubungi Superadmin.</div>'; return; }
-
-  var byHari = {};
-  rows.forEach(function (r) { (byHari[r.hari] = byHari[r.hari] || []).push(r); });
-  var todayHari = JadwalGuruApp_todayHari_();
-  var todayLabel = JadwalGuruApp_todayDateLabel_();
-
-  el.innerHTML = '<div class="sp-jadwal-week">' + JADWAL_GURU_HARI_URUTAN_.map(function (hari) {
-    var isToday = hari === todayHari;
-    var entries = (byHari[hari] || []).slice().sort(function (a, b) { return String(a.jam_mulai).localeCompare(String(b.jam_mulai)); });
-    var cardsHtml = entries.map(function (r) {
-      return '<div class="sp-jadwal-card" onclick="JadwalGuruApp_openRequestForm_(\'' + r.jadwal_id + '\')" title="Klik untuk ajukan perubahan">' +
-        '<div class="sp-jadwal-card-kelas">' + r.nama_kelas + '</div>' +
-        '<div class="sp-jadwal-card-mapel">' + r.nama_mapel + '</div>' +
-        '<div class="sp-jadwal-card-jam">' + r.jam_mulai + '–' + r.jam_selesai + '</div>' +
-        '</div>';
-    }).join('');
-    return '<div class="sp-jadwal-day' + (isToday ? ' sp-jadwal-day-today' : '') + '">' +
-      '<div class="sp-jadwal-day-head">' + GuruApp_hariLabel_(hari) + (isToday ? '<div class="sp-jadwal-day-date">' + todayLabel + '</div>' : '') + '</div>' +
-      '<div class="sp-jadwal-day-body">' + cardsHtml + '</div>' +
-      '</div>';
-  }).join('') + '</div>';
+  el.innerHTML = SIPENA_weekScheduleGridHtml_(rows, 'JadwalGuruApp_openRequestForm_');
 }
 
 function JadwalGuruApp_openRequestForm_(jadwalId) {
@@ -104,7 +71,11 @@ function JadwalGuruApp_openRequestForm_(jadwalId) {
 }
 
 function JadwalGuruApp_wireForm_() {
-  document.getElementById('sp-form-jadwal-request').addEventListener('submit', function (e) {
+  var requestForm = document.getElementById('sp-form-jadwal-request');
+  SIPENA_wireTimeInput_(requestForm.jam_mulai);
+  SIPENA_wireTimeInput_(requestForm.jam_selesai);
+
+  requestForm.addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
     var jadwalId = f.dataset.jadwalId;

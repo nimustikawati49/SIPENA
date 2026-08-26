@@ -232,8 +232,14 @@ function Sync_rewriteSiswa_(ss, guruId) {
  * requestScheduleChange (Jadwal.gs).
  */
 function Sync_rewriteJadwal_(ss, guruId) {
-  const sh = ss.getSheetByName('JADWAL');
+  // Config_ensureGuruSheet_ melengkapi kolom yang mungkin belum ada (mis.
+  // nama_mapel/nama_kelas di spreadsheet guru yang dibuat sebelum kolom
+  // itu ditambahkan) — aman di sini karena Sync_teacherData_ selalu
+  // dipanggil dari aksi Superadmin (adminCreateSchedule dkk.), tidak
+  // pernah dari eksekusi guru.
+  const sh = Config_ensureGuruSheet_(ss, 'JADWAL');
   if (!sh) return;
+  Config_applyTextFormat_(sh, ['jam_mulai', 'jam_selesai']);
 
   const mapelById = Sync_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_MAPEL')), 'mapel_id');
   const kelasById = Sync_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_KELAS')), 'kelas_id');
@@ -246,7 +252,8 @@ function Sync_rewriteJadwal_(ss, guruId) {
     return {
       jadwal_id: r.jadwal_id, mapel_id: r.mapel_id, nama_mapel: m.nama_mapel || '-',
       kelas_id: r.kelas_id, nama_kelas: k.nama_kelas || '-', hari: r.hari,
-      jam_mulai: r.jam_mulai, jam_selesai: r.jam_selesai, ruangan: r.ruangan, keterangan: r.keterangan,
+      jam_mulai: Jadwal_normalizeJam_(r.jam_mulai), jam_selesai: Jadwal_normalizeJam_(r.jam_selesai),
+      ruangan: r.ruangan, keterangan: r.keterangan,
       tahun_ajaran_id: r.tahun_ajaran_id, semester: r.semester, status: r.status
     };
   });

@@ -1261,8 +1261,8 @@ function SuperAdmin_panelJadwal_() {
     '    <div class="sp-field"><label>Guru</label><select id="sp-jadwal-guru" data-source="guru" required></select></div>' +
     '    <div class="sp-field"><label>Kelas</label><select id="sp-jadwal-penugasan" style="min-width:220px;" required><option value="">Pilih guru dulu</option></select></div>' +
     '    <div class="sp-field"><label>Hari</label><select name="hari" required><option value="">Pilih</option><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
-    '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="time" required></div>' +
-    '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="time" required></div>' +
+    '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
+    '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
     '    <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
     '    <div class="sp-field"><label>Keterangan</label><input name="keterangan"></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
@@ -1280,6 +1280,10 @@ function SuperAdmin_wireJadwal_() {
   document.getElementById('sp-jadwal-guru').addEventListener('change', function () {
     SuperAdmin_refreshJadwalPenugasanOptions_(this.value);
   });
+
+  var jadwalForm = document.getElementById('sp-form-jadwal');
+  SIPENA_wireTimeInput_(jadwalForm.jam_mulai);
+  SIPENA_wireTimeInput_(jadwalForm.jam_selesai);
 
   document.getElementById('sp-form-jadwal').addEventListener('submit', function (e) {
     e.preventDefault();

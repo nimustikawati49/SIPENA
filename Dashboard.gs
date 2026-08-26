@@ -36,8 +36,8 @@ function getMyDashboard() {
     .filter(function (r) { return r.sekolah_id === profil.sekolah_id; })[0];
 
   const todayHari = Dashboard_todayHari_();
-  const jadwalHariIni = Utils_sheetToObjects_(ss.getSheetByName('JADWAL'))
-    .filter(function (r) { return r.hari === todayHari && String(r.status).toUpperCase() === 'AKTIF'; })
+  const jadwalMinggu = Utils_sheetToObjects_(ss.getSheetByName('JADWAL'))
+    .filter(function (r) { return String(r.status).toUpperCase() === 'AKTIF'; })
     .map(Dashboard_stripRow_)
     .sort(function (a, b) { return String(a.jam_mulai).localeCompare(String(b.jam_mulai)); });
 
@@ -54,7 +54,7 @@ function getMyDashboard() {
     kelas: kelas,
     penugasan: penugasan,
     hari_ini: todayHari,
-    jadwal_hari_ini: jadwalHariIni,
+    jadwal_minggu: jadwalMinggu,
     nilai_completion: Dashboard_computeGradeCompletion_(ss)
   };
 

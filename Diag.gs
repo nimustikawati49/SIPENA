@@ -15,7 +15,7 @@ function adminGetCentralSpreadsheetInfo() {
 // (modul Nilai Akhir, Katrol) — daftar dicek satu per satu di
 // adminMigrateGuruOperationalSheets di bawah. Tambah nama sheet baru ke
 // sini tiap kali modul baru menambah sheet ke CONFIG_GURU_OPERATIONAL_SCHEMA_.
-const DIAG_GURU_SHEETS_TO_MIGRATE_ = ['NILAI_AKHIR', 'KATROL_HISTORY'];
+const DIAG_GURU_SHEETS_TO_MIGRATE_ = ['NILAI_AKHIR', 'KATROL_HISTORY', 'JADWAL'];
 
 /**
  * adminMigrateGuruOperationalSheets()
@@ -32,7 +32,11 @@ const DIAG_GURU_SHEETS_TO_MIGRATE_ = ['NILAI_AKHIR', 'KATROL_HISTORY'];
  * migrasi ini dijalankan SEKALI oleh Superadmin (pemilik file), bukan
  * otomatis oleh guru. Config_ensureGuruSheet_ juga sekaligus melengkapi
  * kolom yang mungkin masih kurang di sheet yang SUDAH ada (mis.
- * nilai_kktp/kategori/status_ketercapaian di NILAI_AKHIR).
+ * nilai_kktp/kategori/status_ketercapaian di NILAI_AKHIR). Khusus JADWAL,
+ * fungsi ini juga menulis ulang ISI-nya lewat Sync_rewriteJadwal_ (bukan
+ * cuma kolom) supaya guru lama ikut dapat perbaikan nama_mapel/nama_kelas
+ * yang sempat kosong dan jam_mulai/jam_selesai yang sempat korup jadi
+ * serial Date — lihat Jadwal_normalizeJam_.
  */
 function adminMigrateGuruOperationalSheets() {
   Security_requireRole_(['SUPERADMIN']);
@@ -51,6 +55,12 @@ function adminMigrateGuruOperationalSheets() {
         Config_ensureGuruSheet_(ss, sheetName);
         if (!already) touchedAny = true;
       });
+      // JADWAL ditulis ulang PENUH tiap migrasi (bukan cuma dicek kolomnya)
+      // supaya guru yang datanya sudah kadung korup (jam_mulai/jam_selesai
+      // ke-simpan sebagai Date, atau nama_mapel/nama_kelas kosong karena
+      // sheet-nya dibuat sebelum kolom itu ada) ikut diperbaiki tanpa harus
+      // menunggu Superadmin mengubah jadwal guru itu lagi satu per satu.
+      Sync_rewriteJadwal_(ss, r.guru_id);
       if (touchedAny) migrated++;
     } catch (e) {
       failed.push({ guru_id: r.guru_id, email: r.email, error: String(e.message || e) });

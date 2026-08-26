@@ -102,13 +102,18 @@ const CONFIG_KOP_HEADERS_ = ['kop_id', 'sekolah_id', 'nama_kop', 'paper_hint', '
 // Google Sheets otomatis membuang nol di depan (mis. "001" jadi 1) untuk
 // sel berformat default begitu isinya terlihat seperti angka. NPSN, NIP,
 // NUPTK, dan kode mapel di Indonesia lazim berawalan nol, jadi ini bukan
-// isu kosmetik. Lihat Config_ensureTextFormatColumns_.
+// isu kosmetik. jam_mulai/jam_selesai JADWAL_MENGAJAR juga di sini dengan
+// alasan berbeda: begitu SATU sel di kolom itu pernah ke-format Time oleh
+// Sheets, setValues() berikutnya dengan string "HH:MM" ikut dikonversi
+// jadi serial jam (bukan tetap teks) — memaksa kolomnya jadi teks '@'
+// mencegah itu terulang. Lihat Config_ensureTextFormatColumns_.
 const CONFIG_TEXT_FORMAT_COLUMNS_ = {
   MASTER_SEKOLAH: ['npsn', 'kode_pos'],
   MASTER_GURU: ['nip', 'nuptk'],
   MASTER_MAPEL: ['kode_mapel'],
   MASTER_KELAS: ['tingkat'],
-  MASTER_SISWA: ['nis', 'nisn']
+  MASTER_SISWA: ['nis', 'nisn'],
+  JADWAL_MENGAJAR: ['jam_mulai', 'jam_selesai']
 };
 
 // Sheet yang dibuat di spreadsheet PRIBADI tiap guru saat provisioning
@@ -235,12 +240,20 @@ function Config_ensureColumnsMigration_() {
  * CONFIG_TEXT_FORMAT_COLUMNS_) sekali saja, ditandai lewat Script
  * Property (bukan CacheService yang kedaluwarsa) supaya tidak perlu buka
  * spreadsheet & scan header di setiap request setelah yang pertama.
- * Bump nama property (_V2 -> _V3) kalau nanti menambah kolom baru ke
+ * Bump nama property (_V3 -> _V4) kalau nanti menambah kolom baru ke
  * daftar itu, supaya migrasi jalan ulang untuk kolom yang baru saja.
+ *
+ * V4 menambah JADWAL_MENGAJAR.jam_mulai/jam_selesai — beda dari kolom
+ * "kode" lainnya, di sini format '@' saja TIDAK cukup karena nilai yang
+ * SUDAH kadung ke-simpan sebagai serial Date tidak otomatis berubah jadi
+ * teks "HH:MM" hanya karena format selnya diganti. Jadi V4 sekalian
+ * menulis ulang nilai jam yang korup (lihat Config_repairJadwalJamValues_)
+ * — satu-satunya kolom di CONFIG_TEXT_FORMAT_COLUMNS_ yang butuh perbaikan
+ * NILAI, bukan cuma format tampilan.
  */
 function Config_ensureTextFormatColumns_() {
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('TEXT_FORMAT_APPLIED_V3')) return;
+  if (props.getProperty('TEXT_FORMAT_APPLIED_V4')) return;
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_TEXT_FORMAT_COLUMNS_).forEach(function (sheetName) {
@@ -248,8 +261,34 @@ function Config_ensureTextFormatColumns_() {
     if (!sh) return;
     Config_applyTextFormat_(sh, CONFIG_TEXT_FORMAT_COLUMNS_[sheetName]);
   });
+  Config_repairJadwalJamValues_(ss);
 
-  props.setProperty('TEXT_FORMAT_APPLIED_V3', '1');
+  props.setProperty('TEXT_FORMAT_APPLIED_V4', '1');
+}
+
+/**
+ * Config_repairJadwalJamValues_(ss)
+ * Tulis ulang jam_mulai/jam_selesai JADWAL_MENGAJAR yang sudah kadung
+ * tersimpan sebagai serial Date (lihat Jadwal_normalizeJam_) jadi teks
+ * "HH:MM" bersih — dipanggil SETELAH Config_applyTextFormat_ memaksa
+ * kolomnya jadi format teks, supaya nilai bersih yang ditulis ulang di
+ * sini tidak ikut dikonversi balik jadi Date oleh Sheets.
+ */
+function Config_repairJadwalJamValues_(ss) {
+  const sh = ss.getSheetByName('JADWAL_MENGAJAR');
+  if (!sh || sh.getLastRow() < 2) return;
+  const lastCol = sh.getLastColumn();
+  const header = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); });
+  const jmIdx = header.indexOf('jam_mulai');
+  const jsIdx = header.indexOf('jam_selesai');
+  if (jmIdx === -1 || jsIdx === -1) return;
+
+  const lastRow = sh.getLastRow();
+  [jmIdx, jsIdx].forEach(function (idx) {
+    const range = sh.getRange(2, idx + 1, lastRow - 1, 1);
+    const fixed = range.getValues().map(function (row) { return [Jadwal_normalizeJam_(row[0])]; });
+    range.setValues(fixed);
+  });
 }
 
 /**

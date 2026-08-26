@@ -120,6 +120,73 @@ function SIPENA_avatarHtml_(fotoUrl, name) {
 }
 
 /**
+ * SIPENA_wireTimeInput_(el)
+ * Input jam dipakai sebagai <input type="text"> berformat "HH:MM"
+ * (bukan <input type="time">) supaya tidak muncul segmen AM/PM bawaan
+ * browser yang tampil rusak ("--:-- --") kalau locale OS 12-jam — auto
+ * sisip ":" setelah 2 digit supaya tetap nyaman diketik.
+ */
+function SIPENA_wireTimeInput_(el) {
+  if (!el) return;
+  el.addEventListener('input', function () {
+    var digits = el.value.replace(/\D/g, '').slice(0, 4);
+    el.value = digits.length >= 3 ? digits.slice(0, 2) + ':' + digits.slice(2) : digits;
+  });
+}
+
+var SIPENA_JADWAL_HARI_URUTAN_ = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+
+function SIPENA_hariLabel_(hari) {
+  return hari ? (hari.charAt(0) + hari.slice(1).toLowerCase()) : '-';
+}
+
+function SIPENA_todayHari_() {
+  var names = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+  return names[new Date().getDay()];
+}
+
+function SIPENA_todayDateLabel_() {
+  var d = new Date();
+  var dd = String(d.getDate()).padStart(2, '0');
+  var mm = String(d.getMonth() + 1).padStart(2, '0');
+  return dd + '/' + mm;
+}
+
+/**
+ * SIPENA_weekScheduleGridHtml_(rows, onCardClickFnName)
+ * Kartu mingguan Senin-Sabtu, hari ini disorot — dipakai bersama oleh
+ * dashboard guru (read-only) dan tab Jadwal guru (klik kartu untuk
+ * mengajukan perubahan) supaya keduanya konsisten & tidak dobel logika.
+ * onCardClickFnName: nama fungsi global dipanggil dengan jadwal_id saat
+ * kartu diklik, atau falsy untuk versi non-interaktif (dashboard).
+ */
+function SIPENA_weekScheduleGridHtml_(rows, onCardClickFnName) {
+  var byHari = {};
+  rows.forEach(function (r) { (byHari[r.hari] = byHari[r.hari] || []).push(r); });
+  var todayHari = SIPENA_todayHari_();
+  var todayLabel = SIPENA_todayDateLabel_();
+
+  return '<div class="sp-jadwal-week">' + SIPENA_JADWAL_HARI_URUTAN_.map(function (hari) {
+    var isToday = hari === todayHari;
+    var entries = (byHari[hari] || []).slice().sort(function (a, b) { return String(a.jam_mulai).localeCompare(String(b.jam_mulai)); });
+    var cardsHtml = entries.map(function (r) {
+      var clickAttr = onCardClickFnName
+        ? ' onclick="' + onCardClickFnName + '(\'' + r.jadwal_id + '\')" style="cursor:pointer;" title="Klik untuk ajukan perubahan"'
+        : '';
+      return '<div class="sp-jadwal-card"' + clickAttr + '>' +
+        '<div class="sp-jadwal-card-kelas">' + r.nama_kelas + '</div>' +
+        '<div class="sp-jadwal-card-mapel">' + r.nama_mapel + '</div>' +
+        '<div class="sp-jadwal-card-jam">' + r.jam_mulai + '–' + r.jam_selesai + '</div>' +
+        '</div>';
+    }).join('') || '<div class="msg" style="margin:0;font-size:11.5px;">-</div>';
+    return '<div class="sp-jadwal-day' + (isToday ? ' sp-jadwal-day-today' : '') + '">' +
+      '<div class="sp-jadwal-day-head">' + SIPENA_hariLabel_(hari) + (isToday ? '<div class="sp-jadwal-day-date">' + todayLabel + '</div>' : '') + '</div>' +
+      '<div class="sp-jadwal-day-body">' + cardsHtml + '</div>' +
+      '</div>';
+  }).join('') + '</div>';
+}
+
+/**
  * SIPENA_readFileAsBase64_(file, maxKb, callback)
  * FileReader murni client-side (bukan download, jadi tidak kena batasan
  * iframe sandbox yang sempat menggagalkan fitur export — lihat catatan

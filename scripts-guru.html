@@ -30,7 +30,7 @@ function GuruApp_showTab_(tabId) {
 
 function GuruApp_buildContent_() {
   document.getElementById('sp-guru-panel-dashboard').innerHTML =
-    '<div class="sp-section-title">Jadwal Hari Ini</div>' +
+    '<div class="sp-section-title">Jadwal Mengajar Minggu Ini</div>' +
     '<div id="sp-guru-jadwal-hari-ini" style="margin-bottom:28px;"></div>' +
 
     '<div id="sp-guru-profil-card"></div>' +
@@ -99,7 +99,7 @@ function GuruApp_load_() {
 function GuruApp_render_(dash) {
   var p = dash.profil || {};
 
-  GuruApp_renderJadwalHariIni_(dash);
+  GuruApp_renderJadwalMinggu_(dash);
   GuruApp_renderNilaiCompletion_(dash);
 
   document.getElementById('sp-guru-profil-card').innerHTML =
@@ -143,24 +143,14 @@ function GuruApp_render_(dash) {
   document.getElementById('sp-form-corner-guru').no_hp.value = p.no_hp || '';
 }
 
-function GuruApp_hariLabel_(hari) {
-  return hari ? (hari.charAt(0) + hari.slice(1).toLowerCase()) : '-';
-}
-
-function GuruApp_renderJadwalHariIni_(dash) {
+function GuruApp_renderJadwalMinggu_(dash) {
   var el = document.getElementById('sp-guru-jadwal-hari-ini');
-  var rows = dash.jadwal_hari_ini || [];
+  var rows = dash.jadwal_minggu || [];
   if (!rows.length) {
-    el.innerHTML = '<div class="sp-form" style="padding:16px 18px;">Tidak ada jadwal mengajar hari ' + GuruApp_hariLabel_(dash.hari_ini) + '.</div>';
+    el.innerHTML = '<div class="sp-empty">Belum ada jadwal mengajar — hubungi Superadmin.</div>';
     return;
   }
-  el.innerHTML = '<div class="sp-form" style="flex-direction:column;align-items:stretch;padding:16px 18px;">' +
-    '<div style="font-weight:700;margin-bottom:8px;">' + GuruApp_hariLabel_(dash.hari_ini) + '</div>' +
-    rows.map(function (r) {
-      return '<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--border);">' +
-        '<div><strong>' + r.jam_mulai + '–' + r.jam_selesai + '</strong> · ' + r.nama_mapel + ' · ' + r.nama_kelas + '</div>' +
-        '<div style="color:var(--text-muted);">' + (r.ruangan || '-') + '</div></div>';
-    }).join('') + '</div>';
+  el.innerHTML = SIPENA_weekScheduleGridHtml_(rows, null);
 }
 
 function GuruApp_renderNilaiCompletion_(dash) {
