@@ -62,17 +62,34 @@ function Nilai_ensureNilaiAkhirSheet_(ss) {
   }
 }
 
+const NILAI_SETTINGS_DEFAULT_ = { kkm: NILAI_DEFAULT_KKM_, nilai_min_target: NILAI_DEFAULT_MIN_TARGET_, nilai_max_target: NILAI_DEFAULT_MAX_TARGET_, sumber_nilai_rapor: 'MURNI' };
+
+/**
+ * Nilai_getSettings_(ss, ...)
+ * SELURUH isi fungsi dibungkus try/catch — bukan cuma bagian tulis kolom
+ * seperti versi sebelumnya. Terbukti di produksi bahwa BACA sheet
+ * PENGATURAN pun bisa ikut ditolak izin untuk akun guru tertentu, tidak
+ * cuma operasi tulis (kolom baru) seperti dugaan awal — jadi seluruh
+ * akses ke sheet ini (baca maupun tulis) sekarang gagal-ke-default,
+ * bukan gagal-ke-exception. KKM/katrol/sumber rapor semuanya sudah
+ * punya nilai default yang aman, jadi tampilan nilai tidak boleh
+ * pernah terblokir gara-gara sheet pengaturan opsional ini.
+ */
 function Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester) {
-  const sh = Config_ensureGuruSheetColumnsSafe_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
-  const row = Utils_sheetToObjects_(sh).filter(function (r) {
-    return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
-  })[0];
-  return {
-    kkm: row && row.kkm !== '' ? Number(row.kkm) : NILAI_DEFAULT_KKM_,
-    nilai_min_target: row && row.nilai_min_target !== '' ? Number(row.nilai_min_target) : NILAI_DEFAULT_MIN_TARGET_,
-    nilai_max_target: row && row.nilai_max_target !== '' ? Number(row.nilai_max_target) : NILAI_DEFAULT_MAX_TARGET_,
-    sumber_nilai_rapor: row && row.sumber_nilai_rapor === 'KATROL' ? 'KATROL' : 'MURNI'
-  };
+  try {
+    const sh = Config_ensureGuruSheetColumnsSafe_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
+    const row = Utils_sheetToObjects_(sh).filter(function (r) {
+      return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
+    })[0];
+    return {
+      kkm: row && row.kkm !== '' ? Number(row.kkm) : NILAI_DEFAULT_KKM_,
+      nilai_min_target: row && row.nilai_min_target !== '' ? Number(row.nilai_min_target) : NILAI_DEFAULT_MIN_TARGET_,
+      nilai_max_target: row && row.nilai_max_target !== '' ? Number(row.nilai_max_target) : NILAI_DEFAULT_MAX_TARGET_,
+      sumber_nilai_rapor: row && row.sumber_nilai_rapor === 'KATROL' ? 'KATROL' : 'MURNI'
+    };
+  } catch (e) {
+    return Object.assign({}, NILAI_SETTINGS_DEFAULT_);
+  }
 }
 
 function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nilaiMinTarget, nilaiMaxTarget, sumberNilaiRapor) {
@@ -86,16 +103,20 @@ function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nil
   sumberNilaiRapor = sumberNilaiRapor === 'KATROL' ? 'KATROL' : 'MURNI';
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  const sh = Config_ensureGuruSheetColumnsSafe_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
-  const existing = Utils_sheetToObjects_(sh).filter(function (r) {
-    return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
-  })[0];
+  try {
+    const sh = Config_ensureGuruSheetColumnsSafe_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
+    const existing = Utils_sheetToObjects_(sh).filter(function (r) {
+      return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
+    })[0];
 
-  const patch = { kkm: kkm, nilai_min_target: nilaiMinTarget, nilai_max_target: nilaiMaxTarget, sumber_nilai_rapor: sumberNilaiRapor };
-  if (existing) {
-    Utils_updateRowByHeader_(sh, existing._row, patch);
-  } else {
-    Utils_appendRowByHeader_(sh, Object.assign({ kelas_id: kelasId, mapel_id: mapelId, tahun_ajaran_id: tahunAjaranId, semester: semester }, patch));
+    const patch = { kkm: kkm, nilai_min_target: nilaiMinTarget, nilai_max_target: nilaiMaxTarget, sumber_nilai_rapor: sumberNilaiRapor };
+    if (existing) {
+      Utils_updateRowByHeader_(sh, existing._row, patch);
+    } else {
+      Utils_appendRowByHeader_(sh, Object.assign({ kelas_id: kelasId, mapel_id: mapelId, tahun_ajaran_id: tahunAjaranId, semester: semester }, patch));
+    }
+  } catch (e) {
+    throw new Error('Gagal menyimpan pengaturan — akun Anda tampaknya tidak punya akses ke sheet PENGATURAN pada spreadsheet pribadi Anda. Minta Superadmin memeriksa/memprovisi ulang spreadsheet Anda.');
   }
   return { ok: true };
 }
