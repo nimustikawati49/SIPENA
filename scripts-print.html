@@ -5,7 +5,7 @@
  * layar vs @media print) — tidak pernah baca ulang Sheet saat guru ganti
  * pilihan kolom/kertas, itu murni re-render klien dari data yang sudah ada.
  */
-var PrintApp = { data: null, penugasan: null };
+var PrintApp = { data: null, penugasan: null, kopOptions: [], selectedKopId: '' };
 
 var PRINT_COLUMN_GROUPS_ = [
   { title: 'Identitas Siswa', cols: [
@@ -53,6 +53,9 @@ function PrintApp_markup_() {
     '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Periode)</label><select id="sp-print-penugasan" style="min-width:280px;" required></select></div>' +
     '  </div>' +
 
+    '  <div class="sp-section-title">Pilih Kop</div>' +
+    '  <div id="sp-print-kop-options" class="msg">Memuat pilihan kop…</div>' +
+
     '  <div class="sp-section-title">Pilih Kolom</div>' +
     '  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
     '    <button type="button" class="sp-btn secondary" onclick="PrintApp_applyPreset_(\'lengkap\')">Daftar Nilai Lengkap</button>' +
@@ -66,8 +69,12 @@ function PrintApp_markup_() {
     '  <div class="sp-section-title">Format Cetak</div>' +
     '  <div class="sp-form">' +
     '    <div class="sp-field"><label>Ukuran Kertas</label>' +
-    '      <label style="display:block;"><input type="radio" name="sp-print-paper" value="A4" checked> A4 Portrait</label>' +
-    '      <label style="display:block;"><input type="radio" name="sp-print-paper" value="F4"> F4 Portrait</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-paper" value="A4" checked> A4</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-paper" value="F4"> F4</label>' +
+    '    </div>' +
+    '    <div class="sp-field"><label>Orientasi</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-orientation" value="portrait" checked> Portrait</label>' +
+    '      <label style="display:block;"><input type="radio" name="sp-print-orientation" value="landscape"> Landscape</label>' +
     '    </div>' +
     '    <div class="sp-field" style="flex:1;min-width:260px;"><label>Judul</label><input id="sp-print-title" style="width:100%;"></div>' +
     '    <div class="sp-field"><label>Tanggal</label>' +
@@ -100,6 +107,42 @@ function PrintApp_onShow_() {
   sel.innerHTML = options;
   sel.addEventListener('change', PrintApp_onPenugasanChange_);
   PrintApp_loadLastPrefs_();
+
+  if (!PrintApp._kopLoaded) {
+    PrintApp._kopLoaded = true;
+    runServer('getMySekolahKopOptions', [], {
+      onSuccess: function (rows) {
+        PrintApp.kopOptions = rows;
+        PrintApp_renderKopOptions_();
+      }
+    });
+  }
+}
+
+function PrintApp_renderKopOptions_() {
+  var box = document.getElementById('sp-print-kop-options');
+  if (!PrintApp.kopOptions.length) {
+    box.innerHTML = 'Belum ada kop yang tersedia untuk sekolah Anda — minta Superadmin mengunggahnya. Dokumen tetap bisa dicetak tanpa kop.';
+    return;
+  }
+  if (!PrintApp.selectedKopId) PrintApp.selectedKopId = PrintApp.kopOptions[0].kop_id;
+  box.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+    PrintApp.kopOptions.map(function (k) {
+      var checked = k.kop_id === PrintApp.selectedKopId ? 'checked' : '';
+      return '<label style="border:1px solid var(--border);border-radius:10px;padding:8px;cursor:pointer;text-align:center;width:150px;">' +
+        '<input type="radio" name="sp-print-kop" value="' + k.kop_id + '" ' + checked + ' style="margin-bottom:6px;">' +
+        '<img src="' + k.image_url + '" style="width:100%;height:60px;object-fit:contain;display:block;margin-bottom:4px;">' +
+        '<div style="font-size:12px;">' + k.nama_kop + (k.paper_hint ? ' (' + k.paper_hint + ')' : '') + '</div>' +
+        '</label>';
+    }).join('') +
+    '<label style="border:1px solid var(--border);border-radius:10px;padding:8px;cursor:pointer;text-align:center;width:150px;display:flex;flex-direction:column;justify-content:center;">' +
+    '<input type="radio" name="sp-print-kop" value="" ' + (PrintApp.selectedKopId ? '' : 'checked') + ' style="margin-bottom:6px;">' +
+    '<div style="font-size:12px;color:var(--text-muted);">Tanpa Kop</div>' +
+    '</label></div>';
+
+  document.querySelectorAll('input[name="sp-print-kop"]').forEach(function (r) {
+    r.addEventListener('change', function () { PrintApp.selectedKopId = r.value; });
+  });
 }
 
 function PrintApp_onPenugasanChange_() {
@@ -140,15 +183,19 @@ function PrintApp_wire_() {
 
 function PrintApp_buildConfig_() {
   var paper = document.querySelector('input[name="sp-print-paper"]:checked').value;
+  var orientation = document.querySelector('input[name="sp-print-orientation"]:checked').value;
   var dateMode = document.querySelector('input[name="sp-print-date-mode"]:checked').value;
   var dateValue = dateMode === 'TENTUKAN' ? document.getElementById('sp-print-date-value').value : '';
+  var kop = PrintApp.kopOptions.filter(function (k) { return k.kop_id === PrintApp.selectedKopId; })[0] || null;
   return {
     paperSize: paper,
+    orientation: orientation,
     title: document.getElementById('sp-print-title').value || 'DAFTAR NILAI',
     selectedColumns: PrintApp_selectedColumns_(),
     printDateMode: dateMode,
     printDateValue: dateValue,
-    showSignatureImage: document.getElementById('sp-print-show-ttd').checked
+    showSignatureImage: document.getElementById('sp-print-show-ttd').checked,
+    kopImageUrl: kop ? kop.image_url : ''
   };
 }
 
@@ -168,13 +215,17 @@ function PrintApp_loadLastPrefs_() {
       var dr = document.querySelector('input[name="sp-print-date-mode"][value="' + prefs.printDateMode + '"]');
       if (dr) { dr.checked = true; dr.dispatchEvent(new Event('change')); }
     }
+    if (prefs.orientation) {
+      var or = document.querySelector('input[name="sp-print-orientation"][value="' + prefs.orientation + '"]');
+      if (or) or.checked = true;
+    }
   } catch (e) {}
 }
 
 function PrintApp_savePrefs_(config) {
   try {
     localStorage.setItem('sipena_print_prefs', JSON.stringify({
-      paperSize: config.paperSize, selectedColumns: config.selectedColumns, printDateMode: config.printDateMode
+      paperSize: config.paperSize, orientation: config.orientation, selectedColumns: config.selectedColumns, printDateMode: config.printDateMode
     }));
   } catch (e) {}
 }
@@ -192,7 +243,7 @@ function PrintApp_preview_() {
     onSuccess: function (data) {
       PrintApp.data = data;
       document.getElementById('sp-print-page-container').innerHTML = PrintApp_renderPage_(data, config);
-      PrintApp_applyPageSize_(config.paperSize);
+      PrintApp_applyPageSize_(config.paperSize, config.orientation);
       document.getElementById('sp-print-config').classList.add('hidden');
       document.getElementById('sp-print-preview-wrap').classList.remove('hidden');
     }
@@ -204,16 +255,18 @@ function PrintApp_back_() {
   document.getElementById('sp-print-config').classList.remove('hidden');
 }
 
-function PrintApp_applyPageSize_(paperSize) {
-  var css = paperSize === 'F4' ? '210mm 330mm' : '210mm 297mm';
+function PrintApp_applyPageSize_(paperSize, orientation) {
+  var w = 210, h = paperSize === 'F4' ? 330 : 297;
+  if (orientation === 'landscape') { var t = w; w = h; h = t; }
+
   var style = document.getElementById('sp-print-page-style');
   if (!style) {
     style = document.createElement('style');
     style.id = 'sp-print-page-style';
     document.head.appendChild(style);
   }
-  style.textContent = '@page { size: ' + css + ' portrait; margin: 14mm 12mm; } ' +
-    '.sp-print-page{ width: ' + (paperSize === 'F4' ? '210mm' : '210mm') + '; min-height: ' + (paperSize === 'F4' ? '330mm' : '297mm') + '; }';
+  style.textContent = '@page { size: ' + w + 'mm ' + h + 'mm; margin: 14mm 12mm; } ' +
+    '.sp-print-page{ width: ' + w + 'mm; min-height: ' + h + 'mm; }';
 }
 
 function PrintApp_doPrint_() {
@@ -237,19 +290,9 @@ function PrintApp_fmtValue_(v) {
  */
 function PrintApp_renderPage_(data, config) {
   var s = data.sekolah;
-  var kopLines = [s.nama_instansi, s.nama_dinas, s.nama_sekolah].filter(function (t) { return t; });
-  var alamatBits = [s.alamat, s.desa ? 'Desa ' + s.desa : '', s.kecamatan ? 'Kecamatan ' + s.kecamatan : '', s.kabupaten ? 'Kabupaten ' + s.kabupaten : '', s.provinsi].filter(function (t) { return t; }).join(', ');
-  var kontakBits = [s.kode_pos ? 'Kode Pos: ' + s.kode_pos : '', s.email ? 'Email: ' + s.email : '', s.telepon ? 'Telp: ' + s.telepon : ''].filter(function (t) { return t; }).join(' — ');
-
-  var kopHtml = '<div class="sp-print-kop">' +
-    (s.logo_pemerintah_url ? '<img class="sp-print-logo sp-print-logo-left" src="' + s.logo_pemerintah_url + '">' : '<div class="sp-print-logo"></div>') +
-    '<div class="sp-print-kop-text">' +
-    kopLines.map(function (t, i) { return '<div class="' + (i === kopLines.length - 1 ? 'sp-print-kop-sekolah' : '') + '">' + t + '</div>'; }).join('') +
-    (alamatBits ? '<div class="sp-print-kop-small">' + alamatBits + '</div>' : '') +
-    (kontakBits ? '<div class="sp-print-kop-small">' + kontakBits + '</div>' : '') +
-    '</div>' +
-    (s.logo_sekolah_url ? '<img class="sp-print-logo sp-print-logo-right" src="' + s.logo_sekolah_url + '">' : '<div class="sp-print-logo"></div>') +
-    '</div><div class="sp-print-kop-rule"></div>';
+  var kopHtml = config.kopImageUrl
+    ? '<img class="sp-print-kop-image" src="' + config.kopImageUrl + '">'
+    : '';
 
   var titleHtml = '<div class="sp-print-title">' +
     '<div>' + config.title + '</div>' +

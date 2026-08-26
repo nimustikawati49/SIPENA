@@ -90,27 +90,82 @@ function adminUpdateSchool(sekolahId, data) {
 }
 
 /**
- * adminUploadSchoolLogo(sekolahId, jenis, base64Data, mimeType, fileName)
- * jenis: 'sekolah' | 'pemerintah'. Sama pola Utils_saveUploadedFile_ yang
- * sudah dipakai foto profil/tanda tangan — file tersimpan di Drive
- * Superadmin yang mengunggah (executeAs USER_ACCESSING), dibagikan
- * "siapa saja yang punya link boleh lihat" supaya bisa langsung dipakai
- * sebagai <img src> di kop cetak.
+ * Kop cetak — SEKOLAH_KOP (Superadmin only, guru cuma baca lewat
+ * getMySekolahKopOptions di Print.gs). Kop disimpan sebagai GAMBAR utuh
+ * yang diunggah Superadmin (bukan disusun dari field teks) — satu sekolah
+ * boleh punya beberapa kop (mis. "Kop Resmi"/"Kop Sederhana"), guru pilih
+ * salah satu saat cetak lewat preview. Sama pola Utils_saveUploadedFile_
+ * yang sudah dipakai foto profil/tanda tangan.
  */
-function adminUploadSchoolLogo(sekolahId, jenis, base64Data, mimeType, fileName) {
+function adminGetSekolahKopList(sekolahId) {
+  Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_ensureCentralSheet_(CONFIG_KOP_SHEET_, CONFIG_KOP_HEADERS_);
+  let rows = Utils_sheetToObjects_(sh).map(function (r) { delete r._row; return r; });
+  if (sekolahId) rows = rows.filter(function (r) { return r.sekolah_id === sekolahId; });
+  return rows;
+}
+
+function adminUploadSekolahKop(sekolahId, namaKop, paperHint, base64Data, mimeType, fileName) {
   const auth = Security_requireRole_(['SUPERADMIN']);
-  if (['sekolah', 'pemerintah'].indexOf(jenis) === -1) throw new Error('Jenis logo tidak valid.');
-  const sh = Config_getSheet_('MASTER_SEKOLAH');
-  const rowNum = Utils_findRowById_(sh, 'sekolah_id', sekolahId);
-  if (rowNum === -1) throw new Error('Sekolah tidak ditemukan.');
+  if (!sekolahId) throw new Error('Pilih sekolah dulu.');
+  const nama = String(namaKop || '').trim();
+  if (!nama) throw new Error('Nama kop wajib diisi (mis. "Kop Resmi").');
 
-  const url = Utils_saveUploadedFile_('SIPENA_Logo_Sekolah', base64Data, mimeType, fileName, 800);
-  const field = jenis === 'sekolah' ? 'logo_sekolah_url' : 'logo_pemerintah_url';
-  const patch = {}; patch[field] = url; patch.updated_at = new Date();
-  Utils_updateRowByHeader_(sh, rowNum, patch);
+  const url = Utils_saveUploadedFile_('SIPENA_Kop_Sekolah', base64Data, mimeType, fileName, 3000);
+  const sh = Config_ensureCentralSheet_(CONFIG_KOP_SHEET_, CONFIG_KOP_HEADERS_);
+  const kopId = Utils_newId_('KOP');
+  Utils_appendRowByHeader_(sh, {
+    kop_id: kopId, sekolah_id: sekolahId, nama_kop: nama, paper_hint: paperHint || '', image_url: url,
+    status: 'AKTIF', created_at: new Date(), updated_at: new Date(), created_by: auth.email
+  });
 
-  AuditLog_write_(auth, 'UPDATE_SCHOOL_LOGO', 'Sekolah', sekolahId, field);
+  AuditLog_write_(auth, 'UPLOAD_KOP', 'Sekolah', sekolahId, nama);
+  return { kop_id: kopId, url: url };
+}
+
+/**
+ * adminReplaceSekolahKopImage(kopId, base64Data, mimeType, fileName)
+ * "Bisa direplace" — ganti gambar kop tanpa membuat entri baru, nama/paper
+ * hint/kop_id tetap sama (guru yang sudah memilih kop ini otomatis lihat
+ * gambar baru di cetakan berikutnya).
+ */
+function adminReplaceSekolahKopImage(kopId, base64Data, mimeType, fileName) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_ensureCentralSheet_(CONFIG_KOP_SHEET_, CONFIG_KOP_HEADERS_);
+  const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.kop_id === kopId; })[0];
+  if (!row) throw new Error('Kop tidak ditemukan.');
+
+  const url = Utils_saveUploadedFile_('SIPENA_Kop_Sekolah', base64Data, mimeType, fileName, 3000);
+  Utils_updateRowByHeader_(sh, row._row, { image_url: url, updated_at: new Date() });
+
+  AuditLog_write_(auth, 'REPLACE_KOP_IMAGE', 'Sekolah', row.sekolah_id, row.nama_kop);
   return { url: url };
+}
+
+function adminUpdateSekolahKop(kopId, data) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_ensureCentralSheet_(CONFIG_KOP_SHEET_, CONFIG_KOP_HEADERS_);
+  const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.kop_id === kopId; })[0];
+  if (!row) throw new Error('Kop tidak ditemukan.');
+
+  const patch = {};
+  ['nama_kop', 'paper_hint', 'status'].forEach(function (k) { if (data[k] !== undefined) patch[k] = data[k]; });
+  patch.updated_at = new Date();
+  Utils_updateRowByHeader_(sh, row._row, patch);
+
+  AuditLog_write_(auth, 'UPDATE_KOP', 'Sekolah', row.sekolah_id, JSON.stringify(patch));
+  return { ok: true };
+}
+
+function adminDeleteSekolahKop(kopId) {
+  const auth = Security_requireRole_(['SUPERADMIN']);
+  const sh = Config_ensureCentralSheet_(CONFIG_KOP_SHEET_, CONFIG_KOP_HEADERS_);
+  const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.kop_id === kopId; })[0];
+  if (!row) throw new Error('Kop tidak ditemukan.');
+
+  Utils_deleteRowById_(sh, 'kop_id', kopId);
+  AuditLog_write_(auth, 'DELETE_KOP', 'Sekolah', row.sekolah_id, row.nama_kop);
+  return { ok: true };
 }
 
 /**

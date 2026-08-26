@@ -44,10 +44,7 @@ function getMyPrintData(kelasId, mapelId, tahunAjaranId, semester) {
 
   return {
     sekolah: {
-      nama_sekolah: sekolahRow.nama_sekolah || '', nama_instansi: sekolahRow.nama_instansi || '', nama_dinas: sekolahRow.nama_dinas || '',
-      alamat: sekolahRow.alamat || '', desa: sekolahRow.desa || '', kecamatan: sekolahRow.kecamatan || '', kabupaten: sekolahRow.kabupaten || '',
-      provinsi: sekolahRow.provinsi || '', kode_pos: sekolahRow.kode_pos || '', email: sekolahRow.email || '', telepon: sekolahRow.telepon || '',
-      website: sekolahRow.website || '', logo_sekolah_url: sekolahRow.logo_sekolah_url || '', logo_pemerintah_url: sekolahRow.logo_pemerintah_url || ''
+      nama_sekolah: sekolahRow.nama_sekolah || '', kabupaten: sekolahRow.kabupaten || ''
     },
     guru: {
       nama_lengkap: profil.nama_lengkap || auth.namaLengkap || '', nip: profil.nip || '', nuptk: profil.nuptk || '',
@@ -60,4 +57,22 @@ function getMyPrintData(kelasId, mapelId, tahunAjaranId, semester) {
     assessment_label: grades.assessmentLabel,
     students: grades.students
   };
+}
+
+/**
+ * getMySekolahKopOptions()
+ * GURU only — daftar kop AKTIF milik sekolah guru sendiri (auth.sekolahId,
+ * tidak pernah dari parameter klien), dipakai mengisi dropdown "Pilih Kop"
+ * di panel Cetak. Dipanggil sekali saat tab Cetak dibuka, terpisah dari
+ * getMyPrintData supaya guru bisa lihat pilihan kop sebelum menentukan
+ * penugasan/kolom (dan tidak perlu fetch ulang tiap ganti pilihan cetak).
+ */
+function getMySekolahKopOptions() {
+  const auth = Security_requireRole_(['GURU']);
+  const ss = Config_getCentralSpreadsheet_();
+  const sh = ss.getSheetByName(CONFIG_KOP_SHEET_);
+  if (!sh) return [];
+  return Utils_sheetToObjects_(sh).filter(function (r) {
+    return r.sekolah_id === auth.sekolahId && String(r.status).toUpperCase() === 'AKTIF';
+  }).map(function (r) { return { kop_id: r.kop_id, nama_kop: r.nama_kop, paper_hint: r.paper_hint, image_url: r.image_url }; });
 }

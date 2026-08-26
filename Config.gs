@@ -91,6 +91,13 @@ const CONFIG_KATROL_TARGET_SHEET_ = 'KATROL_TARGET_CONFIG';
 const CONFIG_KATROL_TARGET_HEADERS_ = ['config_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenjang', 'tingkat', 'mapel_id',
   'target_min', 'target_max', 'pembulatan', 'status', 'updated_at', 'updated_by'];
 
+// SEKOLAH_KOP: kop cetak sebagai GAMBAR utuh yang diunggah Superadmin
+// (bukan disusun dari field teks — lebih sederhana, sekolah tinggal pakai
+// desain kop yang sudah ada). Satu sekolah boleh punya beberapa kop
+// (mis. "Kop Resmi"/"Kop Sederhana"), guru pilih salah satu saat cetak.
+const CONFIG_KOP_SHEET_ = 'SEKOLAH_KOP';
+const CONFIG_KOP_HEADERS_ = ['kop_id', 'sekolah_id', 'nama_kop', 'paper_hint', 'image_url', 'status', 'created_at', 'updated_at', 'created_by'];
+
 // Kolom "kode" yang HARUS selalu tersimpan sebagai teks, bukan angka —
 // Google Sheets otomatis membuang nol di depan (mis. "001" jadi 1) untuk
 // sel berformat default begitu isinya terlihat seperti angka. NPSN, NIP,

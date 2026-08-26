@@ -256,21 +256,23 @@ function SuperAdmin_panelSekolah_() {
     '    <div class="sp-field"><label>Email</label><input name="email" type="email"></div>' +
     '    <div class="sp-field"><label>Telepon</label><input name="telepon"></div>' +
     '    <div class="sp-field"><label>Website</label><input name="website"></div>' +
-    '    <div class="sp-field"><label>Nama Instansi (kop baris 1)</label><input name="nama_instansi" placeholder="mis. PEMERINTAH KABUPATEN BADUNG" style="min-width:260px;"></div>' +
-    '    <div class="sp-field"><label>Nama Dinas (kop baris 2)</label><input name="nama_dinas" placeholder="mis. DINAS PENDIDIKAN..." style="min-width:260px;"></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
     SuperAdmin_cancelEditButton_() +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Sekolah</div>' +
     '  <div id="sp-table-sekolah"></div>' +
 
-    '  <div class="sp-section-title">Logo Kop Cetak</div>' +
-    '  <div class="msg" style="margin:-6px 0 10px;">Logo pemerintah/instansi (kiri) dan logo sekolah (kanan) yang tampil di kop dokumen Cetak Nilai guru.</div>' +
+    '  <div class="sp-section-title">Kop Cetak</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Kop diunggah sebagai satu gambar utuh (desain kop sekolah yang sudah ada) — bukan disusun dari teks. Satu sekolah boleh punya beberapa kop (mis. "Kop Resmi" &amp; "Kop Sederhana"); guru memilih salah satu saat cetak. Gambar bisa diganti kapan saja tanpa mengubah pilihan guru yang sudah ada.</div>' +
     '  <div class="sp-form">' +
-    '    <div class="sp-field"><label>Sekolah</label><select id="sp-sekolah-logo-target" data-source="sekolah" style="min-width:260px;"></select></div>' +
-    '    <label class="sp-upload-label">Unggah Logo Pemerintah<input type="file" accept="image/*" id="sp-sekolah-logo-pemerintah" class="hidden"></label>' +
-    '    <label class="sp-upload-label">Unggah Logo Sekolah<input type="file" accept="image/*" id="sp-sekolah-logo-sekolah" class="hidden"></label>' +
+    '    <div class="sp-field"><label>Sekolah</label><select id="sp-kop-target" data-source="sekolah" style="min-width:260px;"></select></div>' +
+    '    <div class="sp-field"><label>Nama Kop</label><input id="sp-kop-nama" placeholder="mis. Kop Resmi"></div>' +
+    '    <div class="sp-field"><label>Dirancang untuk</label><select id="sp-kop-paper-hint">' +
+    '      <option value="">Umum (A4/F4)</option><option value="A4">A4</option><option value="F4">F4</option>' +
+    '    </select></div>' +
+    '    <label class="sp-upload-label">Unggah Kop Baru<input type="file" accept="image/*" id="sp-kop-upload-new" class="hidden"></label>' +
     '  </div>' +
+    '  <div id="sp-table-kop"></div>' +
 
     '  <div class="sp-section-title">Bobot Nilai Akhir per Sekolah</div>' +
     '  <div class="msg" style="margin:-6px 0 10px;">Bobot Rata-rata Harian, PTS, dan ASAS/ASAT dipakai guru saat menghitung Nilai Akhir siswa — kebijakan akademik tiap sekolah, total bobot harus 100.</div>' +
@@ -320,7 +322,7 @@ function SuperAdmin_wireSekolah_() {
     var data = {
       npsn: f.npsn.value, nama_sekolah: f.nama_sekolah.value, jenjang: f.jenjang.value, kabupaten: f.kabupaten.value, provinsi: f.provinsi.value,
       alamat: f.alamat.value, desa: f.desa.value, kecamatan: f.kecamatan.value, kode_pos: f.kode_pos.value, email: f.email.value,
-      telepon: f.telepon.value, website: f.website.value, nama_instansi: f.nama_instansi.value, nama_dinas: f.nama_dinas.value
+      telepon: f.telepon.value, website: f.website.value
     };
     var btn = f.querySelector('button[type="submit"]');
     var editId = f.dataset.editId;
@@ -337,19 +339,72 @@ function SuperAdmin_wireSekolah_() {
     });
   });
 
-  document.getElementById('sp-sekolah-logo-pemerintah').addEventListener('change', function (e) { SuperAdmin_uploadSchoolLogo_(e, 'pemerintah'); });
-  document.getElementById('sp-sekolah-logo-sekolah').addEventListener('change', function (e) { SuperAdmin_uploadSchoolLogo_(e, 'sekolah'); });
+  document.getElementById('sp-kop-upload-new').addEventListener('change', function (e) {
+    var sekolahId = document.getElementById('sp-kop-target').value;
+    var nama = document.getElementById('sp-kop-nama').value.trim();
+    if (!sekolahId) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
+    if (!nama) { SIPENA_toast('Isi nama kop dulu (mis. "Kop Resmi").', 'error'); return; }
+    var file = e.target.files[0];
+    if (!file) return;
+    var paperHint = document.getElementById('sp-kop-paper-hint').value;
+    SIPENA_readFileAsBase64_(file, 3000, function (base64, mimeType, fileName) {
+      runServer('adminUploadSekolahKop', [sekolahId, nama, paperHint, base64, mimeType, fileName], {
+        onSuccess: function () {
+          SIPENA_toast('Kop diunggah.');
+          document.getElementById('sp-kop-nama').value = '';
+          e.target.value = '';
+          SuperAdmin_loadKopList_(sekolahId);
+        }
+      });
+    });
+  });
+
+  document.getElementById('sp-kop-target').addEventListener('change', function (e) { SuperAdmin_loadKopList_(e.target.value); });
 }
 
-function SuperAdmin_uploadSchoolLogo_(e, jenis) {
-  var sekolahId = document.getElementById('sp-sekolah-logo-target').value;
-  if (!sekolahId) { SIPENA_toast('Pilih sekolah dulu.', 'error'); return; }
-  var file = e.target.files[0];
+function SuperAdmin_loadKopList_(sekolahId) {
+  if (!sekolahId) { SIPENA_table_('sp-table-kop', [], [], 'Pilih sekolah untuk melihat daftar kop.'); return; }
+  runServer('adminGetSekolahKopList', [sekolahId], {
+    onSuccess: function (rows) { window.SuperAdmin._kopRows = rows; SuperAdmin_renderKopList_(rows); }
+  });
+}
+
+function SuperAdmin_renderKopList_(rows) {
+  SIPENA_table_('sp-table-kop', [
+    { label: 'Pratinjau', render: function (r) { return '<img src="' + r.image_url + '" style="max-width:120px;max-height:60px;border:1px solid var(--border);border-radius:4px;">'; } },
+    { key: 'nama_kop', label: 'Nama' },
+    { label: 'Untuk', render: function (r) { return r.paper_hint || 'Umum'; } },
+    { label: 'Status', render: function (r) { return '<span class="badge ' + (String(r.status).toUpperCase() === 'AKTIF' ? 'ok' : 'danger') + '">' + r.status + '</span>'; } },
+    { label: 'Aksi', render: function (r) {
+        return '<label class="sp-btn secondary" style="display:inline-block;cursor:pointer;">Ganti Gambar<input type="file" accept="image/*" class="hidden" onchange="SuperAdmin_replaceKopImage_(\'' + r.kop_id + '\', this)"></label> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_toggleKopStatus_(\'' + r.kop_id + '\')">' + (String(r.status).toUpperCase() === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan') + '</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteKop_(\'' + r.kop_id + '\', \'' + String(r.nama_kop).replace(/'/g, "\\'") + '\')">Hapus</button>';
+      } }
+  ], rows, 'Belum ada kop untuk sekolah ini.');
+}
+
+function SuperAdmin_replaceKopImage_(kopId, input) {
+  var file = input.files[0];
   if (!file) return;
-  SIPENA_readFileAsBase64_(file, 800, function (base64, mimeType, fileName) {
-    runServer('adminUploadSchoolLogo', [sekolahId, jenis, base64, mimeType, fileName], {
-      onSuccess: function () { SIPENA_toast('Logo diperbarui.'); }
+  SIPENA_readFileAsBase64_(file, 3000, function (base64, mimeType, fileName) {
+    runServer('adminReplaceSekolahKopImage', [kopId, base64, mimeType, fileName], {
+      onSuccess: function () { SIPENA_toast('Gambar kop diganti.'); SuperAdmin_loadKopList_(document.getElementById('sp-kop-target').value); }
     });
+  });
+}
+
+function SuperAdmin_toggleKopStatus_(kopId) {
+  var row = (window.SuperAdmin._kopRows || []).filter(function (r) { return r.kop_id === kopId; })[0];
+  var newStatus = row && String(row.status).toUpperCase() === 'AKTIF' ? 'NONAKTIF' : 'AKTIF';
+  runServer('adminUpdateSekolahKop', [kopId, { status: newStatus }], {
+    onSuccess: function () { SIPENA_toast('Status kop diperbarui.'); SuperAdmin_loadKopList_(document.getElementById('sp-kop-target').value); }
+  });
+}
+
+function SuperAdmin_deleteKop_(kopId, namaKop) {
+  if (!confirm('Hapus kop "' + namaKop + '"? Guru yang sudah memilih kop ini akan otomatis kembali ke pilihan lain saat cetak berikutnya.')) return;
+  runServer('adminDeleteSekolahKop', [kopId], {
+    onSuccess: function () { SIPENA_toast('Kop dihapus.'); SuperAdmin_loadKopList_(document.getElementById('sp-kop-target').value); }
   });
 }
 
@@ -369,8 +424,6 @@ function SuperAdmin_editSchool_(sekolahId) {
   f.email.value = s.email || '';
   f.telepon.value = s.telepon || '';
   f.website.value = s.website || '';
-  f.nama_instansi.value = s.nama_instansi || '';
-  f.nama_dinas.value = s.nama_dinas || '';
   SuperAdmin_setFormEditMode_(f, sekolahId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
