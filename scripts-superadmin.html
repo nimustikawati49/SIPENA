@@ -1259,7 +1259,7 @@ function SuperAdmin_panelJadwal_() {
     '  <div class="sp-section-title">Tambah Jadwal</div>' +
     '  <form class="sp-form" id="sp-form-jadwal">' +
     '    <div class="sp-field"><label>Guru</label><select id="sp-jadwal-guru" data-source="guru" required></select></div>' +
-    '    <div class="sp-field"><label>Penugasan (Mapel — Kelas — Tahun Ajaran)</label><select id="sp-jadwal-penugasan" style="min-width:260px;" required><option value="">Pilih guru dulu</option></select></div>' +
+    '    <div class="sp-field"><label>Kelas</label><select id="sp-jadwal-penugasan" style="min-width:220px;" required><option value="">Pilih guru dulu</option></select></div>' +
     '    <div class="sp-field"><label>Hari</label><select name="hari" required><option value="">Pilih</option><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
     '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="time" required></div>' +
     '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="time" required></div>' +
@@ -1324,9 +1324,9 @@ function SuperAdmin_refreshJadwalPenugasanOptions_(guruId) {
   var assignments = SuperAdmin.assignments.filter(function (a) { return a.guru_id === guruId && String(a.status).toUpperCase() === 'AKTIF'; });
   window.SuperAdmin._jadwalPenugasanOptions = assignments;
   var sel = document.getElementById('sp-jadwal-penugasan');
-  if (!assignments.length) { sel.innerHTML = '<option value="">Guru ini belum punya penugasan</option>'; return; }
+  if (!assignments.length) { sel.innerHTML = '<option value="">Guru ini belum punya kelas</option>'; return; }
   sel.innerHTML = '<option value="">Pilih...</option>' + assignments.map(function (a, i) {
-    return '<option value="' + i + '">' + a.nama_mapel + ' — ' + a.nama_kelas + ' — ' + SuperAdmin_tahunAjaranLabel_(a.tahun_ajaran_id) + '</option>';
+    return '<option value="' + i + '">' + a.nama_kelas + ' — ' + a.nama_mapel + '</option>';
   }).join('');
 }
 
@@ -1357,6 +1357,14 @@ function SuperAdmin_editJadwal_(jadwalId) {
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+var SP_JADWAL_HARI_URUTAN_ = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
+
+/**
+ * SuperAdmin_renderJadwal()
+ * Dikelompokkan per sekolah lalu per hari (Senin—Sabtu, hanya hari yang
+ * benar-benar ada jadwalnya yang dirender) — jadi satu sekolah langsung
+ * terlihat sebagai jadwal satu minggu, bukan daftar datar tercampur.
+ */
 function SuperAdmin_renderJadwal() {
   var el = document.getElementById('sp-table-jadwal');
   if (!SuperAdmin.schedules.length) { el.innerHTML = '<div class="sp-empty">Belum ada jadwal.</div>'; return; }
@@ -1373,17 +1381,27 @@ function SuperAdmin_renderJadwal() {
 
   el.innerHTML = sekolahIds.map(function (sid) {
     var namaSekolah = SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', sid, 'nama_sekolah') || '(Sekolah tidak diketahui)';
-    var body = bySekolah[sid].map(function (r) {
-      return '<tr><td>' + r.nama_guru + '</td><td>' + r.hari + '</td><td>' + r.jam_mulai + '–' + r.jam_selesai + '</td>' +
-        '<td>' + r.nama_mapel + '</td><td>' + r.nama_kelas + '</td><td>' + (r.ruangan || '-') + '</td>' +
-        '<td><button class="sp-btn secondary" onclick="SuperAdmin_editJadwal_(\'' + r.jadwal_id + '\')">Edit</button> ' +
-        '<button class="sp-btn secondary" onclick="SuperAdmin_deleteJadwal_(\'' + r.jadwal_id + '\')">Hapus</button></td></tr>';
+    var byHari = {};
+    bySekolah[sid].forEach(function (r) { (byHari[r.hari] = byHari[r.hari] || []).push(r); });
+
+    var mingguHtml = SP_JADWAL_HARI_URUTAN_.filter(function (hari) { return byHari[hari] && byHari[hari].length; }).map(function (hari) {
+      var entries = byHari[hari].slice().sort(function (a, b) { return String(a.jam_mulai).localeCompare(String(b.jam_mulai)); });
+      var body = entries.map(function (r) {
+        return '<tr><td>' + r.jam_mulai + '–' + r.jam_selesai + '</td><td>' + r.nama_guru + '</td><td>' + r.nama_mapel + '</td>' +
+          '<td>' + r.nama_kelas + '</td><td>' + (r.ruangan || '-') + '</td>' +
+          '<td><button class="sp-btn secondary" onclick="SuperAdmin_editJadwal_(\'' + r.jadwal_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_deleteJadwal_(\'' + r.jadwal_id + '\')">Hapus</button></td></tr>';
+      }).join('');
+      return '<div style="font-weight:700;font-size:12.5px;color:var(--text-muted);margin:12px 0 4px;">' + SuperAdmin_hariLabel_(hari) + '</div>' +
+        '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Jam</th><th>Guru</th><th>Mapel</th><th>Kelas</th><th>Ruangan</th><th>Aksi</th></tr></thead><tbody>' + body + '</tbody></table></div>';
     }).join('');
-    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' +
-      '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
-      '<th>Guru</th><th>Hari</th><th>Jam</th><th>Mapel</th><th>Kelas</th><th>Ruangan</th><th>Aksi</th>' +
-      '</tr></thead><tbody>' + body + '</tbody></table></div>';
+
+    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' + mingguHtml;
   }).join('');
+}
+
+function SuperAdmin_hariLabel_(hari) {
+  return hari.charAt(0) + hari.slice(1).toLowerCase();
 }
 
 function SuperAdmin_deleteJadwal_(jadwalId) {
