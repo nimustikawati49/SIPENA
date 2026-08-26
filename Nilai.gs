@@ -173,41 +173,53 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
   const auth = Security_requireRole_(['GURU']);
   Nilai_validateScope_(kelasId, mapelId, tahunAjaranId, semester);
 
-  const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  Nilai_ensureNilaiAkhirSheet_(ss);
+  // Instrumentasi sementara: exception "tidak memiliki izin mengakses
+  // dokumen" pernah muncul di fungsi ini dari beberapa langkah berbeda
+  // (NILAI_AKHIR, PENGATURAN) dan sudah diperbaiki satu-satu — daripada
+  // menebak lagi, `step` dilaporkan balik di pesan error supaya langkah
+  // yang gagal ketahuan persis dari toast, tanpa perlu akses log server.
+  let step = 'buka spreadsheet guru';
+  try {
+    var ss = Config_getGuruSpreadsheet_(auth.guruId);
+    step = 'siapkan sheet Nilai Akhir';
+    Nilai_ensureNilaiAkhirSheet_(ss);
 
-  const students = Utils_sheetToObjects_(ss.getSheetByName('SISWA')).filter(function (r) {
-    return r.kelas_id === kelasId && String(r.status).toUpperCase() !== 'NONAKTIF';
-  });
+    step = 'baca roster siswa (SISWA)';
+    var students = Utils_sheetToObjects_(ss.getSheetByName('SISWA')).filter(function (r) {
+      return r.kelas_id === kelasId && String(r.status).toUpperCase() !== 'NONAKTIF';
+    });
 
-  const assessmentLabel = Nilai_getAssessmentLabel_(semester);
-  const wideJenis = NILAI_HARIAN_JENIS_.concat(['PTS', assessmentLabel]);
+    step = 'baca komponen nilai (NILAI)';
+    var assessmentLabel = Nilai_getAssessmentLabel_(semester);
+    var wideJenis = NILAI_HARIAN_JENIS_.concat(['PTS', assessmentLabel]);
+    var nilaiBySiswa = {};
+    Utils_sheetToObjects_(ss.getSheetByName('NILAI')).filter(function (r) {
+      return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
+    }).forEach(function (r) {
+      if (!nilaiBySiswa[r.siswa_id]) nilaiBySiswa[r.siswa_id] = {};
+      nilaiBySiswa[r.siswa_id][r.jenis_nilai] = r;
+    });
 
-  const nilaiBySiswa = {};
-  Utils_sheetToObjects_(ss.getSheetByName('NILAI')).filter(function (r) {
-    return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
-  }).forEach(function (r) {
-    if (!nilaiBySiswa[r.siswa_id]) nilaiBySiswa[r.siswa_id] = {};
-    nilaiBySiswa[r.siswa_id][r.jenis_nilai] = r;
-  });
+    step = 'baca ringkasan Nilai Akhir (NILAI_AKHIR)';
+    var akhirBySiswa = {};
+    Utils_sheetToObjects_(ss.getSheetByName('NILAI_AKHIR')).filter(function (r) {
+      return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
+    }).forEach(function (r) { akhirBySiswa[r.siswa_id] = r; });
 
-  const akhirBySiswa = {};
-  Utils_sheetToObjects_(ss.getSheetByName('NILAI_AKHIR')).filter(function (r) {
-    return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
-  }).forEach(function (r) { akhirBySiswa[r.siswa_id] = r; });
+    step = 'baca pengaturan KKM/katrol/sumber rapor (PENGATURAN)';
+    var settings = Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester);
 
-  const settings = Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester);
+    step = 'hitung KKTP live (mode rapor Katrol)';
+    var liveKktpConfig = null;
+    if (settings.sumber_nilai_rapor === 'KATROL') {
+      var kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
+      if (kelasInfo) liveKktpConfig = Nilai_getKktpConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId);
+    }
 
-  // KKTP config cuma di-fetch ULANG (satu kali untuk seluruh kelas, bukan
-  // per siswa) kalau nilai rapor sumbernya Katrol — kategori/status yang
-  // TERSIMPAN di NILAI_AKHIR adalah snapshot berbasis MURNI (§1.5 blueprint),
-  // jadi untuk tampilan yang konsisten dengan nilai rapor Katrol perlu
-  // dihitung ulang di memori terhadap nilai_akhir_katrol memakai config
-  // KKTP yang SAMA (bukan snapshot lain) — tidak menimpa snapshot murni.
-  let liveKktpConfig = null;
-  if (settings.sumber_nilai_rapor === 'KATROL') {
-    const kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
-    if (kelasInfo) liveKktpConfig = Nilai_getKktpConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId);
+    step = 'baca konfigurasi bobot nilai (PENGATURAN_BOBOT_NILAI)';
+    var bobotConfig = Nilai_getBobotConfig_(auth.sekolahId);
+  } catch (e) {
+    throw new Error('Gagal pada langkah "' + step + '": ' + (e && e.message ? e.message : e));
   }
 
   const rows = students.map(function (s) {
@@ -242,7 +254,7 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
   return {
     students: rows,
     settings: settings,
-    bobotConfig: Nilai_getBobotConfig_(auth.sekolahId),
+    bobotConfig: bobotConfig,
     assessmentLabel: assessmentLabel
   };
 }
