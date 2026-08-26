@@ -47,7 +47,7 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   MASTER_SUPERADMIN: ['email', 'nama', 'status', 'foto_url', 'created_at'],
   MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
   RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at'],
-  MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'nama_instansi', 'nama_dinas', 'logo_sekolah_url', 'logo_pemerintah_url', 'status', 'created_at', 'updated_at'],
+  MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'status', 'created_at', 'updated_at'],
   MASTER_MAPEL: ['mapel_id', 'kode_mapel', 'nama_mapel', 'jenjang', 'status'],
   MASTER_KELAS: ['kelas_id', 'sekolah_id', 'tingkat', 'nama_kelas', 'jenjang', 'program_keahlian', 'konsentrasi_keahlian', 'status'],
   GURU_MAPEL: ['guru_mapel_id', 'guru_id', 'mapel_id', 'sekolah_id', 'tahun_ajaran_id', 'status'],
@@ -196,10 +196,15 @@ function Config_getSheet_(name) {
  * membuat sheet yang belum ada). Fungsi ini menambah kolom yang HILANG
  * di akhir sheet (tidak pernah menghapus/menggeser kolom lama) — dipakai
  * pertama kali untuk menambah foto_url ke MASTER_SUPERADMIN yang sudah
- * ada sejak Phase 1, lalu (V2) kolom kop cetak (kode_pos/email/telepon/
- * website/nama_instansi/nama_dinas/logo_sekolah_url/logo_pemerintah_url)
- * ke MASTER_SEKOLAH untuk modul Cetak Daftar Nilai. Bump nama property
- * (_V2 -> _V3) tiap kali skema central bertambah kolom baru di masa
+ * ada sejak Phase 1, lalu (V2) kolom kontak (kode_pos/email/telepon/
+ * website) ke MASTER_SEKOLAH. (Kolom nama_instansi/nama_dinas/
+ * logo_sekolah_url/logo_pemerintah_url sempat ditambah V2 lalu ditarik
+ * lagi dari skema — kop cetak ternyata lebih sederhana sebagai gambar
+ * utuh yang diunggah, lihat SEKOLAH_KOP. Kalau instalasi lama sempat
+ * ter-migrasi, kolom itu tertinggal kosong di sheet — tidak dibaca/ditulis
+ * kode manapun lagi, aman dihapus manual dari spreadsheet kalau mau
+ * bersih-bersih.) Bump nama property (_V2 -> _V3) tiap kali skema central
+ * bertambah kolom baru di masa
  * depan, sama seperti pola Config_ensureTextFormatColumns_. Ini murni
  * TULIS SEL header (bukan insertSheet), aman dipanggil dari eksekusi
  * siapa pun termasuk guru.

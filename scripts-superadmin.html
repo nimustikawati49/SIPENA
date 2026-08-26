@@ -270,7 +270,9 @@ function SuperAdmin_panelSekolah_() {
     '    <div class="sp-field"><label>Dirancang untuk</label><select id="sp-kop-paper-hint">' +
     '      <option value="">Umum (A4/F4)</option><option value="A4">A4</option><option value="F4">F4</option>' +
     '    </select></div>' +
-    '    <label class="sp-upload-label">Unggah Kop Baru<input type="file" accept="image/*" id="sp-kop-upload-new" class="hidden"></label>' +
+    '    <label class="sp-upload-label" id="sp-kop-upload-label">Unggah Kop Baru<input type="file" accept="image/*" id="sp-kop-upload-new" class="hidden"></label>' +
+    '    <button type="button" class="sp-btn hidden" id="sp-kop-save-edit-btn" onclick="SuperAdmin_saveKopEdit_()">Simpan Nama/Kategori</button>' +
+    '    <button type="button" class="sp-btn secondary hidden" id="sp-kop-cancel-edit-btn" onclick="SuperAdmin_cancelKopEdit_()">Batal Edit</button>' +
     '  </div>' +
     '  <div id="sp-table-kop"></div>' +
 
@@ -376,11 +378,46 @@ function SuperAdmin_renderKopList_(rows) {
     { label: 'Untuk', render: function (r) { return r.paper_hint || 'Umum'; } },
     { label: 'Status', render: function (r) { return '<span class="badge ' + (String(r.status).toUpperCase() === 'AKTIF' ? 'ok' : 'danger') + '">' + r.status + '</span>'; } },
     { label: 'Aksi', render: function (r) {
-        return '<label class="sp-btn secondary" style="display:inline-block;cursor:pointer;">Ganti Gambar<input type="file" accept="image/*" class="hidden" onchange="SuperAdmin_replaceKopImage_(\'' + r.kop_id + '\', this)"></label> ' +
+        return '<button class="sp-btn secondary" onclick="SuperAdmin_editKop_(\'' + r.kop_id + '\')">Edit</button> ' +
+          '<label class="sp-btn secondary" style="display:inline-block;cursor:pointer;">Ganti Gambar<input type="file" accept="image/*" class="hidden" onchange="SuperAdmin_replaceKopImage_(\'' + r.kop_id + '\', this)"></label> ' +
           '<button class="sp-btn secondary" onclick="SuperAdmin_toggleKopStatus_(\'' + r.kop_id + '\')">' + (String(r.status).toUpperCase() === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan') + '</button> ' +
           '<button class="sp-btn secondary" onclick="SuperAdmin_deleteKop_(\'' + r.kop_id + '\', \'' + String(r.nama_kop).replace(/'/g, "\\'") + '\')">Hapus</button>';
       } }
   ], rows, 'Belum ada kop untuk sekolah ini.');
+}
+
+function SuperAdmin_editKop_(kopId) {
+  var row = (window.SuperAdmin._kopRows || []).filter(function (r) { return r.kop_id === kopId; })[0];
+  if (!row) return;
+  document.getElementById('sp-kop-nama').value = row.nama_kop || '';
+  document.getElementById('sp-kop-paper-hint').value = row.paper_hint || '';
+  document.getElementById('sp-kop-upload-label').classList.add('hidden');
+  document.getElementById('sp-kop-save-edit-btn').classList.remove('hidden');
+  document.getElementById('sp-kop-cancel-edit-btn').classList.remove('hidden');
+  document.getElementById('sp-kop-save-edit-btn').dataset.kopId = kopId;
+}
+
+function SuperAdmin_cancelKopEdit_() {
+  document.getElementById('sp-kop-nama').value = '';
+  document.getElementById('sp-kop-paper-hint').value = '';
+  document.getElementById('sp-kop-upload-label').classList.remove('hidden');
+  document.getElementById('sp-kop-save-edit-btn').classList.add('hidden');
+  document.getElementById('sp-kop-cancel-edit-btn').classList.add('hidden');
+  delete document.getElementById('sp-kop-save-edit-btn').dataset.kopId;
+}
+
+function SuperAdmin_saveKopEdit_() {
+  var kopId = document.getElementById('sp-kop-save-edit-btn').dataset.kopId;
+  var nama = document.getElementById('sp-kop-nama').value.trim();
+  if (!nama) { SIPENA_toast('Nama kop tidak boleh kosong.', 'error'); return; }
+  var paperHint = document.getElementById('sp-kop-paper-hint').value;
+  runServer('adminUpdateSekolahKop', [kopId, { nama_kop: nama, paper_hint: paperHint }], {
+    onSuccess: function () {
+      SIPENA_toast('Kop diperbarui.');
+      SuperAdmin_cancelKopEdit_();
+      SuperAdmin_loadKopList_(document.getElementById('sp-kop-target').value);
+    }
+  });
 }
 
 function SuperAdmin_replaceKopImage_(kopId, input) {
