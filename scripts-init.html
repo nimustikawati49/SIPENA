@@ -140,6 +140,34 @@ function SIPENA_hariLabel_(hari) {
   return hari ? (hari.charAt(0) + hari.slice(1).toLowerCase()) : '-';
 }
 
+/**
+ * SIPENA_collapsibleHtml_(headerHtml, bodyHtml, startOpen)
+ * Satu blok "klik header untuk buka daftarnya, klik lagi untuk tutup" —
+ * dipakai di mana pun ada daftar yang bisa jadi panjang (per sekolah, per
+ * guru, dsb.) supaya tidak semua tabel tampil sekaligus tanpa diminta.
+ * Header & body dibungkus DIV yang sama (.sp-collapse) supaya nested
+ * collapsible (mis. per-guru DI DALAM per-sekolah) tidak saling
+ * mempengaruhi — toggle cuma menyentuh child langsung, bukan turunan.
+ */
+function SIPENA_collapsibleHtml_(headerHtml, bodyHtml, startOpen) {
+  var openCls = startOpen ? '' : ' hidden';
+  var caret = startOpen ? '&#9662;' : '&#9656;';
+  return '<div class="sp-collapse">' +
+    '<button type="button" class="sp-collapse-header" onclick="SIPENA_toggleCollapse_(this)">' +
+      '<span class="sp-collapse-caret">' + caret + '</span> ' + headerHtml +
+    '</button>' +
+    '<div class="sp-collapse-body' + openCls + '">' + bodyHtml + '</div>' +
+  '</div>';
+}
+
+function SIPENA_toggleCollapse_(headerBtn) {
+  var wrap = headerBtn.parentElement;
+  var body = wrap.querySelector(':scope > .sp-collapse-body');
+  var willOpen = body.classList.contains('hidden');
+  body.classList.toggle('hidden');
+  headerBtn.querySelector('.sp-collapse-caret').innerHTML = willOpen ? '&#9662;' : '&#9656;';
+}
+
 function SIPENA_todayHari_() {
   var names = ['MINGGU', 'SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
   return names[new Date().getDay()];

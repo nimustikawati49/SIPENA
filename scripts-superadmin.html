@@ -238,25 +238,27 @@ function SuperAdmin_panelSekolah_() {
     '<div class="sp-panel active" id="sp-panel-sekolah">' +
     '  <div class="sp-section-title">Tambah Sekolah</div>' +
     '  <form class="sp-form" id="sp-form-sekolah">' +
-    '    <div class="sp-field"><label>NPSN</label><input name="npsn"></div>' +
     '    <div class="sp-field"><label>Nama Sekolah</label><input name="nama_sekolah" required></div>' +
     '    <div class="sp-field"><label>Jenjang</label><select name="jenjang" required>' +
     '      <option value="">Pilih</option><option>SD</option><option>SMP</option><option>SMA</option><option>SMK</option>' +
     '    </select></div>' +
-    '    <div class="sp-field"><label>Kabupaten</label><input name="kabupaten"></div>' +
-    '    <div class="sp-field"><label>Provinsi</label><input name="provinsi"></div>' +
-    '    <div class="sp-field"><label>Alamat</label><input name="alamat" style="min-width:260px;"></div>' +
-    '    <div class="sp-field"><label>Desa</label><input name="desa"></div>' +
-    '    <div class="sp-field"><label>Kecamatan</label><input name="kecamatan"></div>' +
-    '    <div class="sp-field"><label>Kode Pos</label><input name="kode_pos"></div>' +
-    '    <div class="sp-field"><label>Email</label><input name="email" type="email"></div>' +
-    '    <div class="sp-field"><label>Telepon</label><input name="telepon"></div>' +
-    '    <div class="sp-field"><label>Website</label><input name="website"></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
+    '    <button type="button" class="sp-btn secondary" onclick="SuperAdmin_toggleSekolahAdvanced_()">Detail Tambahan (opsional)</button>' +
     SuperAdmin_cancelEditButton_() +
+    '    <div id="sp-sekolah-advanced" class="hidden" style="flex-basis:100%;display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">' +
+    '      <div class="sp-field"><label>NPSN</label><input name="npsn"></div>' +
+    '      <div class="sp-field"><label>Kabupaten</label><input name="kabupaten"></div>' +
+    '      <div class="sp-field"><label>Provinsi</label><input name="provinsi"></div>' +
+    '      <div class="sp-field"><label>Alamat</label><input name="alamat" style="min-width:260px;"></div>' +
+    '      <div class="sp-field"><label>Desa</label><input name="desa"></div>' +
+    '      <div class="sp-field"><label>Kecamatan</label><input name="kecamatan"></div>' +
+    '      <div class="sp-field"><label>Kode Pos</label><input name="kode_pos"></div>' +
+    '      <div class="sp-field"><label>Email</label><input name="email" type="email"></div>' +
+    '      <div class="sp-field"><label>Telepon</label><input name="telepon"></div>' +
+    '      <div class="sp-field"><label>Website</label><input name="website"></div>' +
+    '    </div>' +
     '  </form>' +
-    '  <div class="sp-section-title">Daftar Sekolah</div>' +
-    '  <div id="sp-table-sekolah"></div>' +
+    SIPENA_collapsibleHtml_('Daftar Sekolah', '<div id="sp-table-sekolah"></div>', false) +
 
     '  <div class="sp-section-title">Kop Cetak</div>' +
     '  <div class="msg" style="margin:-6px 0 10px;">Kop diunggah sebagai satu gambar utuh (desain kop sekolah yang sudah ada) — bukan disusun dari teks. Satu sekolah boleh punya beberapa kop (mis. "Kop Resmi" &amp; "Kop Sederhana"); guru memilih salah satu saat cetak. Gambar bisa diganti kapan saja tanpa mengubah pilihan guru yang sudah ada.</div>' +
@@ -457,8 +459,13 @@ function SuperAdmin_editSchool_(sekolahId) {
   f.email.value = s.email || '';
   f.telepon.value = s.telepon || '';
   f.website.value = s.website || '';
+  document.getElementById('sp-sekolah-advanced').classList.remove('hidden');
   SuperAdmin_setFormEditMode_(f, sekolahId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function SuperAdmin_toggleSekolahAdvanced_() {
+  document.getElementById('sp-sekolah-advanced').classList.toggle('hidden');
 }
 function SuperAdmin_renderSekolah() {
   SIPENA_table_('sp-table-sekolah', [
@@ -579,8 +586,9 @@ function SuperAdmin_editTeacher_(guruId) {
 }
 /**
  * SuperAdmin_renderGuru()
- * Dikelompokkan per sekolah (pola sama Penugasan/Jadwal) — bukan tabel
- * datar semua guru semua sekolah tercampur.
+ * Dikelompokkan per sekolah, tiap sekolah jadi satu blok collapsible
+ * (tertutup secara default) — bukan tabel datar semua guru semua
+ * sekolah tercampur/tampil sekaligus.
  */
 function SuperAdmin_renderGuru() {
   var el = document.getElementById('sp-table-guru');
@@ -605,10 +613,10 @@ function SuperAdmin_renderGuru() {
         '<button class="sp-btn secondary" onclick="SuperAdmin_reprovision_(\'' + r.guru_id + '\')">Provisi ulang</button> ' +
         '<button class="sp-btn secondary" onclick="SuperAdmin_deleteTeacher_(\'' + r.guru_id + '\', \'' + String(r.nama_lengkap).replace(/'/g, "\\'") + '\')">Hapus</button></td></tr>';
     }).join('');
-    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' +
-      '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+    var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
       '<th>Email</th><th>Nama</th><th>Jabatan</th><th>Status</th><th>Aksi</th>' +
       '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    return SIPENA_collapsibleHtml_(namaSekolah + ' <span class="msg" style="margin:0;">(' + rows.length + ' guru)</span>', tableHtml, false);
   }).join('');
 }
 function SuperAdmin_reprovision_(guruId) {
@@ -643,8 +651,7 @@ function SuperAdmin_panelMapel_() {
     '    <button class="sp-btn" type="submit">Simpan</button>' +
     SuperAdmin_cancelEditButton_() +
     '  </form>' +
-    '  <div class="sp-section-title">Daftar Mata Pelajaran</div>' +
-    '  <div id="sp-table-mapel"></div>' +
+    SIPENA_collapsibleHtml_('Daftar Mata Pelajaran', '<div id="sp-table-mapel"></div>', false) +
     '</div>';
 }
 function SuperAdmin_getMapelJenjangChecked_(form) {
@@ -805,10 +812,10 @@ function SuperAdmin_renderKelas() {
         '<td><button class="sp-btn secondary" onclick="SuperAdmin_editClass_(\'' + r.kelas_id + '\')">Edit</button> ' +
         '<button class="sp-btn secondary" onclick="SuperAdmin_deleteClass_(\'' + r.kelas_id + '\', \'' + String(r.nama_kelas).replace(/'/g, "\\'") + '\')">Hapus</button></td></tr>';
     }).join('');
-    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' +
-      '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+    var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
       '<th>Nama Kelas</th><th>Tingkat</th><th>Jenjang</th><th>Status</th><th>Aksi</th>' +
       '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    return SIPENA_collapsibleHtml_(namaSekolah + ' <span class="msg" style="margin:0;">(' + rows.length + ' kelas)</span>', tableHtml, false);
   }).join('');
 }
 function SuperAdmin_deleteClass_(kelasId, namaKelas) {
@@ -833,6 +840,10 @@ function SuperAdmin_panelTahunAjaran_() {
     SuperAdmin_cancelEditButton_() +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Tahun Ajaran</div>' +
+    '  <div style="margin-bottom:10px;">' +
+    '    <button type="button" class="sp-btn" id="sp-ta-filter-AKTIF" onclick="SuperAdmin_setTaFilter_(\'AKTIF\')">Aktif</button> ' +
+    '    <button type="button" class="sp-btn secondary" id="sp-ta-filter-NONAKTIF" onclick="SuperAdmin_setTaFilter_(\'NONAKTIF\')">Nonaktif</button>' +
+    '  </div>' +
     '  <div id="sp-table-ta" style="margin-bottom:24px;"></div>' +
     '  <div class="sp-section-title">Aktifkan Periode per Sekolah</div>' +
     '  <form class="sp-form" id="sp-form-periode">' +
@@ -868,15 +879,42 @@ function SuperAdmin_wireTahunAjaran_() {
     });
   });
 }
+/**
+ * SuperAdmin_setTaFilter_(status) / SuperAdmin_renderTahunAjaran()
+ * Daftar dipisah tab Aktif/Nonaktif (bukan satu tabel campur semuanya) —
+ * default AKTIF supaya tahun ajaran lama yang dinonaktifkan tidak
+ * memenuhi tampilan begitu ada beberapa tahun histori.
+ */
+window.SuperAdmin._taFilter = 'AKTIF';
+function SuperAdmin_setTaFilter_(status) {
+  window.SuperAdmin._taFilter = status;
+  document.getElementById('sp-ta-filter-AKTIF').classList.toggle('secondary', status !== 'AKTIF');
+  document.getElementById('sp-ta-filter-NONAKTIF').classList.toggle('secondary', status !== 'NONAKTIF');
+  SuperAdmin_renderTahunAjaran();
+}
 function SuperAdmin_renderTahunAjaran() {
+  var filter = window.SuperAdmin._taFilter || 'AKTIF';
+  var rows = SuperAdmin.academicYears.filter(function (r) { return String(r.status).toUpperCase() === filter; });
   SIPENA_table_('sp-table-ta', [
-    { key: 'tahun_ajaran_id', label: 'ID' }, { key: 'label', label: 'Label' },
-    { key: 'semester', label: 'Semester' }, { key: 'status', label: 'Status' },
+    { key: 'label', label: 'Label' }, { key: 'semester', label: 'Semester' },
     { label: 'Aksi', render: function (r) {
+        var toggleLabel = filter === 'AKTIF' ? 'Nonaktifkan' : 'Aktifkan';
         return '<button class="sp-btn secondary" onclick="SuperAdmin_editAcademicYear_(\'' + r.tahun_ajaran_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="SuperAdmin_toggleAcademicYearStatus_(\'' + r.tahun_ajaran_id + '\')">' + toggleLabel + '</button> ' +
           '<button class="sp-btn secondary" onclick="SuperAdmin_deleteAcademicYear_(\'' + r.tahun_ajaran_id + '\', \'' + String(r.label).replace(/'/g, "\\'") + ' ' + r.semester + '\')">Hapus</button>';
       } }
-  ], SuperAdmin.academicYears, 'Belum ada tahun ajaran.');
+  ], rows, filter === 'AKTIF' ? 'Belum ada tahun ajaran aktif.' : 'Tidak ada tahun ajaran nonaktif.');
+}
+function SuperAdmin_toggleAcademicYearStatus_(tahunAjaranId) {
+  var t = SuperAdmin.academicYears.filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; })[0];
+  if (!t) return;
+  var newStatus = String(t.status).toUpperCase() === 'AKTIF' ? 'NONAKTIF' : 'AKTIF';
+  runServer('adminUpdateAcademicYear', [tahunAjaranId, { status: newStatus }], {
+    onSuccess: function () {
+      SIPENA_toast('Status tahun ajaran diperbarui.');
+      runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } });
+    }
+  });
 }
 function SuperAdmin_editAcademicYear_(tahunAjaranId) {
   var t = SuperAdmin.academicYears.filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; })[0];
@@ -1163,10 +1201,10 @@ function SuperAdmin_renderPenugasan() {
         '<td><button class="sp-btn secondary" onclick="SuperAdmin_openPenugasanDetail_(\'' + sid + '\', \'' + gid + '\')">Detail</button></td></tr>';
     }).join('');
 
-    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' +
-      '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+    var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
       '<th>Guru</th><th>Mata Pelajaran</th><th>Jumlah Kelas</th><th>Aksi</th>' +
       '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    return SIPENA_collapsibleHtml_(namaSekolah + ' <span class="msg" style="margin:0;">(' + guruIds.length + ' guru)</span>', tableHtml, false);
   }).join('');
 }
 
@@ -1450,9 +1488,9 @@ var SP_JADWAL_HARI_URUTAN_ = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABT
 
 /**
  * SuperAdmin_renderJadwal()
- * Dikelompokkan per sekolah lalu per hari (Senin—Sabtu, hanya hari yang
- * benar-benar ada jadwalnya yang dirender) — jadi satu sekolah langsung
- * terlihat sebagai jadwal satu minggu, bukan daftar datar tercampur.
+ * Dikelompokkan per sekolah (collapsible) LALU per guru (collapsible
+ * bersarang di dalamnya) — jadwal tiap guru ditampilkan sebagai satu
+ * tabel diurutkan hari+jam, bukan daftar datar tercampur semua guru.
  */
 function SuperAdmin_renderJadwal() {
   var el = document.getElementById('sp-table-jadwal');
@@ -1470,22 +1508,30 @@ function SuperAdmin_renderJadwal() {
 
   el.innerHTML = sekolahIds.map(function (sid) {
     var namaSekolah = SuperAdmin_labelFromId_(SuperAdmin.schools, 'sekolah_id', sid, 'nama_sekolah') || '(Sekolah tidak diketahui)';
-    var byHari = {};
-    bySekolah[sid].forEach(function (r) { (byHari[r.hari] = byHari[r.hari] || []).push(r); });
 
-    var mingguHtml = SP_JADWAL_HARI_URUTAN_.filter(function (hari) { return byHari[hari] && byHari[hari].length; }).map(function (hari) {
-      var entries = byHari[hari].slice().sort(function (a, b) { return String(a.jam_mulai).localeCompare(String(b.jam_mulai)); });
+    var byGuru = {};
+    bySekolah[sid].forEach(function (r) {
+      if (!byGuru[r.guru_id]) byGuru[r.guru_id] = [];
+      byGuru[r.guru_id].push(r);
+    });
+    var guruIds = Object.keys(byGuru).sort(function (a, b) { return (byGuru[a][0].nama_guru || '').localeCompare(byGuru[b][0].nama_guru || ''); });
+
+    var guruBlocks = guruIds.map(function (gid) {
+      var entries = byGuru[gid].slice().sort(function (a, b) {
+        var hariCmp = SP_JADWAL_HARI_URUTAN_.indexOf(a.hari) - SP_JADWAL_HARI_URUTAN_.indexOf(b.hari);
+        return hariCmp !== 0 ? hariCmp : String(a.jam_mulai).localeCompare(String(b.jam_mulai));
+      });
       var body = entries.map(function (r) {
-        return '<tr><td>' + r.jam_mulai + '–' + r.jam_selesai + '</td><td>' + r.nama_guru + '</td><td>' + r.nama_mapel + '</td>' +
+        return '<tr><td>' + SuperAdmin_hariLabel_(r.hari) + '</td><td>' + r.jam_mulai + '–' + r.jam_selesai + '</td><td>' + r.nama_mapel + '</td>' +
           '<td>' + r.nama_kelas + '</td><td>' + (r.ruangan || '-') + '</td>' +
           '<td><button class="sp-btn secondary" onclick="SuperAdmin_editJadwal_(\'' + r.jadwal_id + '\')">Edit</button> ' +
           '<button class="sp-btn secondary" onclick="SuperAdmin_deleteJadwal_(\'' + r.jadwal_id + '\')">Hapus</button></td></tr>';
       }).join('');
-      return '<div style="font-weight:700;font-size:12.5px;color:var(--text-muted);margin:12px 0 4px;">' + SuperAdmin_hariLabel_(hari) + '</div>' +
-        '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Jam</th><th>Guru</th><th>Mapel</th><th>Kelas</th><th>Ruangan</th><th>Aksi</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+      var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Hari</th><th>Jam</th><th>Mapel</th><th>Kelas</th><th>Ruangan</th><th>Aksi</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+      return SIPENA_collapsibleHtml_(entries[0].nama_guru + ' <span class="msg" style="margin:0;">(' + entries.length + ' jadwal)</span>', tableHtml, false);
     }).join('');
 
-    return '<div class="sp-section-title" style="font-size:14px;margin-top:18px;">' + namaSekolah + '</div>' + mingguHtml;
+    return SIPENA_collapsibleHtml_(namaSekolah + ' <span class="msg" style="margin:0;">(' + guruIds.length + ' guru)</span>', guruBlocks, false);
   }).join('');
 }
 
@@ -1956,7 +2002,7 @@ function SuperAdmin_panelAuditLog_() {
     '  <div class="sp-section-title">Audit Log</div>' +
     '  <div class="msg" style="margin:-6px 0 10px;">Mencatat aksi administratif (tambah/ubah/hapus, sinkronisasi, kenaikan kelas, dsb.) — 300 entri terakhir. Ini bukan pengganti pengujian isolasi antar-akun (butuh login sungguhan sebagai guru berbeda untuk itu, tidak bisa disimulasikan dari satu sesi).</div>' +
     '  <button type="button" class="sp-btn secondary" style="margin-bottom:10px;" onclick="SuperAdmin_loadAuditLog_()">Muat Ulang</button>' +
-    '  <div id="sp-auditlog-table"></div>' +
+    SIPENA_collapsibleHtml_('Daftar Aktivitas', '<div id="sp-auditlog-table"></div>', false) +
     '</div>';
 }
 
