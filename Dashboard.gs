@@ -67,6 +67,15 @@ function getMyDashboard() {
  * GURU only, dan HANYA field non-kritis (no_hp/foto_url/ttd_url) — nama,
  * NIP, sekolah, dsb. dikelola Superadmin (spec §11), tidak diterima di
  * sini walau dikirim client.
+ *
+ * Tulis baris PROFIL dibungkus try/catch — sama pola dengan
+ * saveMyGradeSettings (Nilai.gs): terbukti di produksi sebagian akun
+ * guru bisa GAGAL menulis SEL tertentu di spreadsheet mereka sendiri
+ * walau baca berhasil (mis. baris/kolom yang belum pernah mereka tulis
+ * sebelumnya), muncul sebagai exception permission mentah yang
+ * membingungkan ("Anda tidak memiliki izin...") kalau dibiarkan bocor
+ * apa adanya. Di sini itu diubah jadi pesan jelas yang mengarahkan ke
+ * Superadmin, bukan exception mentah.
  */
 function updateMyProfile(data) {
   const auth = Security_requireRole_(['GURU']);
@@ -79,7 +88,11 @@ function updateMyProfile(data) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
   patch.updated_at = new Date();
-  Utils_updateRowByHeader_(sh, 2, patch);
+  try {
+    Utils_updateRowByHeader_(sh, 2, patch);
+  } catch (e) {
+    throw new Error('Gagal menyimpan — akun Anda tampaknya tidak punya akses tulis ke sheet PROFIL pada spreadsheet pribadi Anda. Minta Superadmin memeriksa/memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
+  }
 
   Dashboard_invalidateCache_(auth.guruId);
   AuditLog_write_(auth, 'UPDATE_PROFILE', 'Profil', auth.guruId, JSON.stringify(patch));
@@ -113,7 +126,11 @@ function Dashboard_patchProfilField_(auth, field, value) {
   const sh = ss.getSheetByName('PROFIL');
   if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
   const patch = {}; patch[field] = value; patch.updated_at = new Date();
-  Utils_updateRowByHeader_(sh, 2, patch);
+  try {
+    Utils_updateRowByHeader_(sh, 2, patch);
+  } catch (e) {
+    throw new Error('File berhasil diunggah ke Drive, tapi gagal disimpan ke profil — akun Anda tampaknya tidak punya akses tulis ke sheet PROFIL pada spreadsheet pribadi Anda. Minta Superadmin memeriksa/memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
+  }
   Dashboard_invalidateCache_(auth.guruId);
   AuditLog_write_(auth, 'UPDATE_PROFILE', 'Profil', auth.guruId, field + '=' + value);
 }

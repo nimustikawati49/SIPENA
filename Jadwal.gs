@@ -106,6 +106,15 @@ function adminCreateSchedule(data) {
   return { jadwal_id: jadwalId };
 }
 
+/**
+ * adminUpdateSchedule(jadwalId, data)
+ * Selain hari/jam, sekarang juga bisa ganti mapel_id+kelas_id sekaligus
+ * (mis. salah pilih kelas saat Tambah) — kalau salah satu dikirim,
+ * tahun_ajaran_id+semester ikut disegarkan dari mapel/kelas baru itu
+ * supaya tidak mismatch dengan penugasan sebenarnya. guru_id TETAP
+ * tidak bisa diubah dari sini (jadwal pindah guru = hapus lalu buat
+ * baru, bukan edit).
+ */
 function adminUpdateSchedule(jadwalId, data) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   const sh = Config_getSheet_('JADWAL_MENGAJAR');
@@ -115,16 +124,21 @@ function adminUpdateSchedule(jadwalId, data) {
   const hari = data.hari !== undefined ? String(data.hari).toUpperCase().trim() : row.hari;
   const jamMulai = data.jam_mulai !== undefined ? String(data.jam_mulai).trim() : row.jam_mulai;
   const jamSelesai = data.jam_selesai !== undefined ? String(data.jam_selesai).trim() : row.jam_selesai;
+  const mapelId = data.mapel_id !== undefined ? String(data.mapel_id).trim() : row.mapel_id;
+  const kelasId = data.kelas_id !== undefined ? String(data.kelas_id).trim() : row.kelas_id;
+  const tahunAjaranId = data.tahun_ajaran_id !== undefined ? String(data.tahun_ajaran_id).trim() : row.tahun_ajaran_id;
   if (JADWAL_HARI_VALID_.indexOf(hari) === -1) throw new Error('Hari tidak valid.');
   if (!Jadwal_validateJam_(jamMulai) || !Jadwal_validateJam_(jamSelesai)) throw new Error('Format jam harus HH:MM.');
   if (jamMulai >= jamSelesai) throw new Error('Jam mulai harus lebih awal dari jam selesai.');
+  if (!mapelId || !kelasId) throw new Error('Mapel dan kelas wajib diisi.');
+  const semester = tahunAjaranId !== row.tahun_ajaran_id ? TahunAjaran_getSemester_(tahunAjaranId) : row.semester;
 
-  if (Jadwal_isBentrok_(row.guru_id, hari, jamMulai, jamSelesai, row.tahun_ajaran_id, row.semester, jadwalId)) {
+  if (Jadwal_isBentrok_(row.guru_id, hari, jamMulai, jamSelesai, tahunAjaranId, semester, jadwalId)) {
     throw new Error('Jadwal bentrok dengan jadwal lain milik guru ini di hari & jam yang sama.');
   }
 
-  const patch = { hari: hari, jam_mulai: jamMulai, jam_selesai: jamSelesai };
-  ['ruangan', 'keterangan', 'status'].forEach(function (k) { if (data[k] !== undefined) patch[k] = data[k]; });
+  const patch = { hari: hari, jam_mulai: jamMulai, jam_selesai: jamSelesai, mapel_id: mapelId, kelas_id: kelasId, tahun_ajaran_id: tahunAjaranId, semester: semester };
+  if (data.status !== undefined) patch.status = data.status;
   Utils_updateRowByHeader_(sh, row._row, patch);
 
   AuditLog_write_(auth, 'UPDATE_SCHEDULE', 'Jadwal', jadwalId, JSON.stringify(patch));
@@ -204,7 +218,7 @@ function createMySchedule(data) {
   Utils_appendRowByHeader_(Config_getSheet_('JADWAL_MENGAJAR'), {
     jadwal_id: jadwalId, guru_id: auth.guruId, mapel_id: mapelId, kelas_id: kelasId, sekolah_id: auth.sekolahId,
     tahun_ajaran_id: tahunAjaranId, semester: semester, hari: hari, jam_mulai: jamMulai, jam_selesai: jamSelesai,
-    ruangan: data.ruangan || '', keterangan: data.keterangan || '', status: 'AKTIF'
+    status: 'AKTIF'
   });
 
   AuditLog_write_(auth, 'CREATE_SCHEDULE_SELF', 'Jadwal', jadwalId, hari + ' ' + jamMulai + '-' + jamSelesai);
@@ -212,6 +226,13 @@ function createMySchedule(data) {
   return { jadwal_id: jadwalId };
 }
 
+/**
+ * updateMySchedule(jadwalId, data)
+ * Selain hari/jam, guru juga bisa ganti mapel_id+kelas_id (mis. salah
+ * pilih kelas saat menambah) — kombinasi baru tetap wajib penugasan
+ * aktif miliknya sendiri (Jadwal_assertGuruAssignment_), tahun_ajaran_id
+ * +semester ikut disegarkan mengikuti mapel/kelas yang baru.
+ */
 function updateMySchedule(jadwalId, data) {
   const auth = Security_requireRole_(['GURU']);
   const sh = Config_getSheet_('JADWAL_MENGAJAR');
@@ -222,17 +243,22 @@ function updateMySchedule(jadwalId, data) {
   const hari = data.hari !== undefined ? String(data.hari).toUpperCase().trim() : row.hari;
   const jamMulai = data.jam_mulai !== undefined ? String(data.jam_mulai).trim() : row.jam_mulai;
   const jamSelesai = data.jam_selesai !== undefined ? String(data.jam_selesai).trim() : row.jam_selesai;
+  const mapelId = data.mapel_id !== undefined ? String(data.mapel_id).trim() : row.mapel_id;
+  const kelasId = data.kelas_id !== undefined ? String(data.kelas_id).trim() : row.kelas_id;
+  const tahunAjaranId = data.tahun_ajaran_id !== undefined ? String(data.tahun_ajaran_id).trim() : row.tahun_ajaran_id;
   if (JADWAL_HARI_VALID_.indexOf(hari) === -1) throw new Error('Hari tidak valid.');
   if (!Jadwal_validateJam_(jamMulai) || !Jadwal_validateJam_(jamSelesai)) throw new Error('Format jam harus HH:MM.');
   if (jamMulai >= jamSelesai) throw new Error('Jam mulai harus lebih awal dari jam selesai.');
+  const semester = tahunAjaranId !== row.tahun_ajaran_id ? TahunAjaran_getSemester_(tahunAjaranId) : row.semester;
+  if (mapelId !== row.mapel_id || kelasId !== row.kelas_id || tahunAjaranId !== row.tahun_ajaran_id) {
+    Jadwal_assertGuruAssignment_(auth, mapelId, kelasId, tahunAjaranId);
+  }
 
-  if (Jadwal_isBentrok_(auth.guruId, hari, jamMulai, jamSelesai, row.tahun_ajaran_id, row.semester, jadwalId)) {
+  if (Jadwal_isBentrok_(auth.guruId, hari, jamMulai, jamSelesai, tahunAjaranId, semester, jadwalId)) {
     throw new Error('Jadwal bentrok dengan jadwal Anda yang lain di hari & jam yang sama.');
   }
 
-  const patch = { hari: hari, jam_mulai: jamMulai, jam_selesai: jamSelesai };
-  if (data.ruangan !== undefined) patch.ruangan = data.ruangan;
-  if (data.keterangan !== undefined) patch.keterangan = data.keterangan;
+  const patch = { hari: hari, jam_mulai: jamMulai, jam_selesai: jamSelesai, mapel_id: mapelId, kelas_id: kelasId, tahun_ajaran_id: tahunAjaranId, semester: semester };
   Utils_updateRowByHeader_(sh, row._row, patch);
 
   AuditLog_write_(auth, 'UPDATE_SCHEDULE_SELF', 'Jadwal', jadwalId, JSON.stringify(patch));

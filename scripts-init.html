@@ -342,7 +342,7 @@ function SIPENA_toggleSidebar_(btn) {
 
 (function () {
   function show(id) {
-    ['sp-loading', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
+    ['sp-landing', 'sp-loading', 'sp-unregistered', 'sp-error'].forEach(function (elId) {
       document.getElementById(elId).classList.toggle('hidden', elId !== id);
     });
   }
@@ -384,6 +384,7 @@ function SIPENA_toggleSidebar_(btn) {
   }
 
   function bootApp() {
+    show('sp-loading');
     runServer('getAuth', [], {
       onSuccess: renderAuth,
       onError: function (msg) {
@@ -393,6 +394,10 @@ function SIPENA_toggleSidebar_(btn) {
     });
   }
 
-  document.addEventListener('DOMContentLoaded', bootApp);
+  // Landing page tampil dulu (klik "Masuk ke Sistem" baru memicu
+  // pengecekan akun) — sebelumnya getAuth langsung jalan begitu halaman
+  // dibuka, tanpa jeda perkenalan sama sekali.
+  window.SIPENA_enterApp_ = bootApp;
+  document.addEventListener('DOMContentLoaded', function () { show('sp-landing'); });
 })();
 </script>

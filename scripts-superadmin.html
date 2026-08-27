@@ -1425,8 +1425,6 @@ function SuperAdmin_panelJadwal_() {
     '    <div class="sp-field"><label>Hari</label><select name="hari" required><option value="">Pilih</option><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
     '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
     '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
-    '    <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
-    '    <div class="sp-field"><label>Keterangan</label><input name="keterangan"></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
     '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditJadwal_(this.form)">Batal Edit</button>' +
     '  </form>' +
@@ -1452,8 +1450,14 @@ function SuperAdmin_wireJadwal_() {
     var btn = f.querySelector('button[type="submit"]');
     var editId = f.dataset.editId;
 
+    if (penugasanIdx === '') { SIPENA_toast('Pilih kelas/penugasan dulu.', 'error'); return; }
+    var p = window.SuperAdmin._jadwalPenugasanOptions[Number(penugasanIdx)];
+
     if (editId) {
-      var patch = { hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value, ruangan: f.ruangan.value, keterangan: f.keterangan.value };
+      var patch = {
+        mapel_id: p.mapel_id, kelas_id: p.kelas_id, tahun_ajaran_id: p.tahun_ajaran_id,
+        hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value
+      };
       runServer('adminUpdateSchedule', [editId, patch], {
         loadingEl: btn,
         onSuccess: function () {
@@ -1465,12 +1469,10 @@ function SuperAdmin_wireJadwal_() {
       return;
     }
 
-    if (!guruId || penugasanIdx === '') { SIPENA_toast('Pilih guru dan penugasan dulu.', 'error'); return; }
-    var p = window.SuperAdmin._jadwalPenugasanOptions[Number(penugasanIdx)];
+    if (!guruId) { SIPENA_toast('Pilih guru dulu.', 'error'); return; }
     var data = {
       guru_id: guruId, mapel_id: p.mapel_id, kelas_id: p.kelas_id, tahun_ajaran_id: p.tahun_ajaran_id,
-      hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value,
-      ruangan: f.ruangan.value, keterangan: f.keterangan.value
+      hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value
     };
     runServer('adminCreateSchedule', [data], {
       loadingEl: btn,
@@ -1510,12 +1512,9 @@ function SuperAdmin_editJadwal_(jadwalId) {
   var idx = -1;
   opts.forEach(function (a, i) { if (a.mapel_id === j.mapel_id && a.kelas_id === j.kelas_id && a.tahun_ajaran_id === j.tahun_ajaran_id) idx = i; });
   document.getElementById('sp-jadwal-penugasan').value = idx >= 0 ? String(idx) : '';
-  document.getElementById('sp-jadwal-penugasan').disabled = true;
   f.hari.value = j.hari;
   f.jam_mulai.value = j.jam_mulai;
   f.jam_selesai.value = j.jam_selesai;
-  f.ruangan.value = j.ruangan || '';
-  f.keterangan.value = j.keterangan || '';
   SuperAdmin_setFormEditMode_(f, jadwalId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -1559,11 +1558,11 @@ function SuperAdmin_renderJadwal() {
       });
       var body = entries.map(function (r) {
         return '<tr><td>' + SuperAdmin_hariLabel_(r.hari) + '</td><td>' + r.jam_mulai + '–' + r.jam_selesai + '</td><td>' + r.nama_mapel + '</td>' +
-          '<td>' + r.nama_kelas + '</td><td>' + (r.ruangan || '-') + '</td>' +
+          '<td>' + r.nama_kelas + '</td>' +
           '<td><button class="sp-btn secondary" onclick="SuperAdmin_editJadwal_(\'' + r.jadwal_id + '\')">Edit</button> ' +
           '<button class="sp-btn secondary" onclick="SuperAdmin_deleteJadwal_(\'' + r.jadwal_id + '\')">Hapus</button></td></tr>';
       }).join('');
-      var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Hari</th><th>Jam</th><th>Mapel</th><th>Kelas</th><th>Ruangan</th><th>Aksi</th></tr></thead><tbody>' + body + '</tbody></table></div>';
+      var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr><th>Hari</th><th>Jam</th><th>Mapel</th><th>Kelas</th><th>Aksi</th></tr></thead><tbody>' + body + '</tbody></table></div>';
       return SIPENA_collapsibleHtml_(entries[0].nama_guru + ' <span class="msg" style="margin:0;">(' + entries.length + ' jadwal)</span>', tableHtml, false);
     }).join('');
 

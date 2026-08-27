@@ -29,8 +29,6 @@ function JadwalGuruApp_markup_() {
     '  <div class="sp-field"><label>Hari</label><select name="hari" required><option value="">Pilih</option><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
     '  <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
     '  <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
-    '  <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
-    '  <div class="sp-field"><label>Keterangan</label><input name="keterangan"></div>' +
     '  <button class="sp-btn" type="submit">Simpan</button>' +
     '  <button type="button" class="sp-btn secondary hidden" id="sp-jadwal-guru-cancel" onclick="JadwalGuruApp_cancelEdit_()">Batal Edit</button>' +
     '</form>' +
@@ -64,7 +62,7 @@ function JadwalGuruApp_renderTable_(rows) {
   SIPENA_table_('sp-jadwal-guru-table', [
     { label: 'Hari', render: function (r) { return SIPENA_hariLabel_(r.hari); } },
     { label: 'Jam', render: function (r) { return r.jam_mulai + '–' + r.jam_selesai; } },
-    { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' }, { key: 'ruangan', label: 'Ruangan' },
+    { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' },
     { label: 'Aksi', render: function (r) {
         return '<button class="sp-btn secondary" onclick="JadwalGuruApp_edit_(\'' + r.jadwal_id + '\')">Edit</button> ' +
           '<button class="sp-btn secondary" onclick="JadwalGuruApp_delete_(\'' + r.jadwal_id + '\')">Hapus</button>';
@@ -82,8 +80,15 @@ function JadwalGuruApp_wireForm_() {
     var editId = f.dataset.editId;
     var btn = f.querySelector('button[type="submit"]');
 
+    var idx = document.getElementById('sp-jadwal-guru-penugasan').value;
+    if (idx === '') { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
+    var p = JadwalGuruApp.penugasan[Number(idx)];
+
     if (editId) {
-      var patch = { hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value, ruangan: f.ruangan.value, keterangan: f.keterangan.value };
+      var patch = {
+        mapel_id: p.mapel_id, kelas_id: p.kelas_id, tahun_ajaran_id: p.tahun_ajaran_id,
+        hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value
+      };
       runServer('updateMySchedule', [editId, patch], {
         loadingEl: btn,
         onSuccess: function () {
@@ -95,13 +100,9 @@ function JadwalGuruApp_wireForm_() {
       return;
     }
 
-    var idx = document.getElementById('sp-jadwal-guru-penugasan').value;
-    if (idx === '') { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
-    var p = JadwalGuruApp.penugasan[Number(idx)];
     var data = {
       mapel_id: p.mapel_id, kelas_id: p.kelas_id, tahun_ajaran_id: p.tahun_ajaran_id,
-      hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value,
-      ruangan: f.ruangan.value, keterangan: f.keterangan.value
+      hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value
     };
     runServer('createMySchedule', [data], {
       loadingEl: btn,
@@ -118,12 +119,14 @@ function JadwalGuruApp_edit_(jadwalId) {
   var j = JadwalGuruApp.schedule.filter(function (r) { return r.jadwal_id === jadwalId; })[0];
   if (!j) return;
   var f = document.getElementById('sp-form-jadwal-guru');
-  document.getElementById('sp-jadwal-guru-penugasan').disabled = true;
+  var idx = -1;
+  JadwalGuruApp.penugasan.forEach(function (p, i) {
+    if (p.mapel_id === j.mapel_id && p.kelas_id === j.kelas_id) idx = i;
+  });
+  document.getElementById('sp-jadwal-guru-penugasan').value = idx >= 0 ? String(idx) : '';
   f.hari.value = j.hari || 'SENIN';
   f.jam_mulai.value = j.jam_mulai || '';
   f.jam_selesai.value = j.jam_selesai || '';
-  f.ruangan.value = j.ruangan || '';
-  f.keterangan.value = j.keterangan || '';
   f.dataset.editId = jadwalId;
   document.getElementById('sp-jadwal-guru-cancel').classList.remove('hidden');
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -131,7 +134,6 @@ function JadwalGuruApp_edit_(jadwalId) {
 
 function JadwalGuruApp_cancelEdit_() {
   var f = document.getElementById('sp-form-jadwal-guru');
-  document.getElementById('sp-jadwal-guru-penugasan').disabled = false;
   document.getElementById('sp-jadwal-guru-cancel').classList.add('hidden');
   delete f.dataset.editId;
   f.reset();

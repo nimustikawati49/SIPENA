@@ -228,21 +228,37 @@ function Config_getSheet_(name) {
  * Sekali saja: tulis ulang URL gambar lama ("uc?export=view", rawan
  * tampil "gambar rusak" di <img>) yang sudah kadung tersimpan di kop
  * cetak & foto/tanda tangan guru jadi format thumbnail yang lebih
- * andal — lihat Utils_saveUploadedFile_/Utils_fixDriveViewUrls_. Aman
- * dipanggil dari konteks manapun: sel yang disentuh cuma DATA (bukan
- * header), dan guru memang sudah biasa menulis MASTER_GURU.foto_url/
- * ttd_url miliknya sendiri lewat uploadMyPhoto/uploadMySignature.
+ * andal — lihat Utils_saveUploadedFile_/Utils_fixDriveViewUrls_.
+ *
+ * REVISI: sebelumnya diasumsikan aman dipanggil dari konteks guru
+ * karena "cuma nulis sel DATA, bukan header" — asumsi itu TIDAK CUKUP.
+ * Ini menulis SELURUH kolom foto_url/ttd_url MASTER_GURU (milik SEMUA
+ * guru, bukan cuma baris guru yang sedang eksekusi), beda kategori
+ * risiko dari guru menulis baris miliknya sendiri. Dibungkus try/catch
+ * supaya migrasi ini TIDAK PERNAH menggagalkan aksi guru yang cuma
+ * kebetulan lewat Config_getSheet_ (mis. updateMyProfile) — kalau
+ * gagal, flag TIDAK diset supaya dicoba lagi di eksekusi berikutnya
+ * (idealnya oleh Superadmin yang izinnya lebih luas), guru sendiri
+ * tidak perlu tahu migrasi ini ada.
  */
 var CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_ = false;
 function Config_ensureDriveUrlsFixed_() {
   if (CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_) return;
   const props = PropertiesService.getScriptProperties();
   if (props.getProperty('DRIVE_VIEW_URLS_FIXED_V1')) { CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_ = true; return; }
+  try {
+    Config_ensureDriveUrlsFixed_run_();
+    props.setProperty('DRIVE_VIEW_URLS_FIXED_V1', '1');
+  } catch (e) {
+    Utils_logError_('DRIVE_URLS_FIX_FAILED', e);
+  }
+  CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_ = true;
+}
+
+function Config_ensureDriveUrlsFixed_run_() {
   const ss = Config_getCentralSpreadsheet_();
   Utils_fixDriveViewUrls_(ss, 'SEKOLAH_KOP', ['image_url']);
   Utils_fixDriveViewUrls_(ss, 'MASTER_GURU', ['foto_url', 'ttd_url']);
-  props.setProperty('DRIVE_VIEW_URLS_FIXED_V1', '1');
-  CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_ = true;
 }
 
 /**
@@ -314,15 +330,24 @@ function Config_ensureTextFormatColumns_() {
   const props = PropertiesService.getScriptProperties();
   if (props.getProperty('TEXT_FORMAT_APPLIED_V4')) { CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = true; return; }
 
-  const ss = Config_getCentralSpreadsheet_();
-  Object.keys(CONFIG_TEXT_FORMAT_COLUMNS_).forEach(function (sheetName) {
-    const sh = ss.getSheetByName(sheetName);
-    if (!sh) return;
-    Config_applyTextFormat_(sh, CONFIG_TEXT_FORMAT_COLUMNS_[sheetName]);
-  });
-  Config_repairJadwalJamValues_(ss);
-
-  props.setProperty('TEXT_FORMAT_APPLIED_V4', '1');
+  // Sama alasan seperti Config_ensureDriveUrlsFixed_: ini menulis banyak
+  // baris sekaligus (format kolom + isi ulang jam JADWAL_MENGAJAR) lintas
+  // banyak sheet, bukan cuma milik satu guru — dibungkus try/catch supaya
+  // tidak pernah menggagalkan aksi guru yang cuma kebetulan lewat
+  // Config_getSheet_. Kalau gagal, flag tidak diset, dicoba lagi di
+  // eksekusi berikutnya.
+  try {
+    const ss = Config_getCentralSpreadsheet_();
+    Object.keys(CONFIG_TEXT_FORMAT_COLUMNS_).forEach(function (sheetName) {
+      const sh = ss.getSheetByName(sheetName);
+      if (!sh) return;
+      Config_applyTextFormat_(sh, CONFIG_TEXT_FORMAT_COLUMNS_[sheetName]);
+    });
+    Config_repairJadwalJamValues_(ss);
+    props.setProperty('TEXT_FORMAT_APPLIED_V4', '1');
+  } catch (e) {
+    Utils_logError_('TEXT_FORMAT_COLUMNS_FAILED', e);
+  }
   CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = true;
 }
 

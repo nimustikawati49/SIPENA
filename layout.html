@@ -9,7 +9,15 @@
     </div>
   </div>
 
-  <div id="sp-loading">
+  <div id="sp-landing">
+    <div class="msg" style="text-align:center;line-height:1.7;margin:0 0 22px;">
+      Kelola nilai, jadwal, dan administrasi guru dalam satu sistem —
+      dari input nilai harian sampai cetak rapor, semuanya di sini.
+    </div>
+    <button type="button" class="sp-btn" style="width:100%;" onclick="SIPENA_enterApp_()">Masuk ke Sistem</button>
+  </div>
+
+  <div id="sp-loading" class="hidden">
     <div class="spinner"></div>
     <div class="msg" style="text-align:center;">Memeriksa akun Anda&hellip;</div>
   </div>
@@ -134,7 +142,8 @@
       <div class="sp-detail-grid" id="sp-corner-guru-readonly" style="grid-template-columns:1fr 1fr;padding:12px;margin-bottom:12px;gap:10px;"></div>
       <form id="sp-form-corner-guru">
         <div class="sp-field" style="width:100%;margin-bottom:10px;"><label>No. HP</label><input name="no_hp" type="tel" placeholder="08xxxxxxxxxx" pattern="08[0-9]{8,12}" title="Format: diawali 08, diikuti 8-12 digit angka." style="width:100%;"></div>
-        <label class="sp-upload-label" style="display:block;text-align:center;margin-bottom:10px;">Unggah Tanda Tangan<input type="file" accept="image/*" id="sp-corner-guru-ttd" class="hidden"></label>
+        <label class="sp-upload-label" style="display:block;text-align:center;margin-bottom:4px;">Unggah Tanda Tangan<input type="file" accept="image/*" id="sp-corner-guru-ttd" class="hidden"></label>
+        <div class="msg" style="margin:0 0 10px;text-align:center;">Format PNG (latar transparan disarankan) atau JPG, hasil scan/foto tanda tangan di kertas putih — maks 1,5 MB.</div>
         <button class="sp-btn" type="submit" style="width:100%;">Simpan No. HP</button>
       </form>
     </div>
