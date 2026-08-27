@@ -203,12 +203,25 @@ function adminGetTeacherSpreadsheetUrl(guruId) {
   }
 }
 
+/**
+ * Guru_findResourceMapByGuruId_(guruId)
+ * Normalnya cuma ada SATU baris RESOURCE_MAP berstatus 'active' per guru.
+ * Kalau ternyata lebih dari satu (data anomali — mis. sisa percobaan
+ * migrasi versi sebelumnya yang gagal ditandai selesai), jangan asal
+ * ambil baris PERTAMA yang ketemu (bisa jadi baris LAMA yang justru
+ * bermasalah) — prioritaskan yang sudah dikonfirmasi owned_by_guru='YES',
+ * lalu yang paling baru dibuat.
+ */
 function Guru_findResourceMapByGuruId_(guruId) {
   const sh = Config_getSheet_('RESOURCE_MAP');
-  const rows = Utils_sheetToObjects_(sh);
-  return rows.filter(function (r) {
+  const rows = Utils_sheetToObjects_(sh).filter(function (r) {
     return String(r.guru_id) === String(guruId) && String(r.status).toLowerCase() === 'active';
-  })[0] || null;
+  });
+  if (rows.length <= 1) return rows[0] || null;
+
+  const owned = rows.filter(function (r) { return String(r.owned_by_guru).toUpperCase() === 'YES'; });
+  const pool = owned.length ? owned : rows;
+  return pool.slice().sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); })[0];
 }
 
 /**
@@ -267,7 +280,11 @@ function Guru_ensureOwnSpreadsheet_(guru, email) {
     return entry;
   } catch (e) {
     Utils_logError_('ENSURE_GURU_SPREADSHEET_' + guru.guru_id, e);
-    return Guru_findResourceMapByGuruId_(guru.guru_id);
+    // Percobaan terakhir mengambil entry apa adanya — dibungkus try/catch
+    // SENDIRI (bukan cuma diandalkan dari try di atas) supaya kalau
+    // Config_getSheet_ konsisten gagal untuk eksekusi ini, fungsi ini
+    // tetap TIDAK PERNAH melempar exception ke pemanggilnya (getAuth).
+    try { return Guru_findResourceMapByGuruId_(guru.guru_id); } catch (e2) { return null; }
   }
 }
 
