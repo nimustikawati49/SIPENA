@@ -259,6 +259,10 @@ function Guru_ensureOwnSpreadsheet_(guru, email) {
       return Guru_findResourceMapByGuruId_(guru.guru_id);
     }
 
+    // Dua pengecekan ini SALING LEPAS (bukan if/else-if seperti versi
+    // sebelumnya) — guru bisa saja owned_by_guru masih kosong DAN
+    // needs_resync='YES' sekaligus (persis kasus guru lama dari
+    // arsitektur sebelum kolom ini ada), keduanya tetap harus diproses.
     if (String(entry.owned_by_guru).toUpperCase() !== 'YES') {
       try {
         const owner = DriveApp.getFileById(entry.spreadsheet_id).getOwner();
@@ -269,10 +273,14 @@ function Guru_ensureOwnSpreadsheet_(guru, email) {
         // Tidak bisa baca info owner (jarang) -> lewati saja, tetap pakai
         // spreadsheet yang ada apa adanya, tidak membuat yang baru.
       }
-      try { Guru_grantSuperadminAccess_(entry.spreadsheet_id); } catch (eGrant) {}
-    } else if (String(entry.needs_resync).toUpperCase() === 'YES') {
-      Guru_grantSuperadminAccess_(entry.spreadsheet_id);
-      Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), entry._row, { needs_resync: '' });
+    }
+
+    try { Guru_grantSuperadminAccess_(entry.spreadsheet_id); } catch (eGrant) {}
+
+    if (String(entry.needs_resync).toUpperCase() === 'YES') {
+      try {
+        Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), entry._row, { needs_resync: '' });
+      } catch (eResync) { /* dicoba lagi di login berikutnya */ }
     }
 
     Jadwal_migrateGuruToOwnSheetIfEmpty_(guru.guru_id, entry);

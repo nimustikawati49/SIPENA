@@ -92,7 +92,18 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   // dibaca/ditulis kode manapun lagi.
   JADWAL_MENGAJAR: ['jadwal_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'status'],
   SYNC_QUEUE: ['queue_id', 'guru_id', 'status', 'attempt', 'last_error', 'created_at', 'updated_at'],
-  AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
+  AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description'],
+  // _LOG_ERROR_ dulu dibuat LAZY oleh Utils_logError_ sendiri (insertSheet
+  // baru dijalankan begitu error PERTAMA terjadi) — ternyata itu sendiri
+  // adalah masalah: kalau eksekusi GURU yang pertama kali memicu error,
+  // insertSheet itu bisa ditolak izin Drive (operasi struktural, beda
+  // dari sekadar tulis sel), lalu GAGAL DIAM-DIAM (Utils_logError_ sengaja
+  // tidak pernah melempar exception) — akibatnya error yang justru paling
+  // dibutuhkan buat menelusuri masalah malah tidak pernah tercatat sama
+  // sekali. Dimasukkan ke bootstrap normal di sini supaya sheetnya sudah
+  // ada duluan (biasanya lewat sesi Superadmin, pemilik file), sebelum
+  // guru mana pun sempat butuh menulis ke situ.
+  _LOG_ERROR_: ['timestamp', 'email', 'context', 'error', 'stack']
 };
 
 // PENGATURAN_BOBOT_NILAI SENGAJA TIDAK dimasukkan ke CONFIG_CENTRAL_SCHEMA_
@@ -202,23 +213,39 @@ function Config_ensureCentralSchema_() {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
-    let createdAny = false;
-    missing.forEach(function (name) {
-      let sh = ss.getSheetByName(name);
-      if (!sh) {
-        sh = ss.insertSheet(name);
-        sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setValues([CONFIG_CENTRAL_SCHEMA_[name]]);
-        sh.setFrozenRows(1);
-        sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setFontWeight('bold');
-        createdAny = true;
-      }
-    });
+    // insertSheet adalah operasi STRUKTURAL — beda kategori risiko dari
+    // menulis sel di sheet yang sudah ada. Kalau kebetulan eksekusi GURU
+    // yang PERTAMA kali menemukan sheet central hilang (mis. baru
+    // ditambahkan ke CONFIG_CENTRAL_SCHEMA_ lewat deploy ini), izin Drive
+    // guru untuk operasi struktural semacam ini bisa ditolak walau baca/
+    // tulis sel biasa berhasil — pernah membuat getAuth() gagal total
+    // untuk guru (lihat Config_ensureColumnsMigration_ untuk kejadian
+    // serupa). Dibungkus try/catch supaya kalau gagal, TIDAK menjatuhkan
+    // login/aksi yang sedang berjalan — dicoba lagi di eksekusi berikutnya
+    // (idealnya berhasil lewat sesi Superadmin, pemilik file central).
+    try {
+      let createdAny = false;
+      missing.forEach(function (name) {
+        let sh = ss.getSheetByName(name);
+        if (!sh) {
+          sh = ss.insertSheet(name);
+          sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setValues([CONFIG_CENTRAL_SCHEMA_[name]]);
+          sh.setFrozenRows(1);
+          sh.getRange(1, 1, 1, CONFIG_CENTRAL_SCHEMA_[name].length).setFontWeight('bold');
+          createdAny = true;
+        }
+      });
 
-    if (createdAny) {
-      try {
-        const def = ss.getSheetByName('Sheet1') || ss.getSheetByName('Lembar1');
-        if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
-      } catch (e) {}
+      if (createdAny) {
+        try {
+          const def = ss.getSheetByName('Sheet1') || ss.getSheetByName('Lembar1');
+          if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
+        } catch (e) {}
+      }
+    } catch (eCreate) {
+      // Sengaja TIDAK lewat Utils_logError_ di sini — kalau sheet yang
+      // gagal dibuat justru _LOG_ERROR_ sendiri, itu akan diam-diam gagal
+      // lagi (lihat catatan panjang di Utils_logError_). Cukup lewati.
     }
     CONFIG_SCHEMA_VERIFIED_THIS_EXEC_ = true;
   } finally {
