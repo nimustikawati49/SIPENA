@@ -262,6 +262,7 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
     wideJenis.forEach(function (j) {
       const c = comps[j];
       wide[j.toLowerCase()] = c && c.nilai_murni !== '' ? c.nilai_murni : '';
+      wide[j.toLowerCase() + '_katrol'] = c && c.nilai_katrol !== '' ? c.nilai_katrol : '';
     });
     wide.dari_sekolah_asal = !!(comps.RAPOR_TERAKHIR && comps.RAPOR_TERAKHIR.sumber_nilai === 'SEKOLAH_ASAL');
 

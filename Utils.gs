@@ -102,7 +102,49 @@ function Utils_saveUploadedFile_(folderName, base64Data, mimeType, fileName, max
   const folder = Utils_getOrCreateFolder_(folderName);
   const file = folder.createFile(blob);
   try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) {}
-  return 'https://drive.google.com/uc?export=view&id=' + file.getId();
+  // "uc?export=view" (URL lama) terkenal tidak bisa diandalkan sebagai
+  // <img src> hotlink langsung — Google sering mengembalikan halaman
+  // interstitial/HTML alih-alih byte gambar, muncul sebagai "gambar rusak"
+  // di browser walau filenya sendiri valid & sharing-nya benar. Endpoint
+  // thumbnail jauh lebih konsisten untuk kebutuhan ini (dipakai luas untuk
+  // kasus persis ini) — sz=w2000 supaya tetap tajam saat dicetak.
+  return Utils_driveThumbnailUrl_(file.getId());
+}
+
+function Utils_driveThumbnailUrl_(fileId) {
+  return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w2000';
+}
+
+/**
+ * Utils_fixDriveViewUrls_(ss, sheetName, columns)
+ * Tulis ulang URL lama ("uc?export=view") yang sudah kadung tersimpan di
+ * kolom tertentu jadi format thumbnail yang baru — murni transformasi
+ * string (ID file di URL lama dipakai lagi), tidak menyentuh file Drive-
+ * nya sama sekali. Lihat Config_ensureDriveUrlsFixed_.
+ */
+function Utils_fixDriveViewUrls_(ss, sheetName, columns) {
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh || sh.getLastRow() < 2) return 0;
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); });
+  const lastRow = sh.getLastRow();
+  let fixed = 0;
+  columns.forEach(function (col) {
+    const idx = header.indexOf(col);
+    if (idx === -1) return;
+    const range = sh.getRange(2, idx + 1, lastRow - 1, 1);
+    const values = range.getValues();
+    let changed = false;
+    const newValues = values.map(function (row) {
+      const v = String(row[0] || '');
+      const m = v.match(/drive\.google\.com\/uc\?export=view&id=([^&\s]+)/);
+      if (!m) return [v];
+      changed = true;
+      fixed++;
+      return [Utils_driveThumbnailUrl_(m[1])];
+    });
+    if (changed) range.setValues(newValues);
+  });
+  return fixed;
 }
 
 function Utils_getOrCreateFolder_(name) {

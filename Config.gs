@@ -54,7 +54,10 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   PENUGASAN_MENGAJAR: ['assignment_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'status'],
   MASTER_TAHUN_AJARAN: ['tahun_ajaran_id', 'label', 'semester', 'status'],
   SEKOLAH_PERIODE_AKTIF: ['sekolah_id', 'tahun_ajaran_id', 'semester', 'status', 'activated_at', 'activated_by'],
-  MASTER_SISWA: ['siswa_id', 'sekolah_id', 'nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'tanggal_lahir', 'tahun_masuk', 'status', 'created_at', 'updated_at'],
+  // Kolom nisn dulu ada di sini, dihapus dari skema — NIS saja sudah
+  // cukup untuk kebutuhan sistem ini. Sheet lama boleh masih punya kolom
+  // nisn dengan data historis, tidak dibaca/ditulis kode manapun lagi.
+  MASTER_SISWA: ['siswa_id', 'sekolah_id', 'nis', 'nama_lengkap', 'jenis_kelamin', 'tanggal_lahir', 'tahun_masuk', 'status', 'created_at', 'updated_at'],
   RIWAYAT_KELAS: ['riwayat_id', 'siswa_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'kelas_id', 'status', 'tanggal_mulai', 'tanggal_selesai', 'keterangan'],
   REQUEST_KENAIKAN_KELAS: ['request_id', 'sekolah_id', 'tahun_ajaran_lama', 'tahun_ajaran_baru', 'mapping_json', 'requested_by', 'requested_at', 'status', 'processed_by', 'processed_at', 'notes'],
   // REQUEST_JADWAL_PERUBAHAN (dulu di sini) DIHAPUS dari skema — alur
@@ -110,7 +113,7 @@ const CONFIG_TEXT_FORMAT_COLUMNS_ = {
   MASTER_GURU: ['nip', 'nuptk'],
   MASTER_MAPEL: ['kode_mapel'],
   MASTER_KELAS: ['tingkat'],
-  MASTER_SISWA: ['nis', 'nisn'],
+  MASTER_SISWA: ['nis'],
   JADWAL_MENGAJAR: ['jam_mulai', 'jam_selesai']
 };
 
@@ -121,7 +124,7 @@ const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
   MAPEL: ['guru_mapel_id', 'mapel_id', 'kode_mapel', 'nama_mapel', 'tahun_ajaran_id', 'status'],
   KELAS: ['kelas_id', 'nama_kelas', 'tingkat', 'jenjang', 'status'],
   PENUGASAN: ['assignment_id', 'mapel_id', 'nama_mapel', 'kelas_id', 'nama_kelas', 'tahun_ajaran_id', 'semester', 'status'],
-  SISWA: ['siswa_id', 'nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'kelas_id', 'status'],
+  SISWA: ['siswa_id', 'nis', 'nama_lengkap', 'jenis_kelamin', 'kelas_id', 'status'],
   NILAI: ['nilai_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenis_nilai', 'sumber_nilai', 'nilai_murni', 'nilai_katrol', 'asal_sekolah', 'tanggal_input', 'keterangan'],
   RIWAYAT_NILAI: ['riwayat_id', 'nilai_id', 'nilai_sebelum', 'nilai_sesudah', 'updated_by', 'updated_at'],
   JADWAL: ['jadwal_id', 'mapel_id', 'nama_mapel', 'kelas_id', 'nama_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'tahun_ajaran_id', 'semester', 'status'],
@@ -189,7 +192,27 @@ function Config_getSheet_(name) {
   Config_ensureCentralSchema_();
   Config_ensureTextFormatColumns_();
   Config_ensureColumnsMigration_();
+  Config_ensureDriveUrlsFixed_();
   return Config_getCentralSpreadsheet_().getSheetByName(name);
+}
+
+/**
+ * Config_ensureDriveUrlsFixed_()
+ * Sekali saja: tulis ulang URL gambar lama ("uc?export=view", rawan
+ * tampil "gambar rusak" di <img>) yang sudah kadung tersimpan di kop
+ * cetak & foto/tanda tangan guru jadi format thumbnail yang lebih
+ * andal — lihat Utils_saveUploadedFile_/Utils_fixDriveViewUrls_. Aman
+ * dipanggil dari konteks manapun: sel yang disentuh cuma DATA (bukan
+ * header), dan guru memang sudah biasa menulis MASTER_GURU.foto_url/
+ * ttd_url miliknya sendiri lewat uploadMyPhoto/uploadMySignature.
+ */
+function Config_ensureDriveUrlsFixed_() {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('DRIVE_VIEW_URLS_FIXED_V1')) return;
+  const ss = Config_getCentralSpreadsheet_();
+  Utils_fixDriveViewUrls_(ss, 'SEKOLAH_KOP', ['image_url']);
+  Utils_fixDriveViewUrls_(ss, 'MASTER_GURU', ['foto_url', 'ttd_url']);
+  props.setProperty('DRIVE_VIEW_URLS_FIXED_V1', '1');
 }
 
 /**

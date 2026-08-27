@@ -1557,7 +1557,6 @@ function SuperAdmin_panelSiswa_() {
     '  <form class="sp-form" id="sp-form-siswa">' +
     '    <div class="sp-field"><label>Sekolah</label><select name="sekolah_id" data-source="sekolah" required></select></div>' +
     '    <div class="sp-field"><label>NIS</label><input name="nis"></div>' +
-    '    <div class="sp-field"><label>NISN</label><input name="nisn"></div>' +
     '    <div class="sp-field"><label>Nama Lengkap</label><input name="nama_lengkap" required></div>' +
     '    <div class="sp-field"><label>Jenis Kelamin</label><select name="jenis_kelamin"><option value="">Pilih</option><option value="L">Laki-laki</option><option value="P">Perempuan</option></select></div>' +
     '    <div class="sp-field"><label>Tahun Masuk</label><input name="tahun_masuk" placeholder="2026"></div>' +
@@ -1635,7 +1634,7 @@ function SuperAdmin_wireSiswa_() {
     var btn = f.querySelector('button[type="submit"]');
 
     if (editId) {
-      var patch = { nis: f.nis.value, nisn: f.nisn.value, nama_lengkap: f.nama_lengkap.value, jenis_kelamin: f.jenis_kelamin.value, tahun_masuk: f.tahun_masuk.value, status: f.status.value };
+      var patch = { nis: f.nis.value, nama_lengkap: f.nama_lengkap.value, jenis_kelamin: f.jenis_kelamin.value, tahun_masuk: f.tahun_masuk.value, status: f.status.value };
       runServer('adminUpdateStudent', [editId, patch], {
         loadingEl: btn,
         onSuccess: function () {
@@ -1648,7 +1647,7 @@ function SuperAdmin_wireSiswa_() {
       return;
     }
 
-    var data = { sekolah_id: f.sekolah_id.value, nis: f.nis.value, nisn: f.nisn.value, nama_lengkap: f.nama_lengkap.value, jenis_kelamin: f.jenis_kelamin.value, tahun_masuk: f.tahun_masuk.value };
+    var data = { sekolah_id: f.sekolah_id.value, nis: f.nis.value, nama_lengkap: f.nama_lengkap.value, jenis_kelamin: f.jenis_kelamin.value, tahun_masuk: f.tahun_masuk.value };
     runServer('adminCreateStudent', [data], {
       loadingEl: btn,
       onSuccess: function () { SIPENA_toast('Siswa tersimpan.'); f.reset(); SuperAdmin_refreshSiswaList_(); }
@@ -1703,7 +1702,7 @@ function SuperAdmin_loadSiswaPerKelas_() {
 
 function SuperAdmin_renderSiswa(students) {
   SIPENA_table_('sp-table-siswa', [
-    { key: 'nis', label: 'NIS' }, { key: 'nisn', label: 'NISN' }, { key: 'nama_lengkap', label: 'Nama' },
+    { key: 'nis', label: 'NIS' }, { key: 'nama_lengkap', label: 'Nama' },
     { key: 'jenis_kelamin', label: 'JK' }, { key: 'status', label: 'Status' },
     { label: 'Aksi', render: function (r) {
         return '<button class="sp-btn secondary" onclick="SuperAdmin_editSiswa_(\'' + r.siswa_id + '\')">Edit</button> ' +
@@ -1741,7 +1740,6 @@ function SuperAdmin_editSiswa_(siswaId) {
   var f = document.getElementById('sp-form-siswa');
   f.sekolah_id.value = s.sekolah_id || ''; f.sekolah_id.disabled = true;
   f.nis.value = s.nis || '';
-  f.nisn.value = s.nisn || '';
   f.nama_lengkap.value = s.nama_lengkap || '';
   f.jenis_kelamin.value = s.jenis_kelamin || '';
   f.tahun_masuk.value = s.tahun_masuk || '';

@@ -7,44 +7,25 @@
  */
 var PrintApp = { data: null, penugasan: null, kopOptions: [], selectedKopId: '' };
 
-var PRINT_COLUMN_GROUPS_ = [
-  { title: 'Identitas Siswa', cols: [
-    { key: 'no', label: 'No' }, { key: 'nis', label: 'NIS' }, { key: 'nisn', label: 'NISN' },
-    { key: 'nama', label: 'Nama Siswa' }, { key: 'gender', label: 'L/P' }
-  ] },
-  { title: 'Nilai Tugas', cols: [
-    { key: 'tgs1', label: 'TGS 1' }, { key: 'tgs2', label: 'TGS 2' }, { key: 'tgs3', label: 'TGS 3' }
-  ] },
-  { title: 'Nilai Ulangan Harian', cols: [
-    { key: 'uh1', label: 'UH 1' }, { key: 'uh2', label: 'UH 2' }, { key: 'uh3', label: 'UH 3' }
-  ] },
-  { title: 'Penilaian Semester', cols: [
-    { key: 'pts', label: 'PTS' }, { key: 'asasAsat', label: null } // label diisi dinamis (ASAS/ASAT)
-  ] },
-  { title: 'Hasil Perhitungan', cols: [
-    { key: 'rataHarian', label: 'Rata-rata Harian' }, { key: 'nilaiAkhirMurni', label: 'Nilai Akhir (Murni)' },
-    { key: 'nilaiAkhirKatrol', label: 'Nilai Akhir (Katrol)' }, { key: 'kktp', label: 'KKTP' },
-    { key: 'kategori', label: 'Kategori' }, { key: 'statusKetercapaian', label: 'Status Ketercapaian' }
-  ] },
-  { title: 'Lainnya', cols: [
-    { key: 'nilaiPindahan', label: 'Nilai Pindahan (Rapor Sekolah Asal)' }
-  ] }
+// Sengaja dibatasi cuma 6 pilihan (3 pasang asli/katrol) — spec awal
+// mengizinkan banyak kolom (Tugas/UH/rata-rata/KKTP/dsb.), tapi itu
+// bikin guru bingung harus centang yang mana untuk kebutuhan cetak
+// sehari-hari. No/NIS/Nama SELALU ikut tercetak (tidak perlu dicentang).
+var PRINT_VALUE_COLUMNS_ = [
+  { key: 'ptsMurni', label: 'PTS (Asli)' },
+  { key: 'ptsKatrol', label: 'PTS (Katrol)' },
+  { key: 'asasAsatMurni', label: null }, // label diisi dinamis (ASAS/ASAT Asli)
+  { key: 'asasAsatKatrol', label: null }, // label diisi dinamis (ASAS/ASAT Katrol)
+  { key: 'nilaiAkhirMurni', label: 'Nilai Akhir (Asli)' },
+  { key: 'nilaiAkhirKatrol', label: 'Nilai Akhir (Katrol)' }
 ];
-
-var PRINT_PRESETS_ = {
-  lengkap: ['no', 'nis', 'nama', 'gender', 'tgs1', 'tgs2', 'tgs3', 'uh1', 'uh2', 'uh3', 'pts', 'asasAsat', 'rataHarian', 'nilaiAkhirMurni'],
-  ringkas: ['no', 'nis', 'nama', 'gender', 'rataHarian', 'pts', 'asasAsat', 'nilaiAkhirMurni'],
-  nilaiAkhir: ['no', 'nis', 'nama', 'nilaiAkhirMurni', 'nilaiAkhirKatrol', 'kktp', 'kategori', 'statusKetercapaian']
-};
+var PRINT_DEFAULT_COLUMNS_ = ['ptsMurni', 'asasAsatMurni', 'nilaiAkhirMurni'];
 
 function PrintApp_markup_() {
-  var groupsHtml = PRINT_COLUMN_GROUPS_.map(function (g) {
-    return '<div style="margin-bottom:10px;">' +
-      '<div style="font-weight:700;font-size:12.5px;color:var(--text-muted);margin-bottom:4px;">' + g.title + '</div>' +
-      g.cols.map(function (c) {
-        return '<label style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 6px 0;font-size:13px;">' +
-          '<input type="checkbox" class="sp-print-col" value="' + c.key + '"> <span data-col-label="' + c.key + '">' + (c.label || c.key) + '</span></label>';
-      }).join('') + '</div>';
+  var colsHtml = PRINT_VALUE_COLUMNS_.map(function (c) {
+    var checked = PRINT_DEFAULT_COLUMNS_.indexOf(c.key) !== -1 ? ' checked' : '';
+    return '<label style="display:inline-flex;align-items:center;gap:5px;margin:0 14px 8px 0;font-size:13.5px;">' +
+      '<input type="checkbox" class="sp-print-col" value="' + c.key + '"' + checked + '> <span data-col-label="' + c.key + '">' + (c.label || c.key) + '</span></label>';
   }).join('');
 
   return '' +
@@ -56,15 +37,9 @@ function PrintApp_markup_() {
     '  <div class="sp-section-title">Pilih Kop</div>' +
     '  <div id="sp-print-kop-options" class="msg">Memuat pilihan kop…</div>' +
 
-    '  <div class="sp-section-title">Pilih Kolom</div>' +
-    '  <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' +
-    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_applyPreset_(\'lengkap\')">Daftar Nilai Lengkap</button>' +
-    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_applyPreset_(\'ringkas\')">Daftar Nilai Ringkas</button>' +
-    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_applyPreset_(\'nilaiAkhir\')">Nilai Akhir</button>' +
-    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_selectAll_(true)">Pilih Semua</button>' +
-    '    <button type="button" class="sp-btn secondary" onclick="PrintApp_selectAll_(false)">Hapus Semua</button>' +
-    '  </div>' +
-    '  <div id="sp-print-columns">' + groupsHtml + '</div>' +
+    '  <div class="sp-section-title">Pilih Nilai yang Dicetak</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">No, NIS, dan Nama selalu ikut tercetak — tinggal centang nilai mana saja yang mau ditampilkan (sudah ada pilihan default, tinggal sesuaikan kalau perlu).</div>' +
+    '  <div id="sp-print-columns">' + colsHtml + '</div>' +
 
     '  <div class="sp-section-title">Format Cetak</div>' +
     '  <div class="sp-form">' +
@@ -150,20 +125,12 @@ function PrintApp_onPenugasanChange_() {
   var p = idx === '' ? null : NilaiApp.penugasan[Number(idx)];
   PrintApp.penugasan = p;
   var label = p ? NilaiApp_assessmentLabel_(p.semester) : 'ASAS/ASAT';
-  document.querySelector('[data-col-label="asasAsat"]').textContent = label;
+  document.querySelector('[data-col-label="asasAsatMurni"]').textContent = label + ' (Asli)';
+  document.querySelector('[data-col-label="asasAsatKatrol"]').textContent = label + ' (Katrol)';
   var titleField = document.getElementById('sp-print-title');
   if (p && !titleField.dataset.userEdited) {
     titleField.value = 'DAFTAR NILAI AKHIR SEMESTER ' + p.semester;
   }
-}
-
-function PrintApp_applyPreset_(name) {
-  var keys = PRINT_PRESETS_[name] || [];
-  document.querySelectorAll('.sp-print-col').forEach(function (cb) { cb.checked = keys.indexOf(cb.value) !== -1; });
-}
-
-function PrintApp_selectAll_(checked) {
-  document.querySelectorAll('.sp-print-col').forEach(function (cb) { cb.checked = checked; });
 }
 
 function PrintApp_selectedColumns_() {
@@ -306,12 +273,16 @@ function PrintApp_renderPage_(data, config) {
     '</div>';
 
   var colDefs = {};
-  PRINT_COLUMN_GROUPS_.forEach(function (g) { g.cols.forEach(function (c) { colDefs[c.key] = c; }); });
+  PRINT_VALUE_COLUMNS_.forEach(function (c) { colDefs[c.key] = c; });
   var assessmentLabel = data.assessment_label;
-  var cols = config.selectedColumns.map(function (key) {
-    var label = key === 'asasAsat' ? assessmentLabel : (colDefs[key] ? colDefs[key].label : key);
+  var fixedCols = [{ key: 'no', label: 'No' }, { key: 'nis', label: 'NIS' }, { key: 'nama', label: 'Nama Siswa' }];
+  var valueCols = config.selectedColumns.map(function (key) {
+    var label = key === 'asasAsatMurni' ? assessmentLabel + ' (Asli)'
+      : key === 'asasAsatKatrol' ? assessmentLabel + ' (Katrol)'
+      : (colDefs[key] ? colDefs[key].label : key);
     return { key: key, label: label };
   });
+  var cols = fixedCols.concat(valueCols);
 
   var manyCols = cols.length > 10;
   var thead = '<thead><tr>' + cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') + '</tr></thead>';
@@ -343,17 +314,13 @@ function PrintApp_renderCell_(key, s, i, assessmentLabel) {
   switch (key) {
     case 'no': return i + 1;
     case 'nis': return s.nis || '-';
-    case 'nisn': return s.nisn || '-';
     case 'nama': return s.nama_lengkap;
-    case 'gender': return s.jenis_kelamin || '-';
-    case 'asasAsat': return PrintApp_fmtValue_(s[assessmentLabel.toLowerCase()]);
-    case 'rataHarian': return PrintApp_fmtValue_(s.rata_rata_harian);
+    case 'ptsMurni': return PrintApp_fmtValue_(s.pts);
+    case 'ptsKatrol': return PrintApp_fmtValue_(s.pts_katrol);
+    case 'asasAsatMurni': return PrintApp_fmtValue_(s[assessmentLabel.toLowerCase()]);
+    case 'asasAsatKatrol': return PrintApp_fmtValue_(s[assessmentLabel.toLowerCase() + '_katrol']);
     case 'nilaiAkhirMurni': return PrintApp_fmtValue_(s.nilai_akhir_murni);
     case 'nilaiAkhirKatrol': return PrintApp_fmtValue_(s.nilai_akhir_katrol);
-    case 'kktp': return PrintApp_fmtValue_(s.nilai_kktp);
-    case 'kategori': return s.kategori || '-';
-    case 'statusKetercapaian': return s.status_ketercapaian === 'TERCAPAI' ? 'Tercapai' : (s.status_ketercapaian === 'BELUM_TERCAPAI' ? 'Belum Tercapai' : '-');
-    case 'nilaiPindahan': return PrintApp_fmtValue_(s.nilai_pindahan);
     default: return PrintApp_fmtValue_(s[key]);
   }
 }

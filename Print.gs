@@ -11,7 +11,7 @@
  * getMyPrintData(kelasId, mapelId, tahunAjaranId, semester)
  * GURU only. Mengembalikan semua yang dibutuhkan template cetak: sekolah
  * (kop), guru (identitas+tanda tangan), mapel/kelas/tahun ajaran (label),
- * dan siswa+nilai (dari getMyGradeSheetWide, dilengkapi nisn/jenis_kelamin
+ * dan siswa+nilai (dari getMyGradeSheetWide, dilengkapi jenis_kelamin
  * yang belum ada di respons itu).
  */
 function getMyPrintData(kelasId, mapelId, tahunAjaranId, semester) {
@@ -34,7 +34,6 @@ function getMyPrintData(kelasId, mapelId, tahunAjaranId, semester) {
 
   grades.students.forEach(function (s) {
     const detail = siswaDetailById[s.siswa_id];
-    s.nisn = detail ? detail.nisn : '';
     s.jenis_kelamin = detail ? detail.jenis_kelamin : '';
     s.nilai_pindahan = pindahanBySiswa.hasOwnProperty(s.siswa_id) ? pindahanBySiswa[s.siswa_id] : '';
   });

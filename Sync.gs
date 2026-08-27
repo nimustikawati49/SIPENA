@@ -217,7 +217,7 @@ function Sync_rewriteSiswa_(ss, guruId) {
     const s = siswaById[r.siswa_id];
     if (!s) return;
     rows.push({
-      siswa_id: s.siswa_id, nis: s.nis, nisn: s.nisn, nama_lengkap: s.nama_lengkap,
+      siswa_id: s.siswa_id, nis: s.nis, nama_lengkap: s.nama_lengkap,
       jenis_kelamin: s.jenis_kelamin, kelas_id: r.kelas_id, status: s.status
     });
   });

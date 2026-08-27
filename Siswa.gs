@@ -26,7 +26,6 @@ function adminCreateStudent(data) {
     siswa_id: siswaId,
     sekolah_id: sekolahId,
     nis: data.nis || '',
-    nisn: data.nisn || '',
     nama_lengkap: namaLengkap,
     jenis_kelamin: data.jenis_kelamin || '',
     tanggal_lahir: data.tanggal_lahir || '',
@@ -47,7 +46,7 @@ function adminUpdateStudent(siswaId, data) {
   if (rowNum === -1) throw new Error('Siswa tidak ditemukan.');
 
   const patch = {};
-  ['nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'tanggal_lahir', 'tahun_masuk', 'status'].forEach(function (k) {
+  ['nis', 'nama_lengkap', 'jenis_kelamin', 'tanggal_lahir', 'tahun_masuk', 'status'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
   patch.updated_at = new Date();
@@ -128,11 +127,11 @@ function adminExportStudentsUrl(sekolahId) {
   let rows = Utils_sheetToObjects_(Config_getSheet_('MASTER_SISWA'));
   if (sekolahId) rows = rows.filter(function (r) { return r.sekolah_id === sekolahId; });
   const dataRows = rows.map(function (r) {
-    return [r.nis || '', r.nisn || '', r.nama_lengkap, (schoolById[r.sekolah_id] || {}).nama_sekolah || '-', r.jenis_kelamin || '', r.status];
+    return [r.nis || '', r.nama_lengkap, (schoolById[r.sekolah_id] || {}).nama_sekolah || '-', r.jenis_kelamin || '', r.status];
   });
   const url = Utils_writeExportSheetAndGetUrl_(
     Config_getCentralSpreadsheet_(), '_EXPORT_SISWA',
-    ['NIS', 'NISN', 'Nama Lengkap', 'Sekolah', 'JK', 'Status'], dataRows
+    ['NIS', 'Nama Lengkap', 'Sekolah', 'JK', 'Status'], dataRows
   );
   return { export_url: url };
 }
@@ -140,7 +139,7 @@ function adminExportStudentsUrl(sekolahId) {
 /**
  * adminImportStudents(sekolahId, rows)
  * Import massal — rows sudah divalidasi & di-preview di client
- * (SuperAdmin_previewImport_): [{nis, nisn, nama_lengkap, jenis_kelamin,
+ * (SuperAdmin_previewImport_): [{nis, nama_lengkap, jenis_kelamin,
  * kelas_id}]. Bisa mencakup beberapa kelas/tingkat sekaligus (mis. impor
  * kelas 7-9 dalam satu tempel), karena kelas_id per baris sudah berbeda-
  * beda hasil pencocokan nama kelas di client.
@@ -168,7 +167,7 @@ function adminImportStudents(sekolahId, rows) {
     const siswaId = Utils_newId_('SIS');
     siswaRefs.push({ siswa_id: siswaId, kelas_id: r.kelas_id });
     const obj = {
-      siswa_id: siswaId, sekolah_id: sekolahId, nis: r.nis || '', nisn: r.nisn || '',
+      siswa_id: siswaId, sekolah_id: sekolahId, nis: r.nis || '',
       nama_lengkap: r.nama_lengkap, jenis_kelamin: r.jenis_kelamin || '', tanggal_lahir: '', tahun_masuk: '',
       status: 'AKTIF', created_at: now, updated_at: now
     };
