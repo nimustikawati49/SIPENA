@@ -30,6 +30,33 @@
   .logo svg{ width: 20px; height: 20px; }
   .brand .title{ font-weight: 700; font-size: 18px; }
   .brand .subtitle{ font-size: 12px; color: var(--text-muted); }
+  /* ===== Ilustrasi landing page — 3 kartu melayang dengan efek
+     kedalaman ringan (shadow berlapis + tilt statis + animasi mengambang
+     halus), murni CSS/SVG supaya ringan & tidak perlu aset eksternal. ===== */
+  .sp-landing-illustration{ position: relative; height: 128px; max-width: 260px; margin: 4px auto 24px; }
+  .sp-landing-card{
+    position: absolute; width: 74px; height: 92px; border-radius: 16px;
+    background: linear-gradient(160deg, var(--card), var(--bg));
+    border: 1px solid var(--border); box-shadow: 0 16px 30px rgba(0,0,0,.18);
+  }
+  .sp-landing-card-inner{
+    width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    border-radius: inherit; animation: sp-landing-float 3.2s ease-in-out infinite;
+  }
+  .sp-landing-card-inner svg{ width: 30px; height: 30px; color: var(--brand); }
+  .sp-landing-card-1{ left: 6px; top: 26px; transform: rotate(-11deg); }
+  .sp-landing-card-2{
+    left: 50%; top: 0; margin-left: -37px; z-index: 2;
+    box-shadow: 0 20px 40px rgba(79,70,229,.32), inset 0 1px 0 rgba(255,255,255,.15);
+  }
+  .sp-landing-card-2 .sp-landing-card-inner{ animation-delay: .3s; }
+  .sp-landing-card-3{ right: 6px; top: 26px; transform: rotate(11deg); }
+  .sp-landing-card-3 .sp-landing-card-inner{ animation-delay: .6s; }
+  @keyframes sp-landing-float{
+    0%, 100%{ transform: translateY(0); }
+    50%{ transform: translateY(-10px); }
+  }
+
   .spinner{
     width: 22px; height: 22px; margin: 12px auto; border: 3px solid rgba(79,70,229,.2);
     border-top-color: var(--brand); border-radius: 50%; animation: spin .8s linear infinite;
@@ -62,7 +89,11 @@
   .sp-sidebar-collapse-btn:hover{ background: var(--bg); }
   .sp-sidebar-collapse-btn svg{ width: 14px; height: 14px; transition: transform .18s ease; }
 
-  .sp-main{ flex: 1; min-width: 0; padding: 28px 32px 60px; max-width: 1100px; }
+  /* padding-top diberi jarak aman dari .sp-corner-profile (fixed, pojok
+     kanan atas) — tanpa ini, konten lebar (mis. kartu jadwal mingguan)
+     bisa tertutup sebagian oleh chip profil di layar yang cukup lebar
+     untuk keduanya "bertabrakan" secara visual. */
+  .sp-main{ flex: 1; min-width: 0; padding: 78px 32px 60px; max-width: 1100px; }
 
   /* Navigasi utama (vertikal, di sidebar) — beda dari .sp-tabs (sub-tab
      horizontal di dalam konten, mis. Input/Rekap Nilai) meski elemen
@@ -109,12 +140,18 @@
   .sp-corner-trigger{
     display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 999px;
     background: var(--card); border: 1px solid var(--border); cursor: pointer;
-    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    box-shadow: 0 2px 12px rgba(0,0,0,.08); max-width: 300px;
     /* <button> tidak mewarisi color/font dari body secara default (UA
        stylesheet browser memaksa "buttontext") — tanpa baris ini nama
        guru/superadmin tampil pudar/gelap walau mode dark aktif. */
     color: inherit; font: inherit; position: relative; z-index: 2;
   }
+  /* Baris nama & meta dipotong satu baris (bukan melebar/wrap tak
+     terduga) — footprint chip jadi konsisten, tidak pernah tiba-tiba
+     melebar/meninggi gara-gara nama atau nama sekolah yang panjang. */
+  .sp-corner-trigger .sp-profile-info{ min-width: 0; overflow: hidden; }
+  .sp-corner-trigger .sp-profile-name{ overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sp-corner-trigger .sp-profile-meta{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sp-corner-caret{ font-size: 10px; color: var(--text-muted); transition: transform .15s ease; }
   .sp-corner-trigger.open .sp-corner-caret{ transform: rotate(180deg); }
   .sp-corner-panel{

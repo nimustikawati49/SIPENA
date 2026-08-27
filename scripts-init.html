@@ -157,7 +157,7 @@ function SIPENA_startSidebarClock_(greetingElId, clockElId, nameGetter) {
     var clockEl = document.getElementById(clockElId);
     if (!greetingEl || !clockEl) return;
     var name = (typeof nameGetter === 'function' ? nameGetter() : '') || '';
-    greetingEl.textContent = SIPENA_greetingLabel_() + (name && name !== '-' ? ', ' + name : '') + '!';
+    greetingEl.textContent = SIPENA_greetingLabel_() + (name && name !== '-' ? ', ' + name : '') + ' 😊';
     var now = new Date();
     clockEl.textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
   }
