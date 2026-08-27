@@ -31,6 +31,7 @@ function adminCreateSchool(data) {
     email: data.email || '',
     telepon: data.telepon || '',
     website: data.website || '',
+    tempat_cetak: data.tempat_cetak || '',
     status: 'AKTIF',
     created_at: new Date(),
     updated_at: new Date()
@@ -77,7 +78,7 @@ function adminUpdateSchool(sekolahId, data) {
   if (rowNum === -1) throw new Error('Sekolah tidak ditemukan.');
 
   const patch = {};
-  ['npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'status'].forEach(function (k) {
+  ['npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'tempat_cetak', 'status'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
   patch.updated_at = new Date();

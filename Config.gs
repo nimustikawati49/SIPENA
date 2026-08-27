@@ -47,7 +47,7 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   MASTER_SUPERADMIN: ['email', 'nama', 'status', 'foto_url', 'created_at'],
   MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
   RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at'],
-  MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'status', 'created_at', 'updated_at'],
+  MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'tempat_cetak', 'status', 'created_at', 'updated_at'],
   MASTER_MAPEL: ['mapel_id', 'kode_mapel', 'nama_mapel', 'jenjang', 'status'],
   MASTER_KELAS: ['kelas_id', 'sekolah_id', 'tingkat', 'nama_kelas', 'jenjang', 'program_keahlian', 'konsentrasi_keahlian', 'status'],
   GURU_MAPEL: ['guru_mapel_id', 'guru_id', 'mapel_id', 'sekolah_id', 'tahun_ajaran_id', 'status'],
@@ -229,15 +229,18 @@ function Config_ensureDriveUrlsFixed_() {
  * utuh yang diunggah, lihat SEKOLAH_KOP. Kalau instalasi lama sempat
  * ter-migrasi, kolom itu tertinggal kosong di sheet — tidak dibaca/ditulis
  * kode manapun lagi, aman dihapus manual dari spreadsheet kalau mau
- * bersih-bersih.) Bump nama property (_V2 -> _V3) tiap kali skema central
- * bertambah kolom baru di masa
- * depan, sama seperti pola Config_ensureTextFormatColumns_. Ini murni
- * TULIS SEL header (bukan insertSheet), aman dipanggil dari eksekusi
- * siapa pun termasuk guru.
+ * bersih-bersih.) V3 menambah tempat_cetak ke MASTER_SEKOLAH — nama
+ * tempat eksplisit untuk baris "Kota, tanggal" di cetak nilai (bisa beda
+ * dari kabupaten, mis. sekolah di Kabupaten Badung tapi tanda tangannya
+ * mau tertulis "Mengwi", nama kecamatannya — lihat Print.gs). Bump nama
+ * property (_V2 -> _V3, dst.) tiap kali skema central bertambah kolom
+ * baru di masa depan, sama seperti pola Config_ensureTextFormatColumns_.
+ * Ini murni TULIS SEL header (bukan insertSheet), aman dipanggil dari
+ * eksekusi siapa pun termasuk guru.
  */
 function Config_ensureColumnsMigration_() {
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('COLUMNS_MIGRATION_V2')) return;
+  if (props.getProperty('COLUMNS_MIGRATION_V3')) return;
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
@@ -252,7 +255,7 @@ function Config_ensureColumnsMigration_() {
     }
   });
 
-  props.setProperty('COLUMNS_MIGRATION_V2', '1');
+  props.setProperty('COLUMNS_MIGRATION_V3', '1');
 }
 
 /**

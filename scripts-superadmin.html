@@ -252,6 +252,7 @@ function SuperAdmin_panelSekolah_() {
     '      <div class="sp-field"><label>Alamat</label><input name="alamat" style="min-width:260px;"></div>' +
     '      <div class="sp-field"><label>Desa</label><input name="desa"></div>' +
     '      <div class="sp-field"><label>Kecamatan</label><input name="kecamatan"></div>' +
+    '      <div class="sp-field"><label>Tempat Cetak (untuk tanda tangan, mis. "Mengwi")</label><input name="tempat_cetak" placeholder="Kosongkan = pakai Kecamatan/Kabupaten"></div>' +
     '      <div class="sp-field"><label>Kode Pos</label><input name="kode_pos"></div>' +
     '      <div class="sp-field"><label>Email</label><input name="email" type="email"></div>' +
     '      <div class="sp-field"><label>Telepon</label><input name="telepon"></div>' +
@@ -322,7 +323,7 @@ function SuperAdmin_wireSekolah_() {
     var data = {
       npsn: f.npsn.value, nama_sekolah: f.nama_sekolah.value, jenjang: f.jenjang.value, kabupaten: f.kabupaten.value, provinsi: f.provinsi.value,
       alamat: f.alamat.value, desa: f.desa.value, kecamatan: f.kecamatan.value, kode_pos: f.kode_pos.value, email: f.email.value,
-      telepon: f.telepon.value, website: f.website.value
+      telepon: f.telepon.value, website: f.website.value, tempat_cetak: f.tempat_cetak.value
     };
     var btn = f.querySelector('button[type="submit"]');
     var editId = f.dataset.editId;
@@ -459,6 +460,7 @@ function SuperAdmin_editSchool_(sekolahId) {
   f.email.value = s.email || '';
   f.telepon.value = s.telepon || '';
   f.website.value = s.website || '';
+  f.tempat_cetak.value = s.tempat_cetak || '';
   document.getElementById('sp-sekolah-advanced').classList.remove('hidden');
   SuperAdmin_setFormEditMode_(f, sekolahId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });

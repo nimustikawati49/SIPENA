@@ -43,7 +43,8 @@ function getMyPrintData(kelasId, mapelId, tahunAjaranId, semester) {
 
   return {
     sekolah: {
-      nama_sekolah: sekolahRow.nama_sekolah || '', kabupaten: sekolahRow.kabupaten || ''
+      nama_sekolah: sekolahRow.nama_sekolah || '', kabupaten: sekolahRow.kabupaten || '',
+      kecamatan: sekolahRow.kecamatan || '', tempat_cetak: sekolahRow.tempat_cetak || ''
     },
     guru: {
       nama_lengkap: profil.nama_lengkap || auth.namaLengkap || '', nip: profil.nip || '', nuptk: profil.nuptk || '',

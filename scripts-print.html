@@ -297,7 +297,7 @@ function PrintApp_renderPage_(data, config) {
   var tanggal = config.printDateMode === 'TENTUKAN' && config.printDateValue
     ? PrintApp_formatDate_(config.printDateValue)
     : PrintApp_formatDate_(new Date().toISOString().slice(0, 10));
-  var kotaCetak = data.sekolah.kabupaten || data.sekolah.desa || '';
+  var kotaCetak = data.sekolah.tempat_cetak || data.sekolah.kecamatan || data.sekolah.kabupaten || '';
   var g = data.guru;
   var nipLabel = g.nip ? 'NIP. ' + g.nip : (g.nuptk ? 'NUPTK. ' + g.nuptk : 'NIP/NUPTK. -');
 
