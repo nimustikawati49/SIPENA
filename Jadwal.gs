@@ -1,6 +1,10 @@
-// Jadwal.gs — Phase 5. Jadwal RESMI diinput SUPERADMIN (spec §36) — guru
-// tidak bisa mengubahnya langsung, hanya "Ajukan Perubahan Jadwal"
-// (REQUEST_JADWAL_PERUBAHAN) yang Superadmin approve/reject (spec §37).
+// Jadwal.gs — Superadmin bisa kelola jadwal guru manapun (dipakai untuk
+// setup awal/perbaikan), DAN guru bisa kelola jadwal mengajarnya sendiri
+// secara langsung (tambah/ubah/hapus, tanpa approval) — kebijakan yang
+// sama seperti KKTP/Katrol: jadwal harian adalah urusan operasional guru
+// sendiri. Keduanya menulis ke sheet central JADWAL_MENGAJAR yang sama
+// dan divalidasi cek bentrok yang sama (Jadwal_isBentrok_), jadi tetap
+// satu sumber kebenaran walau ditulis dari dua sisi.
 
 const JADWAL_HARI_VALID_ = ['SENIN', 'SELASA', 'RABU', 'KAMIS', 'JUMAT', 'SABTU'];
 
@@ -140,7 +144,7 @@ function adminDeleteSchedule(jadwalId) {
   return { ok: true };
 }
 
-/* ================= Guru: lihat jadwal + ajukan perubahan ================= */
+/* ================= Guru: lihat + kelola jadwal sendiri langsung ================= */
 
 function getMySchedule() {
   const auth = Security_requireRole_(['GURU']);
@@ -154,80 +158,97 @@ function getMySchedule() {
 }
 
 /**
- * requestScheduleChange(jadwalId, perubahan, alasan)
- * perubahan: {hari?, jam_mulai?, jam_selesai?, ruangan?} — field yang
- * ingin diubah guru. TIDAK langsung mengubah JADWAL_MENGAJAR — hanya
- * membuat baris PENDING di REQUEST_JADWAL_PERUBAHAN untuk ditinjau
- * Superadmin (spec §37).
+ * Jadwal_assertGuruAssignment_(auth, mapelId, kelasId, tahunAjaranId)
+ * Guru cuma boleh menjadwalkan kombinasi mapel+kelas+tahun ajaran yang
+ * memang penugasannya (PENUGASAN_MENGAJAR aktif) — supaya jadwal
+ * langsung guru tidak bisa "mengklaim" kelas/mapel yang bukan miliknya.
  */
-function requestScheduleChange(jadwalId, perubahan, alasan) {
-  const auth = Security_requireRole_(['GURU']);
-  const jadwalRow = Utils_sheetToObjects_(Config_getSheet_('JADWAL_MENGAJAR')).filter(function (r) { return r.jadwal_id === jadwalId; })[0];
-  if (!jadwalRow) throw new Error('Jadwal tidak ditemukan.');
-  if (jadwalRow.guru_id !== auth.guruId) throw new Error('AKSES_DITOLAK: Jadwal ini bukan milik Anda.');
-  if (!perubahan || !Object.keys(perubahan).length) throw new Error('Tidak ada perubahan yang diajukan.');
-  if (!String(alasan || '').trim()) throw new Error('Alasan pengajuan wajib diisi.');
-
-  const requestId = Utils_newId_('RJ');
-  Utils_appendRowByHeader_(Config_getSheet_('REQUEST_JADWAL_PERUBAHAN'), {
-    request_id: requestId, guru_id: auth.guruId, jadwal_id_terkait: jadwalId,
-    perubahan_json: JSON.stringify(perubahan), alasan: alasan, requested_at: new Date(), status: 'PENDING'
+function Jadwal_assertGuruAssignment_(auth, mapelId, kelasId, tahunAjaranId) {
+  const ok = Utils_sheetToObjects_(Config_getSheet_('PENUGASAN_MENGAJAR')).some(function (r) {
+    return r.guru_id === auth.guruId && r.mapel_id === mapelId && r.kelas_id === kelasId &&
+      r.tahun_ajaran_id === tahunAjaranId && String(r.status).toUpperCase() === 'AKTIF';
   });
-
-  AuditLog_write_(auth, 'REQUEST_SCHEDULE_CHANGE', 'Jadwal', requestId, JSON.stringify(perubahan));
-  return { request_id: requestId };
-}
-
-function getMyScheduleRequests() {
-  const auth = Security_requireRole_(['GURU']);
-  return Utils_sheetToObjects_(Config_getSheet_('REQUEST_JADWAL_PERUBAHAN'))
-    .filter(function (r) { return r.guru_id === auth.guruId; })
-    .map(function (r) { delete r._row; return r; })
-    .sort(function (a, b) { return new Date(b.requested_at) - new Date(a.requested_at); });
-}
-
-/* ================= Superadmin: tinjau pengajuan ================= */
-
-function adminGetScheduleRequests(status) {
-  Security_requireRole_(['SUPERADMIN']);
-  const guruById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_GURU')), 'guru_id');
-  const jadwalById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('JADWAL_MENGAJAR')), 'jadwal_id');
-  let rows = Utils_sheetToObjects_(Config_getSheet_('REQUEST_JADWAL_PERUBAHAN')).map(function (r) { delete r._row; return r; });
-  if (status) rows = rows.filter(function (r) { return r.status === status; });
-  return rows.map(function (r) {
-    const j = jadwalById[r.jadwal_id_terkait] || {};
-    return Object.assign({}, r, {
-      nama_guru: (guruById[r.guru_id] || {}).nama_lengkap || '-',
-      jadwal_saat_ini: j.hari ? (j.hari + ' ' + j.jam_mulai + '-' + j.jam_selesai + (j.ruangan ? ' (' + j.ruangan + ')' : '')) : '(jadwal tidak ditemukan)'
-    });
-  }).sort(function (a, b) { return new Date(b.requested_at) - new Date(a.requested_at); });
+  if (!ok) throw new Error('Anda tidak memiliki penugasan mengajar untuk kombinasi mapel & kelas ini.');
 }
 
 /**
- * adminProcessScheduleRequest(requestId, decision, catatan)
- * decision: 'APPROVED' | 'REJECTED'. APPROVED menerapkan perubahan_json
- * ke JADWAL_MENGAJAR (lewat adminUpdateSchedule, jadi validasi bentrok
- * tetap berlaku) lalu sinkron guru. REJECTED cuma menandai status,
- * jadwal resmi tidak tersentuh.
+ * createMySchedule(data) / updateMySchedule(jadwalId, data) / deleteMySchedule(jadwalId)
+ * Guru mengelola jadwalnya sendiri langsung (tanpa approval Superadmin) —
+ * menulis ke JADWAL_MENGAJAR central yang sama dipakai Superadmin, dicek
+ * bentrok yang sama (Jadwal_isBentrok_), lalu Sync_teacherData_ (sudah
+ * aman dipanggil dari konteks manapun — internal try/catch-nya sendiri
+ * mengantre ke SYNC_QUEUE kalau gagal, tidak pernah melempar exception)
+ * menyalin hasilnya ke sheet JADWAL pribadi guru untuk dibaca getMySchedule.
  */
-function adminProcessScheduleRequest(requestId, decision, catatan) {
-  const auth = Security_requireRole_(['SUPERADMIN']);
-  if (['APPROVED', 'REJECTED'].indexOf(decision) === -1) throw new Error('Keputusan harus APPROVED atau REJECTED.');
+function createMySchedule(data) {
+  const auth = Security_requireRole_(['GURU']);
+  const mapelId = String(data && data.mapel_id || '').trim();
+  const kelasId = String(data && data.kelas_id || '').trim();
+  const tahunAjaranId = String(data && data.tahun_ajaran_id || '').trim();
+  const hari = String(data && data.hari || '').toUpperCase().trim();
+  const jamMulai = String(data && data.jam_mulai || '').trim();
+  const jamSelesai = String(data && data.jam_selesai || '').trim();
 
-  const sh = Config_getSheet_('REQUEST_JADWAL_PERUBAHAN');
-  const req = Utils_sheetToObjects_(sh).filter(function (r) { return r.request_id === requestId; })[0];
-  if (!req) throw new Error('Pengajuan tidak ditemukan.');
-  if (req.status !== 'PENDING') throw new Error('Pengajuan ini sudah diproses sebelumnya (' + req.status + ').');
+  if (!mapelId || !kelasId || !tahunAjaranId) throw new Error('Mapel, kelas, dan tahun ajaran wajib diisi.');
+  if (JADWAL_HARI_VALID_.indexOf(hari) === -1) throw new Error('Hari tidak valid.');
+  if (!Jadwal_validateJam_(jamMulai) || !Jadwal_validateJam_(jamSelesai)) throw new Error('Format jam harus HH:MM.');
+  if (jamMulai >= jamSelesai) throw new Error('Jam mulai harus lebih awal dari jam selesai.');
+  Jadwal_assertGuruAssignment_(auth, mapelId, kelasId, tahunAjaranId);
 
-  if (decision === 'APPROVED') {
-    const perubahan = JSON.parse(req.perubahan_json || '{}');
-    adminUpdateSchedule(req.jadwal_id_terkait, perubahan);
+  const semester = TahunAjaran_getSemester_(tahunAjaranId);
+  if (Jadwal_isBentrok_(auth.guruId, hari, jamMulai, jamSelesai, tahunAjaranId, semester, null)) {
+    throw new Error('Jadwal bentrok dengan jadwal Anda yang lain di hari & jam yang sama.');
   }
 
-  Utils_updateRowByHeader_(sh, req._row, {
-    status: decision, processed_by: auth.email, processed_at: new Date(), catatan: catatan || ''
+  const jadwalId = Utils_newId_('JDW');
+  Utils_appendRowByHeader_(Config_getSheet_('JADWAL_MENGAJAR'), {
+    jadwal_id: jadwalId, guru_id: auth.guruId, mapel_id: mapelId, kelas_id: kelasId, sekolah_id: auth.sekolahId,
+    tahun_ajaran_id: tahunAjaranId, semester: semester, hari: hari, jam_mulai: jamMulai, jam_selesai: jamSelesai,
+    ruangan: data.ruangan || '', keterangan: data.keterangan || '', status: 'AKTIF'
   });
 
-  AuditLog_write_(auth, 'PROCESS_SCHEDULE_REQUEST', 'Jadwal', requestId, decision);
+  AuditLog_write_(auth, 'CREATE_SCHEDULE_SELF', 'Jadwal', jadwalId, hari + ' ' + jamMulai + '-' + jamSelesai);
+  Sync_teacherData_(auth.guruId);
+  return { jadwal_id: jadwalId };
+}
+
+function updateMySchedule(jadwalId, data) {
+  const auth = Security_requireRole_(['GURU']);
+  const sh = Config_getSheet_('JADWAL_MENGAJAR');
+  const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.jadwal_id === jadwalId; })[0];
+  if (!row) throw new Error('Jadwal tidak ditemukan.');
+  if (row.guru_id !== auth.guruId) throw new Error('AKSES_DITOLAK: Jadwal ini bukan milik Anda.');
+
+  const hari = data.hari !== undefined ? String(data.hari).toUpperCase().trim() : row.hari;
+  const jamMulai = data.jam_mulai !== undefined ? String(data.jam_mulai).trim() : row.jam_mulai;
+  const jamSelesai = data.jam_selesai !== undefined ? String(data.jam_selesai).trim() : row.jam_selesai;
+  if (JADWAL_HARI_VALID_.indexOf(hari) === -1) throw new Error('Hari tidak valid.');
+  if (!Jadwal_validateJam_(jamMulai) || !Jadwal_validateJam_(jamSelesai)) throw new Error('Format jam harus HH:MM.');
+  if (jamMulai >= jamSelesai) throw new Error('Jam mulai harus lebih awal dari jam selesai.');
+
+  if (Jadwal_isBentrok_(auth.guruId, hari, jamMulai, jamSelesai, row.tahun_ajaran_id, row.semester, jadwalId)) {
+    throw new Error('Jadwal bentrok dengan jadwal Anda yang lain di hari & jam yang sama.');
+  }
+
+  const patch = { hari: hari, jam_mulai: jamMulai, jam_selesai: jamSelesai };
+  if (data.ruangan !== undefined) patch.ruangan = data.ruangan;
+  if (data.keterangan !== undefined) patch.keterangan = data.keterangan;
+  Utils_updateRowByHeader_(sh, row._row, patch);
+
+  AuditLog_write_(auth, 'UPDATE_SCHEDULE_SELF', 'Jadwal', jadwalId, JSON.stringify(patch));
+  Sync_teacherData_(auth.guruId);
+  return { ok: true };
+}
+
+function deleteMySchedule(jadwalId) {
+  const auth = Security_requireRole_(['GURU']);
+  const sh = Config_getSheet_('JADWAL_MENGAJAR');
+  const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.jadwal_id === jadwalId; })[0];
+  if (!row) throw new Error('Jadwal tidak ditemukan.');
+  if (row.guru_id !== auth.guruId) throw new Error('AKSES_DITOLAK: Jadwal ini bukan milik Anda.');
+
+  Utils_deleteRowById_(sh, 'jadwal_id', jadwalId);
+  AuditLog_write_(auth, 'DELETE_SCHEDULE_SELF', 'Jadwal', jadwalId, auth.guruId);
+  Sync_teacherData_(auth.guruId);
   return { ok: true };
 }

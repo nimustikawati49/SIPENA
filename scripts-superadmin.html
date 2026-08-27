@@ -97,7 +97,6 @@ function SuperAdmin_loadAll() {
   runServer('adminGetAssignments', [], { onSuccess: function (rows) { SuperAdmin.assignments = rows; SuperAdmin_renderPenugasan(); } });
   runServer('adminGetStudents', [], { onSuccess: function (rows) { SuperAdmin.students = rows; } });
   runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
-  SuperAdmin_loadJadwalRequests_();
   SuperAdmin_loadSyncQueue_();
 }
 
@@ -1359,9 +1358,6 @@ function SuperAdmin_panelJadwal_() {
     '  </form>' +
     '  <div class="sp-section-title">Daftar Jadwal</div>' +
     '  <div id="sp-table-jadwal" style="margin-bottom:28px;"></div>' +
-
-    '  <div class="sp-section-title">Pengajuan Perubahan Jadwal (Menunggu)</div>' +
-    '  <div id="sp-jadwal-requests-table"></div>' +
     '</div>';
 }
 
@@ -1502,42 +1498,6 @@ function SuperAdmin_deleteJadwal_(jadwalId) {
   runServer('adminDeleteSchedule', [jadwalId], {
     onSuccess: function () {
       SIPENA_toast('Jadwal dihapus.');
-      runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
-    }
-  });
-}
-
-function SuperAdmin_loadJadwalRequests_() {
-  runServer('adminGetScheduleRequests', ['PENDING'], { onSuccess: SuperAdmin_renderJadwalRequests_ });
-}
-
-function SuperAdmin_renderJadwalRequests_(rows) {
-  SIPENA_table_('sp-jadwal-requests-table', [
-    { key: 'nama_guru', label: 'Guru' }, { key: 'jadwal_saat_ini', label: 'Jadwal Saat Ini' },
-    { label: 'Perubahan Diminta', render: function (r) {
-        var p = JSON.parse(r.perubahan_json || '{}');
-        return (p.hari || '') + ' ' + (p.jam_mulai || '') + '-' + (p.jam_selesai || '') + (p.ruangan ? ' (' + p.ruangan + ')' : '');
-      } },
-    { key: 'alasan', label: 'Alasan' },
-    { label: 'Aksi', render: function (r) {
-        return '<button class="sp-btn secondary" onclick="SuperAdmin_processJadwalRequest_(\'' + r.request_id + '\', \'APPROVED\')">Setujui</button> ' +
-          '<button class="sp-btn secondary" onclick="SuperAdmin_processJadwalRequest_(\'' + r.request_id + '\', \'REJECTED\')">Tolak</button>';
-      } }
-  ], rows, 'Tidak ada pengajuan yang menunggu.');
-}
-
-function SuperAdmin_processJadwalRequest_(requestId, decision) {
-  var catatan = '';
-  if (decision === 'REJECTED') {
-    catatan = prompt('Catatan penolakan (opsional):');
-    if (catatan === null) return;
-  } else if (!confirm('Setujui perubahan jadwal ini? Jadwal resmi akan langsung berubah.')) {
-    return;
-  }
-  runServer('adminProcessScheduleRequest', [requestId, decision, catatan || ''], {
-    onSuccess: function () {
-      SIPENA_toast(decision === 'APPROVED' ? 'Perubahan jadwal disetujui & diterapkan.' : 'Pengajuan ditolak.');
-      SuperAdmin_loadJadwalRequests_();
       runServer('adminGetSchedules', [], { onSuccess: function (rows) { SuperAdmin.schedules = rows; SuperAdmin_renderJadwal(); } });
     }
   });

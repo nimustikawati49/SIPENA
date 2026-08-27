@@ -227,9 +227,11 @@ function Sync_rewriteSiswa_(ss, guruId) {
 
 /**
  * Sync_rewriteJadwal_(ss, guruId)
- * Mirror JADWAL_MENGAJAR (resmi, diinput Superadmin) milik guru ini ke
- * sheet JADWAL pribadinya — read-only bagi guru, perubahan hanya lewat
- * requestScheduleChange (Jadwal.gs).
+ * Mirror JADWAL_MENGAJAR milik guru ini ke sheet JADWAL pribadinya —
+ * dibaca guru lewat getMySchedule (Jadwal.gs). Dipanggil ulang setelah
+ * guru sendiri menambah/ubah/hapus jadwalnya (createMySchedule dkk.)
+ * maupun setelah aksi Superadmin, supaya mirror selalu segar dari
+ * penulis manapun.
  */
 function Sync_rewriteJadwal_(ss, guruId) {
   // Config_ensureGuruSheet_ melengkapi kolom yang mungkin belum ada (mis.

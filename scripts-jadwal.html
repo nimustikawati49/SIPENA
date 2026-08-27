@@ -1,109 +1,146 @@
 <script>
-var JadwalGuruApp = { initialized: false, schedule: [] };
+/**
+ * JadwalGuruApp — kelola jadwal mengajar guru sendiri, langsung tanpa
+ * approval Superadmin (kebijakan sama seperti KKTP/Katrol). Muncul di
+ * Dashboard guru sebagai tombol collapsible "Kelola Jadwal" di bawah
+ * kartu mingguan (bukan tab terpisah lagi) — dibangun & dimuat baru
+ * pertama kali dibuka (lazy init), supaya Dashboard tetap ringan kalau
+ * guru tidak pernah menyentuhnya.
+ */
+var JadwalGuruApp = { initialized: false, schedule: [], penugasan: [] };
 
-function JadwalGuruApp_init() {
-  if (JadwalGuruApp.initialized) return;
+function JadwalGuruApp_toggleManage_() {
+  var box = document.getElementById('sp-guru-jadwal-manage-box');
+  var willOpen = box.classList.contains('hidden');
+  box.classList.toggle('hidden');
+  if (!willOpen || JadwalGuruApp.initialized) return;
   JadwalGuruApp.initialized = true;
-  document.getElementById('sp-guru-panel-jadwal').innerHTML = JadwalGuruApp_markup_();
+  box.innerHTML = JadwalGuruApp_markup_();
   JadwalGuruApp_wireForm_();
+  JadwalGuruApp_loadPenugasan_();
   JadwalGuruApp_load_();
-  JadwalGuruApp_loadRequests_();
 }
 
 function JadwalGuruApp_markup_() {
   return '' +
-    '<div class="sp-section-title">Jadwal Mengajar Saya</div>' +
-    '<div class="msg" style="margin:-6px 0 10px;">Jadwal resmi dikelola Superadmin — klik kartu jadwal untuk mengajukan perubahan, perubahan baru berlaku setelah disetujui.</div>' +
-    '<div id="sp-guru-jadwal-table"></div>' +
+    '<div class="sp-section-title" style="font-size:14px;">Tambah Jadwal</div>' +
+    '<form class="sp-form" id="sp-form-jadwal-guru">' +
+    '  <div class="sp-field"><label>Penugasan (Mapel — Kelas — Tahun Ajaran)</label><select id="sp-jadwal-guru-penugasan" style="min-width:260px;" required></select></div>' +
+    '  <div class="sp-field"><label>Hari</label><select name="hari" required><option value="">Pilih</option><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
+    '  <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
+    '  <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
+    '  <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
+    '  <div class="sp-field"><label>Keterangan</label><input name="keterangan"></div>' +
+    '  <button class="sp-btn" type="submit">Simpan</button>' +
+    '  <button type="button" class="sp-btn secondary hidden" id="sp-jadwal-guru-cancel" onclick="JadwalGuruApp_cancelEdit_()">Batal Edit</button>' +
+    '</form>' +
+    '<div class="sp-section-title" style="font-size:14px;margin-top:20px;">Daftar Jadwal Saya</div>' +
+    '<div id="sp-jadwal-guru-table"></div>';
+}
 
-    '<div id="sp-guru-jadwal-form-box" class="hidden" style="margin-top:16px;">' +
-    '  <div class="sp-section-title" style="font-size:14px;">Ajukan Perubahan Jadwal</div>' +
-    '  <form class="sp-form" id="sp-form-jadwal-request">' +
-    '    <div class="sp-field"><label>Hari</label><select name="hari" required><option>SENIN</option><option>SELASA</option><option>RABU</option><option>KAMIS</option><option>JUMAT</option><option>SABTU</option></select></div>' +
-    '    <div class="sp-field"><label>Jam Mulai</label><input name="jam_mulai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
-    '    <div class="sp-field"><label>Jam Selesai</label><input name="jam_selesai" type="text" inputmode="numeric" placeholder="HH:MM" maxlength="5" pattern="([01][0-9]|2[0-3]):[0-5][0-9]" required></div>' +
-    '    <div class="sp-field"><label>Ruangan</label><input name="ruangan"></div>' +
-    '    <div class="sp-field" style="flex-basis:100%;"><label>Alasan Pengajuan</label><input name="alasan" style="width:100%;" required></div>' +
-    '    <button class="sp-btn" type="submit">Kirim Pengajuan</button>' +
-    '    <button type="button" class="sp-btn secondary" onclick="document.getElementById(\'sp-guru-jadwal-form-box\').classList.add(\'hidden\')">Batal</button>' +
-    '  </form>' +
-    '</div>' +
-
-    '<div class="sp-section-title" style="margin-top:28px;">Riwayat Pengajuan Saya</div>' +
-    '<div id="sp-guru-jadwal-requests"></div>';
+function JadwalGuruApp_loadPenugasan_() {
+  runServer('getMyDashboard', [], {
+    onSuccess: function (dash) {
+      JadwalGuruApp.penugasan = (dash.penugasan || []).filter(function (p) { return String(p.status).toUpperCase() === 'AKTIF'; });
+      document.getElementById('sp-jadwal-guru-penugasan').innerHTML = '<option value="">Pilih...</option>' + JadwalGuruApp.penugasan.map(function (p, i) {
+        return '<option value="' + i + '">' + p.nama_mapel + ' — ' + p.nama_kelas + ' — ' + p.semester + '</option>';
+      }).join('');
+    }
+  });
 }
 
 function JadwalGuruApp_load_() {
   runServer('getMySchedule', [], {
     onSuccess: function (rows) {
       JadwalGuruApp.schedule = rows;
-      JadwalGuruApp_render_(rows);
+      JadwalGuruApp_renderTable_(rows);
+      var weekEl = document.getElementById('sp-guru-jadwal-hari-ini');
+      if (weekEl) weekEl.innerHTML = rows.length ? SIPENA_weekScheduleGridHtml_(rows, null) : '<div class="sp-empty">Belum ada jadwal mengajar.</div>';
     }
   });
 }
 
-/**
- * JadwalGuruApp_render_(rows)
- * Kartu mingguan (Senin—Sabtu), kolom hari ini disorot — kartu berisi
- * Kelas/Mapel/Jam, klik kartu untuk ajukan perubahan. Pakai renderer
- * mingguan bersama (SIPENA_weekScheduleGridHtml_, scripts-init.html)
- * yang juga dipakai dashboard guru, supaya keduanya konsisten.
- */
-function JadwalGuruApp_render_(rows) {
-  var el = document.getElementById('sp-guru-jadwal-table');
-  if (!rows.length) { el.innerHTML = '<div class="sp-empty">Belum ada jadwal — hubungi Superadmin.</div>'; return; }
-  el.innerHTML = SIPENA_weekScheduleGridHtml_(rows, 'JadwalGuruApp_openRequestForm_');
-}
-
-function JadwalGuruApp_openRequestForm_(jadwalId) {
-  var j = JadwalGuruApp.schedule.filter(function (r) { return r.jadwal_id === jadwalId; })[0];
-  if (!j) return;
-  var f = document.getElementById('sp-form-jadwal-request');
-  f.dataset.jadwalId = jadwalId;
-  f.hari.value = j.hari || 'SENIN';
-  f.jam_mulai.value = j.jam_mulai || '';
-  f.jam_selesai.value = j.jam_selesai || '';
-  f.ruangan.value = j.ruangan || '';
-  f.alasan.value = '';
-  var box = document.getElementById('sp-guru-jadwal-form-box');
-  box.classList.remove('hidden');
-  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+function JadwalGuruApp_renderTable_(rows) {
+  SIPENA_table_('sp-jadwal-guru-table', [
+    { label: 'Hari', render: function (r) { return SIPENA_hariLabel_(r.hari); } },
+    { label: 'Jam', render: function (r) { return r.jam_mulai + '–' + r.jam_selesai; } },
+    { key: 'nama_mapel', label: 'Mapel' }, { key: 'nama_kelas', label: 'Kelas' }, { key: 'ruangan', label: 'Ruangan' },
+    { label: 'Aksi', render: function (r) {
+        return '<button class="sp-btn secondary" onclick="JadwalGuruApp_edit_(\'' + r.jadwal_id + '\')">Edit</button> ' +
+          '<button class="sp-btn secondary" onclick="JadwalGuruApp_delete_(\'' + r.jadwal_id + '\')">Hapus</button>';
+      } }
+  ], rows, 'Belum ada jadwal — tambahkan lewat form di atas.');
 }
 
 function JadwalGuruApp_wireForm_() {
-  var requestForm = document.getElementById('sp-form-jadwal-request');
-  SIPENA_wireTimeInput_(requestForm.jam_mulai);
-  SIPENA_wireTimeInput_(requestForm.jam_selesai);
+  var f = document.getElementById('sp-form-jadwal-guru');
+  SIPENA_wireTimeInput_(f.jam_mulai);
+  SIPENA_wireTimeInput_(f.jam_selesai);
 
-  requestForm.addEventListener('submit', function (e) {
+  f.addEventListener('submit', function (e) {
     e.preventDefault();
-    var f = e.target;
-    var jadwalId = f.dataset.jadwalId;
-    var perubahan = { hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value, ruangan: f.ruangan.value };
+    var editId = f.dataset.editId;
     var btn = f.querySelector('button[type="submit"]');
-    runServer('requestScheduleChange', [jadwalId, perubahan, f.alasan.value], {
+
+    if (editId) {
+      var patch = { hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value, ruangan: f.ruangan.value, keterangan: f.keterangan.value };
+      runServer('updateMySchedule', [editId, patch], {
+        loadingEl: btn,
+        onSuccess: function () {
+          SIPENA_toast('Jadwal diperbarui.');
+          JadwalGuruApp_cancelEdit_();
+          JadwalGuruApp_load_();
+        }
+      });
+      return;
+    }
+
+    var idx = document.getElementById('sp-jadwal-guru-penugasan').value;
+    if (idx === '') { SIPENA_toast('Pilih penugasan dulu.', 'error'); return; }
+    var p = JadwalGuruApp.penugasan[Number(idx)];
+    var data = {
+      mapel_id: p.mapel_id, kelas_id: p.kelas_id, tahun_ajaran_id: p.tahun_ajaran_id,
+      hari: f.hari.value, jam_mulai: f.jam_mulai.value, jam_selesai: f.jam_selesai.value,
+      ruangan: f.ruangan.value, keterangan: f.keterangan.value
+    };
+    runServer('createMySchedule', [data], {
       loadingEl: btn,
       onSuccess: function () {
-        SIPENA_toast('Pengajuan perubahan jadwal terkirim, menunggu persetujuan Superadmin.');
-        document.getElementById('sp-guru-jadwal-form-box').classList.add('hidden');
-        JadwalGuruApp_loadRequests_();
+        SIPENA_toast('Jadwal tersimpan.');
+        f.reset();
+        JadwalGuruApp_load_();
       }
     });
   });
 }
 
-function JadwalGuruApp_loadRequests_() {
-  runServer('getMyScheduleRequests', [], { onSuccess: JadwalGuruApp_renderRequests_ });
+function JadwalGuruApp_edit_(jadwalId) {
+  var j = JadwalGuruApp.schedule.filter(function (r) { return r.jadwal_id === jadwalId; })[0];
+  if (!j) return;
+  var f = document.getElementById('sp-form-jadwal-guru');
+  document.getElementById('sp-jadwal-guru-penugasan').disabled = true;
+  f.hari.value = j.hari || 'SENIN';
+  f.jam_mulai.value = j.jam_mulai || '';
+  f.jam_selesai.value = j.jam_selesai || '';
+  f.ruangan.value = j.ruangan || '';
+  f.keterangan.value = j.keterangan || '';
+  f.dataset.editId = jadwalId;
+  document.getElementById('sp-jadwal-guru-cancel').classList.remove('hidden');
+  f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function JadwalGuruApp_renderRequests_(rows) {
-  SIPENA_table_('sp-guru-jadwal-requests', [
-    { label: 'Diajukan', render: function (r) { return new Date(r.requested_at).toLocaleString('id-ID'); } },
-    { label: 'Perubahan Diminta', render: function (r) {
-        var p = JSON.parse(r.perubahan_json || '{}');
-        return (p.hari || '') + ' ' + (p.jam_mulai || '') + '-' + (p.jam_selesai || '') + (p.ruangan ? ' (' + p.ruangan + ')' : '');
-      } },
-    { key: 'alasan', label: 'Alasan' }, { key: 'status', label: 'Status' }, { key: 'catatan', label: 'Catatan Superadmin' }
-  ], rows, 'Belum pernah mengajukan perubahan jadwal.');
+function JadwalGuruApp_cancelEdit_() {
+  var f = document.getElementById('sp-form-jadwal-guru');
+  document.getElementById('sp-jadwal-guru-penugasan').disabled = false;
+  document.getElementById('sp-jadwal-guru-cancel').classList.add('hidden');
+  delete f.dataset.editId;
+  f.reset();
+}
+
+function JadwalGuruApp_delete_(jadwalId) {
+  if (!confirm('Hapus jadwal ini?')) return;
+  runServer('deleteMySchedule', [jadwalId], {
+    onSuccess: function () { SIPENA_toast('Jadwal dihapus.'); JadwalGuruApp_load_(); }
+  });
 }
 </script>

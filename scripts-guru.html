@@ -25,13 +25,14 @@ function GuruApp_showTab_(tabId) {
     p.classList.toggle('active', p.id === 'sp-guru-panel-' + tabId);
   });
   if (tabId === 'nilai' && window.NilaiApp_init) window.NilaiApp_init();
-  if (tabId === 'jadwal' && window.JadwalGuruApp_init) window.JadwalGuruApp_init();
 }
 
 function GuruApp_buildContent_() {
   document.getElementById('sp-guru-panel-dashboard').innerHTML =
     '<div class="sp-section-title">Jadwal Mengajar Minggu Ini</div>' +
-    '<div id="sp-guru-jadwal-hari-ini" style="margin-bottom:28px;"></div>' +
+    '<div id="sp-guru-jadwal-hari-ini" style="margin-bottom:10px;"></div>' +
+    '<button type="button" class="sp-btn secondary" onclick="JadwalGuruApp_toggleManage_()" style="margin-bottom:14px;">Kelola Jadwal (Tambah/Ubah/Hapus)</button>' +
+    '<div id="sp-guru-jadwal-manage-box" class="hidden" style="margin-bottom:28px;"></div>' +
 
     '<div id="sp-guru-profil-card"></div>' +
     '<div id="sp-guru-profil-grid"></div>' +

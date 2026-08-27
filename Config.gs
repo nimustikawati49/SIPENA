@@ -57,8 +57,12 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   MASTER_SISWA: ['siswa_id', 'sekolah_id', 'nis', 'nisn', 'nama_lengkap', 'jenis_kelamin', 'tanggal_lahir', 'tahun_masuk', 'status', 'created_at', 'updated_at'],
   RIWAYAT_KELAS: ['riwayat_id', 'siswa_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'kelas_id', 'status', 'tanggal_mulai', 'tanggal_selesai', 'keterangan'],
   REQUEST_KENAIKAN_KELAS: ['request_id', 'sekolah_id', 'tahun_ajaran_lama', 'tahun_ajaran_baru', 'mapping_json', 'requested_by', 'requested_at', 'status', 'processed_by', 'processed_at', 'notes'],
+  // REQUEST_JADWAL_PERUBAHAN (dulu di sini) DIHAPUS dari skema — alur
+  // "ajukan perubahan lalu Superadmin approve/reject" sudah diganti guru
+  // mengelola jadwalnya sendiri langsung (lihat Jadwal.gs). Sheet lama di
+  // spreadsheet central boleh masih ada berisi data historis, tidak
+  // dibaca/ditulis kode manapun lagi.
   JADWAL_MENGAJAR: ['jadwal_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'status'],
-  REQUEST_JADWAL_PERUBAHAN: ['request_id', 'guru_id', 'jadwal_id_terkait', 'perubahan_json', 'alasan', 'requested_at', 'status', 'processed_by', 'processed_at', 'catatan'],
   SYNC_QUEUE: ['queue_id', 'guru_id', 'status', 'attempt', 'last_error', 'created_at', 'updated_at'],
   AUDIT_LOG: ['timestamp', 'email', 'guru_id', 'sekolah_id', 'action', 'module', 'record_id', 'description']
 };
