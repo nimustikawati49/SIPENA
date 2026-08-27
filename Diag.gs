@@ -33,10 +33,12 @@ const DIAG_GURU_SHEETS_TO_MIGRATE_ = ['NILAI_AKHIR', 'KATROL_HISTORY', 'JADWAL']
  *    bulk version dari tombol "Tandai Perbaikan Akses" per guru
  *    (adminReprovisionTeacher). Superadmin TIDAK BISA memberi dirinya
  *    sendiri akses ke spreadsheet yang dia bukan pemilik/editor-nya, jadi
- *    perbaikan sesungguhnya (bagikan ulang akses ke Superadmin, dan kalau
- *    perlu pindahkan kepemilikan spreadsheet lama ke akun guru sendiri)
- *    baru terjadi otomatis saat guru itu SENDIRI login berikutnya — lihat
- *    Guru_ensureOwnSpreadsheet_ di Guru.gs.
+ *    perbaikan sesungguhnya (bagikan ulang akses ke Superadmin) baru
+ *    terjadi otomatis saat guru itu SENDIRI login berikutnya — lihat
+ *    Guru_ensureOwnSpreadsheet_ di Guru.gs. Guru tetap memakai SATU
+ *    spreadsheet yang sama seperti sebelumnya — tidak pernah dibuatkan
+ *    spreadsheet pengganti, supaya tidak ambigu yang mana yang aktif
+ *    dipakai.
  */
 function adminMigrateGuruOperationalSheets() {
   const auth = Security_requireRole_(['SUPERADMIN']);

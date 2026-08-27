@@ -63,11 +63,15 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   // owned_by_guru: 'YES' kalau spreadsheet_id di baris ini SUDAH dikonfirmasi
   // dimiliki (owner Drive-nya) akun guru itu sendiri — lihat
   // Guru_ensureOwnSpreadsheet_ di Guru.gs. needs_resync: 'YES' dipakai
-  // Superadmin untuk menandai "tolong bagikan ulang akses saya" tanpa bisa
-  // melakukannya sendiri (Superadmin bukan pemilik file guru lagi) — guru
-  // yang menjalankannya lewat login berikutnya, karena cuma pemilik file
-  // yang bisa memberi akses.
-  RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'owned_by_guru', 'needs_resync', 'created_at'],
+  // Superadmin untuk menandai "tolong bagikan ulang akses saya" — guru
+  // yang menjalankannya lewat login berikutnya. jadwal_migrated: 'YES'
+  // kalau jadwal dari sheet central JADWAL_MENGAJAR (skema lama) sudah
+  // pernah disalin ke sheet JADWAL milik spreadsheet INI (satu-satunya
+  // spreadsheet guru ini, TIDAK PERNAH dibuatkan spreadsheet pengganti —
+  // lihat Jadwal_migrateGuruToOwnSheetIfEmpty_) — dicek lewat flag ini
+  // (bukan getLastRow() tiap login) supaya tidak perlu buka spreadsheet
+  // guru itu tiap kali cuma untuk memastikan sudah pernah atau belum.
+  RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'owned_by_guru', 'needs_resync', 'jadwal_migrated', 'created_at'],
   MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'tempat_cetak', 'status', 'created_at', 'updated_at'],
   MASTER_MAPEL: ['mapel_id', 'kode_mapel', 'nama_mapel', 'jenjang', 'status'],
   MASTER_KELAS: ['kelas_id', 'sekolah_id', 'tingkat', 'nama_kelas', 'jenjang', 'program_keahlian', 'konsentrasi_keahlian', 'status'],
@@ -295,7 +299,7 @@ var CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = false;
 function Config_ensureColumnsMigration_() {
   if (CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_) return;
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('COLUMNS_MIGRATION_V4')) { CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true; return; }
+  if (props.getProperty('COLUMNS_MIGRATION_V5')) { CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true; return; }
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
@@ -310,7 +314,7 @@ function Config_ensureColumnsMigration_() {
     }
   });
 
-  props.setProperty('COLUMNS_MIGRATION_V4', '1');
+  props.setProperty('COLUMNS_MIGRATION_V5', '1');
   CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true;
 }
 

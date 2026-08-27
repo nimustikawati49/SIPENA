@@ -237,33 +237,48 @@ function deleteMySchedule(jadwalId) {
 }
 
 /**
- * Jadwal_migrateGuruToOwnSheet_(guruId, newSs)
- * Dipanggil SEKALI dari Guru_migrateToOwnAccount_ (Guru.gs) saat guru
- * lama (arsitektur sebelum perubahan ini) pindah ke spreadsheet
- * miliknya sendiri — jadwalnya masih tersimpan di sheet central
- * JADWAL_MENGAJAR (skema lama), belum di sheet JADWAL pribadi (yang
- * skemanya beda: sudah menyimpan nama_mapel/nama_kelas langsung).
- * Disalin dengan enrichment supaya guru tidak kehilangan jadwalnya
- * setelah migrasi.
+ * Jadwal_migrateGuruToOwnSheetIfEmpty_(guruId, entry)
+ * Dipanggil dari Guru_ensureOwnSpreadsheet_ (Guru.gs) SETIAP guru login —
+ * tapi langsung pulang tanpa membuka spreadsheet sama sekali kalau
+ * entry.jadwal_migrated sudah 'YES' (flag di RESOURCE_MAP, lihat
+ * Config.gs), jadi murah dipanggil berkali-kali untuk guru yang sudah
+ * pernah diproses. Guru lama (arsitektur sebelum jadwal pindah ke sheet
+ * pribadi) jadwalnya masih tersimpan di sheet central JADWAL_MENGAJAR
+ * (skema lama) — disalin SEKALI ke sheet JADWAL milik spreadsheet
+ * SATU-SATUNYA guru itu (TIDAK PERNAH ke spreadsheet baru — lihat
+ * catatan arsitektur di Guru.gs), dengan enrichment nama_mapel/nama_kelas
+ * karena skemanya beda dari sheet central.
+ *
+ * Kalau sheet JADWAL guru itu ternyata SUDAH berisi baris (mis. guru
+ * sudah sempat menambah jadwalnya sendiri lewat createMySchedule sebelum
+ * flag ini ada), TIDAK ditimpa — cukup ditandai selesai supaya tidak
+ * dicek ulang, karena guru itu sudah otomatis berada di model baru.
  */
-function Jadwal_migrateGuruToOwnSheet_(guruId, newSs) {
+function Jadwal_migrateGuruToOwnSheetIfEmpty_(guruId, entry) {
+  if (String(entry.jadwal_migrated).toUpperCase() === 'YES') return;
   try {
-    const sh = newSs.getSheetByName('JADWAL');
+    const ss = SpreadsheetApp.openById(entry.spreadsheet_id);
+    const sh = ss.getSheetByName('JADWAL');
     if (!sh) return;
-    const mapelById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_MAPEL')), 'mapel_id');
-    const kelasById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_KELAS')), 'kelas_id');
-    const rows = Utils_sheetToObjects_(Config_getSheet_('JADWAL_MENGAJAR')).filter(function (r) {
-      return r.guru_id === guruId && String(r.status).toUpperCase() === 'AKTIF';
-    }).map(function (r) {
-      const m = mapelById[r.mapel_id] || {};
-      const k = kelasById[r.kelas_id] || {};
-      return [
-        r.jadwal_id, r.mapel_id, m.nama_mapel || '-', r.kelas_id, k.nama_kelas || '-',
-        r.hari, Jadwal_normalizeJam_(r.jam_mulai), Jadwal_normalizeJam_(r.jam_selesai),
-        r.ruangan || '', r.keterangan || '', r.tahun_ajaran_id, r.semester, r.status
-      ];
-    });
-    if (rows.length) sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+
+    if (sh.getLastRow() < 2) {
+      const mapelById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_MAPEL')), 'mapel_id');
+      const kelasById = Penugasan_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_KELAS')), 'kelas_id');
+      const rows = Utils_sheetToObjects_(Config_getSheet_('JADWAL_MENGAJAR')).filter(function (r) {
+        return r.guru_id === guruId && String(r.status).toUpperCase() === 'AKTIF';
+      }).map(function (r) {
+        const m = mapelById[r.mapel_id] || {};
+        const k = kelasById[r.kelas_id] || {};
+        return [
+          r.jadwal_id, r.mapel_id, m.nama_mapel || '-', r.kelas_id, k.nama_kelas || '-',
+          r.hari, Jadwal_normalizeJam_(r.jam_mulai), Jadwal_normalizeJam_(r.jam_selesai),
+          r.ruangan || '', r.keterangan || '', r.tahun_ajaran_id, r.semester, r.status
+        ];
+      });
+      if (rows.length) sh.getRange(2, 1, rows.length, rows[0].length).setValues(rows);
+    }
+
+    Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), entry._row, { jadwal_migrated: 'YES' });
   } catch (e) {
     Utils_logError_('MIGRATE_JADWAL_' + guruId, e);
   }

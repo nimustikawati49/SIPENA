@@ -22,6 +22,14 @@
 // guru bisa memakainya. Superadmin tetap diberi akses Editor (dibagikan
 // OLEH guru, pemilik file, ke Superadmin) supaya tetap bisa membuka &
 // memperbaiki data guru itu kalau ada error — lihat Guru_grantSuperadminAccess_.
+//
+// Guru yang SUDAH terprovisi lewat arsitektur LAMA (spreadsheet-nya masih
+// dimiliki Superadmin) TIDAK dipindahkan ke spreadsheet baru — SATU
+// spreadsheet per guru, selamanya, supaya tidak pernah ada ambiguitas
+// "yang mana yang sebenarnya dipakai" baik bagi guru maupun Superadmin.
+// Perbaikan akses untuk kasus ini lewat adminReprovisionTeacher (tombol
+// "Tandai Perbaikan Akses" di UI Superadmin) + Guru_ensureOwnSpreadsheet_,
+// bukan lewat pembuatan file pengganti.
 
 function adminGetTeachers(sekolahId) {
   Security_requireRole_(['SUPERADMIN']);
@@ -133,19 +141,20 @@ function adminDeleteTeacher(guruId) {
 
 /**
  * adminReprovisionTeacher(guruId)
- * Superadmin TIDAK BISA lagi membuat/menguasai ulang spreadsheet guru
- * secara langsung (kalau bisa, file itu akan kembali dimiliki Superadmin
- * — persis masalah arsitektur lama yang sedang diperbaiki). Yang bisa
- * dilakukan Superadmin dari sini:
+ * SATU spreadsheet per guru, SELAMANYA — fungsi ini TIDAK PERNAH membuat
+ * spreadsheet baru/pengganti (sempat begitu di versi sebelumnya, ditarik
+ * lagi karena bikin ambigu: guru dan Superadmin bisa bingung spreadsheet
+ * mana yang sebenarnya aktif dipakai kalau bisa ada lebih dari satu).
+ * Yang dilakukan di sini:
  *  - Guru belum pernah login sama sekali (tidak ada RESOURCE_MAP): tidak
  *    ada yang perlu dilakukan, spreadsheet otomatis dibuat begitu guru
- *    itu login pertama kali.
- *  - Guru sudah pernah terprovisi tapi bermasalah (mis. Superadmin
- *    kehilangan akses lihat/perbaiki datanya): flag needs_resync = 'YES'
- *    di baris RESOURCE_MAP-nya. Baris ini dibaca ulang oleh
- *    Guru_ensureOwnSpreadsheet_ SAAT GURU ITU LOGIN BERIKUTNYA (dia
- *    pemilik file-nya, cuma dia yang bisa membagikan akses ke Superadmin)
- *    dan otomatis membagikan ulang akses ke seluruh Superadmin aktif.
+ *    itu login pertama kali (Guru_ensureOwnSpreadsheet_).
+ *  - Guru sudah punya spreadsheet: (1) coba langsung beri akses EDITOR ke
+ *    guru itu — berhasil kalau Superadmin yang mengklik tombol ini
+ *    kebetulan pemilik/editor file itu (kasus paling umum: spreadsheet
+ *    lama dari sebelum guru bisa provisi sendiri, masih dimiliki
+ *    Superadmin), (2) flag needs_resync = 'YES' supaya akses ke
+ *    Superadmin ikut disegarkan otomatis saat guru itu login berikutnya.
  */
 function adminReprovisionTeacher(guruId) {
   const auth = Security_requireRole_(['SUPERADMIN']);
@@ -154,9 +163,22 @@ function adminReprovisionTeacher(guruId) {
     return { ok: true, note: 'Guru ini belum pernah login. Spreadsheet pribadinya akan dibuat otomatis, dimiliki akun Google guru itu sendiri, begitu dia login pertama kali.' };
   }
 
+  let grantedDirectly = false;
+  try {
+    DriveApp.getFileById(existing.spreadsheet_id).addEditor(existing.email);
+    grantedDirectly = true;
+  } catch (eGrant) {
+    Utils_logError_('REGRANT_GURU_ACCESS_' + guruId, eGrant);
+  }
+
   Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), existing._row, { needs_resync: 'YES' });
-  AuditLog_write_(auth, 'FLAG_TEACHER_RESYNC', 'Guru', guruId, existing.spreadsheet_id);
-  return { ok: true, note: 'Ditandai untuk perbaikan akses — akan otomatis dijalankan begitu guru ini login berikutnya (hanya pemilik file, yaitu guru itu sendiri, yang bisa membagikan akses).' };
+  AuditLog_write_(auth, 'REPAIR_TEACHER_ACCESS', 'Guru', guruId, existing.spreadsheet_id);
+  return {
+    ok: true,
+    note: grantedDirectly
+      ? 'Akses guru ke spreadsheet-nya sudah diperbaiki langsung. Akses Superadmin juga akan disegarkan otomatis saat guru ini login berikutnya.'
+      : 'Tidak bisa memberi akses langsung dari sini (kemungkinan Anda bukan editor/pemilik file itu) — tetap ditandai untuk disegarkan otomatis saat guru ini login berikutnya.'
+  };
 }
 
 /**
@@ -192,22 +214,23 @@ function Guru_findResourceMapByGuruId_(guruId) {
 /**
  * Guru_ensureOwnSpreadsheet_(guru, email)
  * Dipanggil dari Auth_resolve_ SETIAP KALI guru login — jadi selalu
- * berjalan SEBAGAI guru itu sendiri (executeAs: USER_ACCESSING). Ini satu-
- * satunya tempat yang boleh membuat spreadsheet baru untuk guru, karena
- * cuma di sinilah SpreadsheetApp.create() menghasilkan file yang dimiliki
- * akun guru itu sendiri.
+ * berjalan SEBAGAI guru itu sendiri (executeAs: USER_ACCESSING).
  *
- * Tiga kondisi ditangani:
- *  1. Belum ada RESOURCE_MAP aktif -> guru baru, provisi dari nol.
- *  2. Ada, tapi belum pernah dikonfirmasi milik guru (owned_by_guru belum
- *     'YES') -> ini guru lama dari arsitektur SEBELUM perubahan ini,
- *     spreadsheet-nya masih dimiliki Superadmin. Cek owner file-nya lewat
- *     Drive: kalau ternyata sudah jadi milik guru (mis. baris ini sudah
- *     pernah diverifikasi tapi belum ditandai), tandai saja. Kalau
- *     memang masih milik Superadmin, migrasikan datanya ke spreadsheet
- *     BARU yang dimiliki guru (Guru_migrateToOwnAccount_).
- *  3. Sudah dikonfirmasi milik guru, tapi ditandai needs_resync (lihat
- *     adminReprovisionTeacher) -> bagikan ulang akses ke Superadmin.
+ * SATU spreadsheet per guru, SELAMANYA. Fungsi ini cuma boleh MEMBUAT
+ * spreadsheet baru untuk guru yang BENAR-BENAR belum pernah punya satu
+ * pun (belum ada RESOURCE_MAP aktif) — begitu satu sudah ada, fungsi ini
+ * TIDAK PERNAH membuat/mengalihkan ke spreadsheet lain, walau
+ * kepemilikannya masih di Superadmin (arsitektur lama). Sengaja ditarik
+ * dari versi sebelumnya yang sempat auto-migrasi ke spreadsheet BARU
+ * kalau file lama tidak terbaca — itu bikin ambigu (guru & Superadmin
+ * bisa bingung mana yang sebenarnya sedang dipakai kalau ujung-ujungnya
+ * bisa ada lebih dari satu "Data_Guru_..." per guru). Perbaikan akses ke
+ * spreadsheet yang SUDAH ADA sekarang lewat dua jalur saja:
+ *  - Superadmin klik "Tandai Perbaikan Akses" (adminReprovisionTeacher) —
+ *    kalau Superadmin masih py akses ke file itu, bisa langsung
+ *    memberi akses ke guru dari sana.
+ *  - needs_resync (di-flag tombol di atas) dibaca di sini supaya akses
+ *    balik ke Superadmin ikut disegarkan begitu guru itu login.
  *
  * Dibungkus try/catch total — kegagalan di sini TIDAK BOLEH membuat login
  * guru gagal total; kalau gagal, guru tetap bisa lanjut dengan data yang
@@ -216,7 +239,7 @@ function Guru_findResourceMapByGuruId_(guruId) {
  */
 function Guru_ensureOwnSpreadsheet_(guru, email) {
   try {
-    let entry = Guru_findResourceMapByGuruId_(guru.guru_id);
+    const entry = Guru_findResourceMapByGuruId_(guru.guru_id);
 
     if (!entry) {
       Guru_provisionSpreadsheet_(email, guru.guru_id, guru.nama_lengkap, guru.sekolah_id, guru);
@@ -224,24 +247,22 @@ function Guru_ensureOwnSpreadsheet_(guru, email) {
     }
 
     if (String(entry.owned_by_guru).toUpperCase() !== 'YES') {
-      let ownedByGuru = false;
       try {
         const owner = DriveApp.getFileById(entry.spreadsheet_id).getOwner();
-        ownedByGuru = !!owner && String(owner.getEmail()).toLowerCase().trim() === email;
+        if (owner && String(owner.getEmail()).toLowerCase().trim() === email) {
+          Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), entry._row, { owned_by_guru: 'YES' });
+        }
       } catch (eOwner) {
-        // Tidak bisa baca info owner (jarang) -> anggap belum, coba migrasi di bawah.
+        // Tidak bisa baca info owner (jarang) -> lewati saja, tetap pakai
+        // spreadsheet yang ada apa adanya, tidak membuat yang baru.
       }
-      if (ownedByGuru) {
-        Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), entry._row, { owned_by_guru: 'YES' });
-        Guru_grantSuperadminAccess_(entry.spreadsheet_id);
-      } else {
-        const migrated = Guru_migrateToOwnAccount_(entry, guru, email);
-        if (migrated) entry = migrated;
-      }
+      try { Guru_grantSuperadminAccess_(entry.spreadsheet_id); } catch (eGrant) {}
     } else if (String(entry.needs_resync).toUpperCase() === 'YES') {
       Guru_grantSuperadminAccess_(entry.spreadsheet_id);
       Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), entry._row, { needs_resync: '' });
     }
+
+    Jadwal_migrateGuruToOwnSheetIfEmpty_(guru.guru_id, entry);
 
     return entry;
   } catch (e) {
@@ -306,6 +327,11 @@ function Guru_provisionSpreadsheet_(email, guruId, namaLengkap, sekolahId, data)
     status: 'active',
     owned_by_guru: 'YES',
     needs_resync: '',
+    // Guru baru tidak pernah punya jadwal lama di sheet central
+    // JADWAL_MENGAJAR (arsitektur lama) untuk dimigrasikan — langsung
+    // ditandai selesai supaya Jadwal_migrateGuruToOwnSheetIfEmpty_ tidak
+    // perlu mengeceknya lagi di login-login berikutnya.
+    jadwal_migrated: 'YES',
     created_at: new Date()
   });
 
@@ -336,103 +362,6 @@ function Guru_grantSuperadminAccess_(spreadsheetId) {
   } catch (e) {
     Utils_logError_('GRANT_SUPERADMIN_ACCESS_' + spreadsheetId, e);
   }
-}
-
-/**
- * Guru_migrateToOwnAccount_(oldEntry, guru, email)
- * Guru lama yang spreadsheet-nya masih dimiliki Superadmin (arsitektur
- * sebelum perubahan ini): buat spreadsheet BARU yang dimiliki guru
- * (Guru_provisionSpreadsheet_, berjalan sebagai guru), coba salin semua
- * data dari spreadsheet lama ke yang baru, lalu alihkan RESOURCE_MAP ke
- * yang baru.
- *
- * PENTING — ditulis ulang setelah migrasi versi pertama ternyata gagal
- * TERUS-MENERUS untuk sebagian guru (dicoba ulang di SETIAP request
- * berikutnya, lambat & tetap gagal): kalau spreadsheet LAMA ternyata
- * sama sekali tidak bisa dibuka guru ini (skenario persis yang memicu
- * seluruh perubahan arsitektur ini), migrasi TIDAK dibatalkan total lagi
- * seperti sebelumnya — spreadsheet BARU tetap dibuat & dipakai (kosong,
- * tanpa data lama) supaya guru langsung bisa lanjut memakai sistem tanpa
- * terus-terusan mengalami percobaan migrasi yang gagal & lambat di setiap
- * aksi. Baris lama ditandai 'orphaned_no_access' (bukan 'migrated')
- * supaya Superadmin tahu perlu membuka file lama secara manual (dia
- * pemiliknya) kalau data lama itu masih perlu diselamatkan/disalin
- * manual. Setiap tahap dicatat terpisah ke _LOG_ERROR_ (lihat
- * Utils_logError_) supaya penyebab pastinya bisa ditelusuri kalau masih
- * bermasalah.
- */
-function Guru_migrateToOwnAccount_(oldEntry, guru, email) {
-  let oldSs = null;
-  try {
-    oldSs = SpreadsheetApp.openById(oldEntry.spreadsheet_id);
-  } catch (eOpen) {
-    Utils_logError_('MIGRATE_STEP_OPEN_OLD_' + guru.guru_id, eOpen);
-  }
-
-  let newSsId;
-  try {
-    newSsId = Guru_provisionSpreadsheet_(email, guru.guru_id, guru.nama_lengkap, guru.sekolah_id, guru);
-  } catch (eCreate) {
-    // Membuat spreadsheet BARU milik guru sendiri saja gagal — ini bukan
-    // lagi soal berbagi/kepemilikan (SpreadsheetApp.create tidak butuh
-    // izin siapa pun), kemungkinan besar akun ini dibatasi membuat file
-    // Drive sama sekali oleh kebijakan domain/Workspace-nya. Tidak ada
-    // yang bisa dilakukan otomatis di sini.
-    Utils_logError_('MIGRATE_STEP_CREATE_NEW_' + guru.guru_id, eCreate);
-    return null;
-  }
-
-  if (oldSs) {
-    try {
-      const newSs = SpreadsheetApp.openById(newSsId);
-      Object.keys(CONFIG_GURU_OPERATIONAL_SCHEMA_).forEach(function (name) {
-        Guru_copySheetData_(oldSs, newSs, name);
-      });
-      // Guru_copySheetData_ menyalin no_hp APA ADANYA — kalau di spreadsheet
-      // lama nilainya sudah kadung kehilangan nol depan (sebelum kolomnya
-      // diformat teks), salinannya ikut korup walau sel tujuannya sudah
-      // diformat teks (format cuma mencegah korup BARU, bukan memperbaiki
-      // nilai yang sudah korup). Ditulis ulang ternormalisasi di sini.
-      try {
-        const newProfilSheet = newSs.getSheetByName('PROFIL');
-        const newProfil = Utils_sheetToObjects_(newProfilSheet)[0];
-        if (newProfil) Utils_updateRowByHeader_(newProfilSheet, newProfil._row, { no_hp: Utils_normalizeNoHp_(newProfil.no_hp) });
-      } catch (eNoHp) { /* non-kritis, biarkan bersih lewat updateMyProfile berikutnya */ }
-      // Jadwal mengajar guru ini sebelumnya tersimpan di sheet central
-      // JADWAL_MENGAJAR (arsitektur lama), belum di sheet JADWAL pribadinya
-      // — disalin terpisah karena strukturnya beda (lihat Jadwal.gs).
-      Jadwal_migrateGuruToOwnSheet_(guru.guru_id, newSs);
-    } catch (eCopy) {
-      // Spreadsheet baru tetap dipakai (guru tidak terblokir) walau
-      // sebagian/semua data lama gagal tersalin.
-      Utils_logError_('MIGRATE_STEP_COPY_DATA_' + guru.guru_id, eCopy);
-    }
-  }
-
-  try {
-    Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), oldEntry._row, { status: oldSs ? 'migrated' : 'orphaned_no_access' });
-  } catch (eStatus) {
-    // Kalau justru baris LAMA ini yang gagal ditandai, dua baris RESOURCE_MAP
-    // sama-sama 'active' untuk guru_id yang sama — Guru_findResourceMapByGuruId_
-    // (yang cuma ambil baris PERTAMA yang cocok) bisa salah pilih balik ke
-    // baris lama yang rusak. Dicari eksplisit lewat spreadsheet_id yang BARU
-    // saja di bawah supaya tidak bergantung urutan baris.
-    Utils_logError_('MIGRATE_STEP_MARK_OLD_' + guru.guru_id, eStatus);
-  }
-  Auth_invalidateCache_(email);
-  const rows = Utils_sheetToObjects_(Config_getSheet_('RESOURCE_MAP'));
-  return rows.filter(function (r) { return r.spreadsheet_id === newSsId; })[0] || Guru_findResourceMapByGuruId_(guru.guru_id);
-}
-
-function Guru_copySheetData_(oldSs, newSs, sheetName) {
-  const oldSh = oldSs.getSheetByName(sheetName);
-  const newSh = newSs.getSheetByName(sheetName);
-  if (!oldSh || !newSh) return;
-  const lastRow = oldSh.getLastRow();
-  if (lastRow < 2) return;
-  const numCols = oldSh.getLastColumn();
-  const values = oldSh.getRange(2, 1, lastRow - 1, numCols).getValues();
-  newSh.getRange(2, 1, values.length, numCols).setValues(values);
 }
 
 /**
