@@ -68,30 +68,30 @@ function getMyDashboard() {
  * NIP, sekolah, dsb. dikelola Superadmin (spec §11), tidak diterima di
  * sini walau dikirim client.
  *
- * Tulis baris PROFIL dibungkus try/catch — sama pola dengan
- * saveMyGradeSettings (Nilai.gs): terbukti di produksi sebagian akun
- * guru bisa GAGAL menulis SEL tertentu di spreadsheet mereka sendiri
- * walau baca berhasil (mis. baris/kolom yang belum pernah mereka tulis
- * sebelumnya), muncul sebagai exception permission mentah yang
- * membingungkan ("Anda tidak memiliki izin...") kalau dibiarkan bocor
- * apa adanya. Di sini itu diubah jadi pesan jelas yang mengarahkan ke
- * Superadmin, bukan exception mentah.
+ * SELURUH isi fungsi dibungkus try/catch — bukan cuma langkah tulis sel
+ * terakhir seperti versi sebelumnya. Revisi ini menutup celah: versi
+ * lama cuma membungkus Utils_updateRowByHeader_, padahal
+ * Config_getGuruSpreadsheet_ (buka spreadsheet guru) di ATASNYA bisa
+ * juga melempar exception permission mentah dan lolos tanpa tertangkap
+ * sama sekali — persis skenario yang membuat pesan "Anda tidak memiliki
+ * izin..." masih muncul apa adanya walau langkah tulisnya sudah
+ * dilindungi. Sama pola dengan saveMyGradeSettings (Nilai.gs).
  */
 function updateMyProfile(data) {
   const auth = Security_requireRole_(['GURU']);
-  const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  const sh = ss.getSheetByName('PROFIL');
-  if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
-
   const patch = {};
   ['no_hp', 'foto_url', 'ttd_url'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
   patch.updated_at = new Date();
+
   try {
+    const ss = Config_getGuruSpreadsheet_(auth.guruId);
+    const sh = ss.getSheetByName('PROFIL');
+    if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
     Utils_updateRowByHeader_(sh, 2, patch);
   } catch (e) {
-    throw new Error('Gagal menyimpan — akun Anda tampaknya tidak punya akses tulis ke sheet PROFIL pada spreadsheet pribadi Anda. Minta Superadmin memeriksa/memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
+    throw new Error('Gagal menyimpan — akun Anda tampaknya tidak punya akses ke spreadsheet pribadi Anda. Minta Superadmin memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
   }
 
   Dashboard_invalidateCache_(auth.guruId);
@@ -121,15 +121,21 @@ function uploadMySignature(base64Data, mimeType, fileName) {
   return { url: url };
 }
 
+/**
+ * Dashboard_patchProfilField_(auth, field, value)
+ * Sama seperti updateMyProfile — SELURUH isi (termasuk buka spreadsheet
+ * guru, bukan cuma langkah tulis) dibungkus try/catch, lihat catatan di
+ * updateMyProfile soal celah versi sebelumnya.
+ */
 function Dashboard_patchProfilField_(auth, field, value) {
-  const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  const sh = ss.getSheetByName('PROFIL');
-  if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
   const patch = {}; patch[field] = value; patch.updated_at = new Date();
   try {
+    const ss = Config_getGuruSpreadsheet_(auth.guruId);
+    const sh = ss.getSheetByName('PROFIL');
+    if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
     Utils_updateRowByHeader_(sh, 2, patch);
   } catch (e) {
-    throw new Error('File berhasil diunggah ke Drive, tapi gagal disimpan ke profil — akun Anda tampaknya tidak punya akses tulis ke sheet PROFIL pada spreadsheet pribadi Anda. Minta Superadmin memeriksa/memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
+    throw new Error('File berhasil diunggah ke Drive, tapi gagal disimpan ke profil — akun Anda tampaknya tidak punya akses ke spreadsheet pribadi Anda. Minta Superadmin memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
   }
   Dashboard_invalidateCache_(auth.guruId);
   AuditLog_write_(auth, 'UPDATE_PROFILE', 'Profil', auth.guruId, field + '=' + value);

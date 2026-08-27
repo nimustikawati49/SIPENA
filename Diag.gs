@@ -37,6 +37,15 @@ const DIAG_GURU_SHEETS_TO_MIGRATE_ = ['NILAI_AKHIR', 'KATROL_HISTORY', 'JADWAL']
  * cuma kolom) supaya guru lama ikut dapat perbaikan nama_mapel/nama_kelas
  * yang sempat kosong dan jam_mulai/jam_selesai yang sempat korup jadi
  * serial Date — lihat Jadwal_normalizeJam_.
+ *
+ * PENTING: migrasi ini SELALU berjalan sebagai SUPERADMIN (pemilik file
+ * — dibuat lewat SpreadsheetApp.create atas namanya), jadi berhasilnya
+ * migrasi ini TIDAK MEMBUKTIKAN guru pemilik data itu sendiri bisa
+ * mengakses spreadsheet-nya. Ditemukan belakangan bahwa spreadsheet
+ * guru TIDAK PERNAH dibagikan eksplisit ke email guru (lihat
+ * Guru_provisionSpreadsheet_) — jadi Guru_grantOwnSpreadsheetAccess_
+ * sekarang ikut dijalankan di sini untuk SEMUA guru sekaligus, bukan
+ * cuma satu-satu lewat "Provisi ulang" per guru.
  */
 function adminMigrateGuruOperationalSheets() {
   Security_requireRole_(['SUPERADMIN']);
@@ -49,6 +58,7 @@ function adminMigrateGuruOperationalSheets() {
   entries.forEach(function (r) {
     try {
       const ss = SpreadsheetApp.openById(r.spreadsheet_id);
+      Guru_grantOwnSpreadsheetAccess_(r.spreadsheet_id, r.email);
       let touchedAny = false;
       DIAG_GURU_SHEETS_TO_MIGRATE_.forEach(function (sheetName) {
         const already = !!ss.getSheetByName(sheetName);

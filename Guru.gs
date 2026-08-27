@@ -121,10 +121,27 @@ function adminDeleteTeacher(guruId) {
  * atas). Idempoten: tidak membuat spreadsheet baru kalau RESOURCE_MAP
  * sudah punya entri aktif untuk guru ini.
  */
+/**
+ * adminReprovisionTeacher(guruId)
+ * Guru yang BELUM PERNAH terprovisi (tidak ada RESOURCE_MAP aktif):
+ * buat spreadsheet baru seperti biasa.
+ *
+ * Guru yang SUDAH terprovisi: dulu fungsi ini langsung berhenti
+ * ("Sudah terprovisi sebelumnya") tanpa melakukan apa-apa — jadi kalau
+ * guru itu kehilangan akses EDIT ke spreadsheet-nya sendiri (lihat
+ * catatan panjang di Guru_provisionSpreadsheet_ soal sharing yang
+ * dulu tidak pernah eksplisit), tombol "Provisi ulang" di UI terlihat
+ * seperti memperbaiki tapi sebenarnya tidak melakukan apa pun. Sekarang
+ * selalu menjalankan ulang Guru_grantOwnSpreadsheetAccess_ juga di
+ * kasus ini — aman & murah dipanggil berkali-kali (idempoten).
+ */
 function adminReprovisionTeacher(guruId) {
   const auth = Security_requireRole_(['SUPERADMIN']);
-  if (Guru_findResourceMapByGuruId_(guruId)) {
-    return { ok: true, note: 'Sudah terprovisi sebelumnya.' };
+  const existing = Guru_findResourceMapByGuruId_(guruId);
+  if (existing) {
+    Guru_grantOwnSpreadsheetAccess_(existing.spreadsheet_id, existing.email);
+    AuditLog_write_(auth, 'REPAIR_TEACHER_ACCESS', 'Guru', guruId, existing.spreadsheet_id);
+    return { ok: true, note: 'Sudah terprovisi sebelumnya — akses berbagi diperiksa/diperbaiki ulang.' };
   }
   const sh = Config_getSheet_('MASTER_GURU');
   const guru = Utils_sheetToObjects_(sh).filter(function (r) { return r.guru_id === guruId; })[0];
@@ -148,11 +165,24 @@ function Guru_findResourceMapByGuruId_(guruId) {
  * Buat spreadsheet pribadi guru + seluruh sheet operasional kosong
  * (header saja), lalu catat pemetaannya di RESOURCE_MAP. Dipanggil sekali
  * saat guru dibuat (atau diulang lewat adminReprovisionTeacher).
+ *
+ * PENTING (ditemukan setelah berulang kali menyelidiki error "Anda
+ * tidak memiliki izin..." sepanjang sesi ini): file dibuat di Drive
+ * SUPERADMIN (SpreadsheetApp.create berjalan sebagai Superadmin, sesuai
+ * executeAs: USER_ACCESSING) — sebelumnya TIDAK PERNAH dibagikan
+ * eksplisit ke email guru. Akses baca yang selama ini "kelihatan
+ * jalan" ternyata cuma mengandalkan default sharing domain Workspace
+ * yang tidak konsisten (kadang izin baca ada, izin tulis tidak, beda-
+ * beda per akun) — bukan bug di sisi kode pembaca/penulis sheet-nya
+ * sendiri seperti dugaan sebelumnya. addEditor_ di bawah ini
+ * memberi izin EDITOR eksplisit, sumber kebenaran yang tidak
+ * bergantung pada pengaturan default yang bisa berubah-ubah.
  */
 function Guru_provisionSpreadsheet_(email, guruId, namaLengkap, sekolahId, data) {
   const slug = email.split('@')[0].replace(/[^a-z0-9]/gi, '_');
   const ss = SpreadsheetApp.create('Data_Guru_' + slug);
   const ssId = ss.getId();
+  Guru_grantOwnSpreadsheetAccess_(ssId, email);
 
   Object.keys(CONFIG_GURU_OPERATIONAL_SCHEMA_).forEach(function (name) {
     const headers = CONFIG_GURU_OPERATIONAL_SCHEMA_[name];
@@ -195,6 +225,24 @@ function Guru_provisionSpreadsheet_(email, guruId, namaLengkap, sekolahId, data)
 
   Auth_invalidateCache_(email);
   return ssId;
+}
+
+/**
+ * Guru_grantOwnSpreadsheetAccess_(spreadsheetId, email)
+ * Beri izin EDITOR eksplisit ke guru pemilik data ini — dipanggil saat
+ * provisioning baru DAN saat memperbaiki guru yang sudah terprovisi
+ * (adminReprovisionTeacher). addEditor melempar exception kalau email-
+ * nya sendiri (tidak mungkin di sini, guru ≠ Superadmin) atau kalau
+ * domain melarang berbagi jenis ini — dibungkus try/catch supaya
+ * kegagalan berbagi tidak menggagalkan provisioning yang sedang
+ * berjalan, tapi tetap dicatat untuk ditelusuri.
+ */
+function Guru_grantOwnSpreadsheetAccess_(spreadsheetId, email) {
+  try {
+    DriveApp.getFileById(spreadsheetId).addEditor(email);
+  } catch (e) {
+    Utils_logError_('GRANT_GURU_ACCESS_' + spreadsheetId, e);
+  }
 }
 
 /**
