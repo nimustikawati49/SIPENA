@@ -19,9 +19,23 @@ function getAuth() {
   const cache = CacheService.getScriptCache();
   const cacheKey = 'AUTH_' + email;
   const cached = cache.get(cacheKey);
-  if (cached) return JSON.parse(cached);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (eParse) { /* cache korup, resolve ulang di bawah */ }
+  }
 
-  const auth = Auth_resolve_(email);
+  // Dibungkus try/catch total — Auth_resolve_ menyentuh banyak sheet
+  // central lewat Config_getSheet_ (yang sekaligus menjalankan migrasi
+  // skema lazy) DAN spreadsheet pribadi guru (Guru_ensureOwnSpreadsheet_).
+  // Kegagalan tak terduga di salah satu titik itu TIDAK BOLEH membuat
+  // seluruh aplikasi gagal dimuat (pesan mentah "Gagal memuat" tanpa
+  // konteks) — lebih baik guru dapat pesan jelas untuk dicoba lagi.
+  let auth;
+  try {
+    auth = Auth_resolve_(email);
+  } catch (e) {
+    Utils_logError_('GET_AUTH_FAILED_' + email, e);
+    return { authenticated: true, email: email, role: null, message: 'Terjadi kendala saat memuat akun Anda. Coba muat ulang halaman ini sekali lagi.' };
+  }
   try { cache.put(cacheKey, JSON.stringify(auth), 30); } catch (e) {}
   return auth;
 }

@@ -292,8 +292,16 @@ function Config_ensureDriveUrlsFixed_run_() {
  * mau tertulis "Mengwi", nama kecamatannya — lihat Print.gs). Bump nama
  * property (_V2 -> _V3, dst.) tiap kali skema central bertambah kolom
  * baru di masa depan, sama seperti pola Config_ensureTextFormatColumns_.
- * Ini murni TULIS SEL header (bukan insertSheet), aman dipanggil dari
- * eksekusi siapa pun termasuk guru.
+ * Ini murni TULIS SEL header (bukan insertSheet) — sebelumnya diasumsikan
+ * itu berarti selalu aman dipanggil dari eksekusi siapa pun termasuk guru,
+ * TIDAK dibungkus try/catch seperti fungsi migrasi sejenis lainnya. Asumsi
+ * itu ternyata salah: kalau gagal (di sheet mana pun, alasan apa pun),
+ * exception mentah lolos sampai ke getAuth() dan bikin SELURUH aplikasi
+ * gagal dimuat untuk SEMUA orang (bukan cuma satu fitur) — pernah terjadi
+ * persis begitu. Sekarang dibungkus try/catch sama seperti
+ * Config_ensureDriveUrlsFixed_/Config_ensureTextFormatColumns_: kalau
+ * gagal, flag TIDAK diset supaya dicoba lagi di eksekusi berikutnya,
+ * tapi login/aksi yang sedang berjalan tetap lanjut.
  */
 var CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = false;
 function Config_ensureColumnsMigration_() {
@@ -301,20 +309,23 @@ function Config_ensureColumnsMigration_() {
   const props = PropertiesService.getScriptProperties();
   if (props.getProperty('COLUMNS_MIGRATION_V5')) { CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true; return; }
 
-  const ss = Config_getCentralSpreadsheet_();
-  Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
-    const sh = ss.getSheetByName(sheetName);
-    if (!sh) return;
-    const lastCol = sh.getLastColumn();
-    const header = lastCol ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); }) : [];
-    const missing = CONFIG_CENTRAL_SCHEMA_[sheetName].filter(function (col) { return header.indexOf(col) === -1; });
-    if (missing.length) {
-      sh.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
-      sh.getRange(1, lastCol + 1, 1, missing.length).setFontWeight('bold');
-    }
-  });
-
-  props.setProperty('COLUMNS_MIGRATION_V5', '1');
+  try {
+    const ss = Config_getCentralSpreadsheet_();
+    Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
+      const sh = ss.getSheetByName(sheetName);
+      if (!sh) return;
+      const lastCol = sh.getLastColumn();
+      const header = lastCol ? sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); }) : [];
+      const missing = CONFIG_CENTRAL_SCHEMA_[sheetName].filter(function (col) { return header.indexOf(col) === -1; });
+      if (missing.length) {
+        sh.getRange(1, lastCol + 1, 1, missing.length).setValues([missing]);
+        sh.getRange(1, lastCol + 1, 1, missing.length).setFontWeight('bold');
+      }
+    });
+    props.setProperty('COLUMNS_MIGRATION_V5', '1');
+  } catch (e) {
+    Utils_logError_('COLUMNS_MIGRATION_FAILED', e);
+  }
   CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true;
 }
 
