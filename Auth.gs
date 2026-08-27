@@ -149,7 +149,12 @@ function updateMySuperadminProfile(nama) {
 
 function uploadSuperadminPhoto(base64Data, mimeType, fileName) {
   const auth = Security_requireRole_(['SUPERADMIN']);
-  const url = Utils_saveUploadedFile_('SIPENA_Foto_Profil', base64Data, mimeType, fileName);
+  // Nama folder disertai email — dulu bernama generik "SIPENA_Foto_Profil"
+  // yang sama persis dipakai guru (uploadMyPhoto/Dashboard.gs), rawan
+  // tabrakan nama lewat DriveApp.getFoldersByName kalau kebijakan berbagi
+  // default domain membuat folder siapa pun terlihat akun lain sebagai
+  // Viewer. Lihat catatan panjang di uploadMyPhoto.
+  const url = Utils_saveUploadedFile_('SIPENA_Foto_Profil_Superadmin_' + auth.email.replace(/[^a-z0-9]/gi, '_'), base64Data, mimeType, fileName);
 
   const sh = Config_getSheet_('MASTER_SUPERADMIN');
   const rows = Utils_sheetToObjects_(sh);

@@ -121,12 +121,29 @@ function updateMyProfile(data) {
  * jadi tidak kelihatan dari pesan errornya, padahal dua-duanya bisa
  * memunculkan pesan Drive permission mentah yang sama. Sekarang dipisah
  * jelas supaya kalau masih gagal, jelas tahap mana yang bermasalah.
+ *
+ * PENTING: nama folder tujuan upload SEKARANG disertai guru_id
+ * ('SIPENA_Foto_Profil_' + guruId), bukan nama generik "SIPENA_Foto_Profil"
+ * yang dulu dipakai bersama oleh SEMUA guru (dan sama persis dengan nama
+ * folder punya Superadmin di uploadSuperadminPhoto/Auth.gs). Root cause
+ * ditemukan: Utils_getOrCreateFolder_ mencari folder BERDASARKAN NAMA
+ * lewat DriveApp.getFoldersByName — yang mencakup folder MILIK ORANG LAIN
+ * yang kebetulan sudah terlihat oleh akun ini (mis. lewat kebijakan
+ * berbagi default domain Workspace pendidikan yang otomatis membuat file/
+ * folder baru terlihat bagi anggota domain lain sebagai Viewer). Kalau
+ * guru menemukan folder bernama sama milik Superadmin/guru lain lebih
+ * dulu, folder.createFile() di dalamnya gagal karena guru cuma py akses
+ * Viewer, bukan Editor — persis error "tidak punya izin akses edit
+ * dokumen" yang dilaporkan, padahal ini SAMA SEKALI tidak terkait
+ * kepemilikan spreadsheet (No. HP, yang menulis sel spreadsheet biasa,
+ * memang tidak kena masalah ini). Nama folder yang disertai guru_id unik
+ * per guru menghilangkan kemungkinan tabrakan nama ini sepenuhnya.
  */
 function uploadMyPhoto(base64Data, mimeType, fileName) {
   const auth = Security_requireRole_(['GURU']);
   let url;
   try {
-    url = Utils_saveUploadedFile_('SIPENA_Foto_Profil', base64Data, mimeType, fileName);
+    url = Utils_saveUploadedFile_('SIPENA_Foto_Profil_' + auth.guruId, base64Data, mimeType, fileName);
   } catch (e) {
     throw new Error('Gagal mengunggah foto ke Drive Anda: ' + (e && e.message ? e.message : e));
   }
@@ -138,7 +155,7 @@ function uploadMySignature(base64Data, mimeType, fileName) {
   const auth = Security_requireRole_(['GURU']);
   let url;
   try {
-    url = Utils_saveUploadedFile_('SIPENA_Tanda_Tangan', base64Data, mimeType, fileName);
+    url = Utils_saveUploadedFile_('SIPENA_Tanda_Tangan_' + auth.guruId, base64Data, mimeType, fileName);
   } catch (e) {
     throw new Error('Gagal mengunggah tanda tangan ke Drive Anda: ' + (e && e.message ? e.message : e));
   }
