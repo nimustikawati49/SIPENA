@@ -36,7 +36,7 @@ function Config_getCentralSpreadsheetId_() {
  * Cache di variabel modul (bukan CacheService — cukup untuk SATU
  * eksekusi, direset otomatis tiap request baru) — SpreadsheetApp.openById
  * dipanggil banyak fungsi lewat Config_getSheet_, kadang berkali-kali
- * dalam satu request (mis. Jadwal_enrichWithNames_ minta 4 sheet
+ * dalam satu request (mis. adminGetSchedules minta beberapa sheet
  * berbeda). ID spreadsheet-nya tidak mungkin berubah di tengah satu
  * eksekusi, jadi aman disimpan sekali dan dipakai ulang.
  */
@@ -60,7 +60,14 @@ const CONFIG_CENTRAL_SCHEMA_ = {
   // cukup. Sheet lama boleh masih punya kolom nuptk dengan data
   // historis, tidak dibaca/ditulis kode manapun lagi.
   MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
-  RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at'],
+  // owned_by_guru: 'YES' kalau spreadsheet_id di baris ini SUDAH dikonfirmasi
+  // dimiliki (owner Drive-nya) akun guru itu sendiri — lihat
+  // Guru_ensureOwnSpreadsheet_ di Guru.gs. needs_resync: 'YES' dipakai
+  // Superadmin untuk menandai "tolong bagikan ulang akses saya" tanpa bisa
+  // melakukannya sendiri (Superadmin bukan pemilik file guru lagi) — guru
+  // yang menjalankannya lewat login berikutnya, karena cuma pemilik file
+  // yang bisa memberi akses.
+  RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'owned_by_guru', 'needs_resync', 'created_at'],
   MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'tempat_cetak', 'status', 'created_at', 'updated_at'],
   MASTER_MAPEL: ['mapel_id', 'kode_mapel', 'nama_mapel', 'jenjang', 'status'],
   MASTER_KELAS: ['kelas_id', 'sekolah_id', 'tingkat', 'nama_kelas', 'jenjang', 'program_keahlian', 'konsentrasi_keahlian', 'status'],
@@ -175,7 +182,7 @@ const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
  * membuat sheet baru dari deploy berikutnya "tertahan". Yang dicegah
  * cuma pemanggilan getSheetByName() 15× berulang dalam SATU request
  * yang sama begitu satu fungsi memanggil Config_getSheet_() banyak kali
- * (mis. Jadwal_enrichWithNames_) — dalam satu eksekusi, schema tidak
+ * (mis. adminGetSchedules) — dalam satu eksekusi, schema tidak
  * mungkin berubah di tengah jalan, jadi verifikasi kedua dst. aman
  * dilewati.
  */
@@ -288,7 +295,7 @@ var CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = false;
 function Config_ensureColumnsMigration_() {
   if (CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_) return;
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('COLUMNS_MIGRATION_V3')) { CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true; return; }
+  if (props.getProperty('COLUMNS_MIGRATION_V4')) { CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true; return; }
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
@@ -303,7 +310,7 @@ function Config_ensureColumnsMigration_() {
     }
   });
 
-  props.setProperty('COLUMNS_MIGRATION_V3', '1');
+  props.setProperty('COLUMNS_MIGRATION_V4', '1');
   CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true;
 }
 

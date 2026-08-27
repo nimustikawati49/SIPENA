@@ -82,7 +82,10 @@ function GuruApp_wireCorner_() {
     if (!file) return;
     SIPENA_readFileAsBase64_(file, 1500, function (base64, mimeType, fileName) {
       runServer('uploadMySignature', [base64, mimeType, fileName], {
-        onSuccess: function () { SIPENA_toast('Tanda tangan diperbarui.'); }
+        onSuccess: function (res) {
+          SIPENA_toast('Tanda tangan diperbarui.');
+          GuruApp_setTtdPreview_(res.url);
+        }
       });
     });
   });
@@ -145,6 +148,24 @@ function GuruApp_render_(dash) {
   document.getElementById('sp-corner-guru-avatar-big').innerHTML = avatarHtml;
   document.getElementById('sp-corner-guru-readonly').innerHTML = GuruApp_detailItem_('NIP', p.nip);
   document.getElementById('sp-form-corner-guru').no_hp.value = p.no_hp || '';
+  GuruApp_setTtdPreview_(p.ttd_url);
+}
+
+/**
+ * GuruApp_setTtdPreview_(url)
+ * Menampilkan pratinjau tanda tangan yang sudah tersimpan, dan
+ * memperbaruinya lagi (auto-replace, satu-satunya <img>) begitu guru
+ * mengunggah tanda tangan baru — lihat GuruApp_wireCorner_.
+ */
+function GuruApp_setTtdPreview_(url) {
+  var wrap = document.getElementById('sp-corner-guru-ttd-preview-wrap');
+  var img = document.getElementById('sp-corner-guru-ttd-preview');
+  if (url) {
+    img.src = url;
+    wrap.classList.remove('hidden');
+  } else {
+    wrap.classList.add('hidden');
+  }
 }
 
 function GuruApp_renderJadwalMinggu_(dash) {

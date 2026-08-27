@@ -63,7 +63,7 @@ function Auth_resolve_(email) {
     if (String(guru.status || '').toUpperCase() !== 'AKTIF') {
       return { authenticated: true, email: email, role: null, message: 'Akun Anda berstatus nonaktif. Hubungi Superadmin.' };
     }
-    const resourceMap = Auth_findResourceMap_(guru.guru_id);
+    const resourceMap = Guru_ensureOwnSpreadsheet_(guru, email);
     return {
       authenticated: true,
       email: email,
@@ -160,15 +160,4 @@ function uploadSuperadminPhoto(base64Data, mimeType, fileName) {
   Auth_invalidateCache_(auth.email);
   AuditLog_write_(auth, 'UPDATE_SUPERADMIN_PHOTO', 'Profil', auth.email, url);
   return { url: url };
-}
-
-function Auth_findResourceMap_(guruId) {
-  const sh = Config_getSheet_('RESOURCE_MAP');
-  const rows = Utils_sheetToObjects_(sh);
-  for (let i = 0; i < rows.length; i++) {
-    if (String(rows[i].guru_id || '') === String(guruId) && String(rows[i].status || '').toLowerCase() === 'active') {
-      return rows[i];
-    }
-  }
-  return null;
 }

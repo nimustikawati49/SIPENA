@@ -16,7 +16,10 @@ function Sync_teacherData_(guruId) {
     Sync_rewriteMapel_(ss, guruId);
     Sync_rewritePenugasanAndKelas_(ss, guruId);
     Sync_rewriteSiswa_(ss, guruId);
-    Sync_rewriteJadwal_(ss, guruId);
+    // Jadwal TIDAK disinkron dari central lagi — sheet JADWAL pribadi
+    // guru sekarang jadi sumber kebenarannya sendiri (lihat Jadwal.gs).
+    // Menimpanya di sini akan menghapus jadwal yang guru masukkan sendiri
+    // setiap kali sinkronisasi lain (mapel/penugasan/siswa) berjalan.
     Dashboard_invalidateCache_(guruId);
     Sync_clearQueueEntry_(guruId);
   } catch (e) {
@@ -219,44 +222,6 @@ function Sync_rewriteSiswa_(ss, guruId) {
       siswa_id: s.siswa_id, nis: s.nis, nama_lengkap: s.nama_lengkap,
       jenis_kelamin: s.jenis_kelamin, kelas_id: r.kelas_id, status: s.status
     });
-  });
-
-  Sync_clearAndWrite_(sh, rows);
-}
-
-/**
- * Sync_rewriteJadwal_(ss, guruId)
- * Mirror JADWAL_MENGAJAR milik guru ini ke sheet JADWAL pribadinya —
- * dibaca guru lewat getMySchedule (Jadwal.gs). Dipanggil ulang setelah
- * guru sendiri menambah/ubah/hapus jadwalnya (createMySchedule dkk.)
- * maupun setelah aksi Superadmin, supaya mirror selalu segar dari
- * penulis manapun.
- */
-function Sync_rewriteJadwal_(ss, guruId) {
-  // Config_ensureGuruSheet_ melengkapi kolom yang mungkin belum ada (mis.
-  // nama_mapel/nama_kelas di spreadsheet guru yang dibuat sebelum kolom
-  // itu ditambahkan) — aman di sini karena Sync_teacherData_ selalu
-  // dipanggil dari aksi Superadmin (adminCreateSchedule dkk.), tidak
-  // pernah dari eksekusi guru.
-  const sh = Config_ensureGuruSheet_(ss, 'JADWAL');
-  if (!sh) return;
-  Config_applyTextFormat_(sh, ['jam_mulai', 'jam_selesai']);
-
-  const mapelById = Sync_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_MAPEL')), 'mapel_id');
-  const kelasById = Sync_indexBy_(Utils_sheetToObjects_(Config_getSheet_('MASTER_KELAS')), 'kelas_id');
-
-  const rows = Utils_sheetToObjects_(Config_getSheet_('JADWAL_MENGAJAR')).filter(function (r) {
-    return r.guru_id === guruId && String(r.status).toUpperCase() === 'AKTIF';
-  }).map(function (r) {
-    const m = mapelById[r.mapel_id] || {};
-    const k = kelasById[r.kelas_id] || {};
-    return {
-      jadwal_id: r.jadwal_id, mapel_id: r.mapel_id, nama_mapel: m.nama_mapel || '-',
-      kelas_id: r.kelas_id, nama_kelas: k.nama_kelas || '-', hari: r.hari,
-      jam_mulai: Jadwal_normalizeJam_(r.jam_mulai), jam_selesai: Jadwal_normalizeJam_(r.jam_selesai),
-      ruangan: r.ruangan, keterangan: r.keterangan,
-      tahun_ajaran_id: r.tahun_ajaran_id, semester: r.semester, status: r.status
-    };
   });
 
   Sync_clearAndWrite_(sh, rows);

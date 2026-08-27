@@ -91,7 +91,7 @@ function updateMyProfile(data) {
     if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
     Utils_updateRowByHeader_(sh, 2, patch);
   } catch (e) {
-    throw new Error('Gagal menyimpan — akun Anda tampaknya tidak punya akses ke spreadsheet pribadi Anda. Minta Superadmin memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
+    throw new Error('Gagal menyimpan — akun Anda tampaknya belum punya akses penuh ke spreadsheet pribadi Anda. Coba keluar lalu login ulang (akses akan diperbaiki otomatis saat login), atau hubungi Superadmin kalau masih gagal.');
   }
 
   Dashboard_invalidateCache_(auth.guruId);
@@ -135,7 +135,7 @@ function Dashboard_patchProfilField_(auth, field, value) {
     if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
     Utils_updateRowByHeader_(sh, 2, patch);
   } catch (e) {
-    throw new Error('File berhasil diunggah ke Drive, tapi gagal disimpan ke profil — akun Anda tampaknya tidak punya akses ke spreadsheet pribadi Anda. Minta Superadmin memprovisi ulang spreadsheet Anda (menu Guru → Provisi ulang).');
+    throw new Error('File berhasil diunggah ke Drive, tapi gagal disimpan ke profil — akun Anda tampaknya belum punya akses penuh ke spreadsheet pribadi Anda. Coba keluar lalu login ulang (akses akan diperbaiki otomatis saat login), atau hubungi Superadmin kalau masih gagal.');
   }
   Dashboard_invalidateCache_(auth.guruId);
   AuditLog_write_(auth, 'UPDATE_PROFILE', 'Profil', auth.guruId, field + '=' + value);
