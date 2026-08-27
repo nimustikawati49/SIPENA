@@ -342,49 +342,86 @@ function Guru_grantSuperadminAccess_(spreadsheetId) {
  * Guru_migrateToOwnAccount_(oldEntry, guru, email)
  * Guru lama yang spreadsheet-nya masih dimiliki Superadmin (arsitektur
  * sebelum perubahan ini): buat spreadsheet BARU yang dimiliki guru
- * (Guru_provisionSpreadsheet_, berjalan sebagai guru), salin semua data
- * dari spreadsheet lama ke yang baru, lalu alihkan RESOURCE_MAP ke yang
- * baru. Baris lama ditandai status 'migrated' (bukan dihapus) supaya
- * jejaknya tetap ada.
+ * (Guru_provisionSpreadsheet_, berjalan sebagai guru), coba salin semua
+ * data dari spreadsheet lama ke yang baru, lalu alihkan RESOURCE_MAP ke
+ * yang baru.
  *
- * Membaca spreadsheet lama makan akses EDITOR yang sudah (mestinya)
- * dibagikan ke guru ini sebelumnya (addEditor di arsitektur lama). Kalau
- * ternyata akses itu sendiri gagal/ditolak (skenario persis yang memicu
- * perubahan arsitektur ini), migrasi otomatis gagal dengan aman lewat
- * try/catch — guru tetap bisa lanjut pakai spreadsheet lamanya seperti
- * biasa (tidak ada regresi), tinggal dicoba lagi di login berikutnya.
+ * PENTING — ditulis ulang setelah migrasi versi pertama ternyata gagal
+ * TERUS-MENERUS untuk sebagian guru (dicoba ulang di SETIAP request
+ * berikutnya, lambat & tetap gagal): kalau spreadsheet LAMA ternyata
+ * sama sekali tidak bisa dibuka guru ini (skenario persis yang memicu
+ * seluruh perubahan arsitektur ini), migrasi TIDAK dibatalkan total lagi
+ * seperti sebelumnya — spreadsheet BARU tetap dibuat & dipakai (kosong,
+ * tanpa data lama) supaya guru langsung bisa lanjut memakai sistem tanpa
+ * terus-terusan mengalami percobaan migrasi yang gagal & lambat di setiap
+ * aksi. Baris lama ditandai 'orphaned_no_access' (bukan 'migrated')
+ * supaya Superadmin tahu perlu membuka file lama secara manual (dia
+ * pemiliknya) kalau data lama itu masih perlu diselamatkan/disalin
+ * manual. Setiap tahap dicatat terpisah ke _LOG_ERROR_ (lihat
+ * Utils_logError_) supaya penyebab pastinya bisa ditelusuri kalau masih
+ * bermasalah.
  */
 function Guru_migrateToOwnAccount_(oldEntry, guru, email) {
+  let oldSs = null;
   try {
-    const oldSs = SpreadsheetApp.openById(oldEntry.spreadsheet_id);
-    const newSsId = Guru_provisionSpreadsheet_(email, guru.guru_id, guru.nama_lengkap, guru.sekolah_id, guru);
-    const newSs = SpreadsheetApp.openById(newSsId);
+    oldSs = SpreadsheetApp.openById(oldEntry.spreadsheet_id);
+  } catch (eOpen) {
+    Utils_logError_('MIGRATE_STEP_OPEN_OLD_' + guru.guru_id, eOpen);
+  }
 
-    Object.keys(CONFIG_GURU_OPERATIONAL_SCHEMA_).forEach(function (name) {
-      Guru_copySheetData_(oldSs, newSs, name);
-    });
-    // Guru_copySheetData_ menyalin no_hp APA ADANYA — kalau di spreadsheet
-    // lama nilainya sudah kadung kehilangan nol depan (sebelum kolomnya
-    // diformat teks), salinannya ikut korup walau sel tujuannya sudah
-    // diformat teks (format cuma mencegah korup BARU, bukan memperbaiki
-    // nilai yang sudah korup). Ditulis ulang ternormalisasi di sini.
-    try {
-      const newProfilSheet = newSs.getSheetByName('PROFIL');
-      const newProfil = Utils_sheetToObjects_(newProfilSheet)[0];
-      if (newProfil) Utils_updateRowByHeader_(newProfilSheet, newProfil._row, { no_hp: Utils_normalizeNoHp_(newProfil.no_hp) });
-    } catch (eNoHp) { /* non-kritis, biarkan bersih lewat updateMyProfile berikutnya */ }
-    // Jadwal mengajar guru ini sebelumnya tersimpan di sheet central
-    // JADWAL_MENGAJAR (arsitektur lama), belum di sheet JADWAL pribadinya
-    // — disalin terpisah karena strukturnya beda (lihat Jadwal.gs).
-    Jadwal_migrateGuruToOwnSheet_(guru.guru_id, newSs);
-
-    Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), oldEntry._row, { status: 'migrated' });
-    Auth_invalidateCache_(email);
-    return Guru_findResourceMapByGuruId_(guru.guru_id);
-  } catch (e) {
-    Utils_logError_('MIGRATE_GURU_ACCOUNT_' + guru.guru_id, e);
+  let newSsId;
+  try {
+    newSsId = Guru_provisionSpreadsheet_(email, guru.guru_id, guru.nama_lengkap, guru.sekolah_id, guru);
+  } catch (eCreate) {
+    // Membuat spreadsheet BARU milik guru sendiri saja gagal — ini bukan
+    // lagi soal berbagi/kepemilikan (SpreadsheetApp.create tidak butuh
+    // izin siapa pun), kemungkinan besar akun ini dibatasi membuat file
+    // Drive sama sekali oleh kebijakan domain/Workspace-nya. Tidak ada
+    // yang bisa dilakukan otomatis di sini.
+    Utils_logError_('MIGRATE_STEP_CREATE_NEW_' + guru.guru_id, eCreate);
     return null;
   }
+
+  if (oldSs) {
+    try {
+      const newSs = SpreadsheetApp.openById(newSsId);
+      Object.keys(CONFIG_GURU_OPERATIONAL_SCHEMA_).forEach(function (name) {
+        Guru_copySheetData_(oldSs, newSs, name);
+      });
+      // Guru_copySheetData_ menyalin no_hp APA ADANYA — kalau di spreadsheet
+      // lama nilainya sudah kadung kehilangan nol depan (sebelum kolomnya
+      // diformat teks), salinannya ikut korup walau sel tujuannya sudah
+      // diformat teks (format cuma mencegah korup BARU, bukan memperbaiki
+      // nilai yang sudah korup). Ditulis ulang ternormalisasi di sini.
+      try {
+        const newProfilSheet = newSs.getSheetByName('PROFIL');
+        const newProfil = Utils_sheetToObjects_(newProfilSheet)[0];
+        if (newProfil) Utils_updateRowByHeader_(newProfilSheet, newProfil._row, { no_hp: Utils_normalizeNoHp_(newProfil.no_hp) });
+      } catch (eNoHp) { /* non-kritis, biarkan bersih lewat updateMyProfile berikutnya */ }
+      // Jadwal mengajar guru ini sebelumnya tersimpan di sheet central
+      // JADWAL_MENGAJAR (arsitektur lama), belum di sheet JADWAL pribadinya
+      // — disalin terpisah karena strukturnya beda (lihat Jadwal.gs).
+      Jadwal_migrateGuruToOwnSheet_(guru.guru_id, newSs);
+    } catch (eCopy) {
+      // Spreadsheet baru tetap dipakai (guru tidak terblokir) walau
+      // sebagian/semua data lama gagal tersalin.
+      Utils_logError_('MIGRATE_STEP_COPY_DATA_' + guru.guru_id, eCopy);
+    }
+  }
+
+  try {
+    Utils_updateRowByHeader_(Config_getSheet_('RESOURCE_MAP'), oldEntry._row, { status: oldSs ? 'migrated' : 'orphaned_no_access' });
+  } catch (eStatus) {
+    // Kalau justru baris LAMA ini yang gagal ditandai, dua baris RESOURCE_MAP
+    // sama-sama 'active' untuk guru_id yang sama — Guru_findResourceMapByGuruId_
+    // (yang cuma ambil baris PERTAMA yang cocok) bisa salah pilih balik ke
+    // baris lama yang rusak. Dicari eksplisit lewat spreadsheet_id yang BARU
+    // saja di bawah supaya tidak bergantung urutan baris.
+    Utils_logError_('MIGRATE_STEP_MARK_OLD_' + guru.guru_id, eStatus);
+  }
+  Auth_invalidateCache_(email);
+  const rows = Utils_sheetToObjects_(Config_getSheet_('RESOURCE_MAP'));
+  return rows.filter(function (r) { return r.spreadsheet_id === newSsId; })[0] || Guru_findResourceMapByGuruId_(guru.guru_id);
 }
 
 function Guru_copySheetData_(oldSs, newSs, sheetName) {
