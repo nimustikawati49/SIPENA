@@ -39,9 +39,11 @@ function NilaiApp_markup_() {
     '    <button type="button" class="sp-btn secondary" onclick="KatrolApp_open_()">Katrol Nilai Akhir</button>' +
     '    <form class="sp-form hidden" id="sp-nilai-settings-form" style="margin-top:10px;flex-basis:100%;">' +
     '      <div class="sp-field"><label>KKM</label><input name="kkm" type="number" min="0" max="100" required></div>' +
+    '      <div class="sp-field"><label>Nilai KKTP</label><input name="nilai_kktp" type="number" min="0" max="100" placeholder="Default sistem"></div>' +
     '      <div class="sp-field"><label>Nilai Min Katrol Komponen</label><input name="nilai_min_target" type="number" min="0" max="100" required></div>' +
     '      <div class="sp-field"><label>Nilai Max Katrol Komponen</label><input name="nilai_max_target" type="number" min="0" max="100" required></div>' +
     '      <div class="sp-field"><label>Sumber Nilai Rapor</label><select name="sumber_nilai_rapor"><option value="MURNI">Nilai Akhir Murni</option><option value="KATROL">Nilai Akhir Katrol</option></select></div>' +
+    '      <div class="msg" style="flex-basis:100%;margin:-2px 0 0;">Nilai KKTP menentukan kategori & status ketercapaian siswa (kebijakan Anda sendiri, bukan diatur Superadmin) — kosongkan untuk pakai default sistem sesuai jenjang/tingkat kelas ini.</div>' +
     '      <button class="sp-btn" type="submit">Simpan Pengaturan</button>' +
     '    </form>' +
     '  </div>' +
@@ -108,7 +110,7 @@ function NilaiApp_wire_() {
     var ctx = NilaiApp.currentContext;
     if (!ctx) return;
     var btn = f.querySelector('button[type="submit"]');
-    runServer('saveMyGradeSettings', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, f.kkm.value, f.nilai_min_target.value, f.nilai_max_target.value, f.sumber_nilai_rapor.value], {
+    runServer('saveMyGradeSettings', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester, f.kkm.value, f.nilai_min_target.value, f.nilai_max_target.value, f.sumber_nilai_rapor.value, f.nilai_kktp.value], {
       loadingEl: btn,
       onSuccess: function () { SIPENA_toast('Pengaturan disimpan.'); NilaiApp_loadGrades_(); }
     });
@@ -160,6 +162,8 @@ function NilaiApp_loadGrades_() {
       f.nilai_min_target.value = res.settings.nilai_min_target;
       f.nilai_max_target.value = res.settings.nilai_max_target;
       f.sumber_nilai_rapor.value = res.settings.sumber_nilai_rapor;
+      f.nilai_kktp.value = res.settings.nilai_kktp !== '' ? res.settings.nilai_kktp : '';
+      f.nilai_kktp.placeholder = 'Default sistem (' + res.kktpDefaultValue + ')';
 
       NilaiApp.currentContext.bobotConfig = res.bobotConfig;
       NilaiApp.currentContext.assessmentLabel = res.assessmentLabel;

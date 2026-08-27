@@ -78,18 +78,12 @@ const CONFIG_CENTRAL_SCHEMA_ = {
 const CONFIG_BOBOT_NILAI_SHEET_ = 'PENGATURAN_BOBOT_NILAI';
 const CONFIG_BOBOT_NILAI_HEADERS_ = ['sekolah_id', 'bobot_harian', 'bobot_pts', 'bobot_akhir_semester', 'mode_perhitungan', 'decimal_places', 'updated_at', 'updated_by'];
 
-// Sama alasan seperti CONFIG_BOBOT_NILAI_SHEET_ di atas — MASTER_KKTP dan
-// KATROL_TARGET_CONFIG murni domain Superadmin, dibuat lazy hanya lewat
-// Config_ensureCentralSheet_ dari fungsi admin* (Kktp.gs/Katrol.gs).
-const CONFIG_KKTP_SHEET_ = 'MASTER_KKTP';
-const CONFIG_KKTP_HEADERS_ = ['kktp_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenjang', 'tingkat', 'mapel_id', 'nilai_kktp',
-  'interval_1_min', 'interval_1_max', 'interval_1_label', 'interval_2_min', 'interval_2_max', 'interval_2_label',
-  'interval_3_min', 'interval_3_max', 'interval_3_label', 'interval_4_min', 'interval_4_max', 'interval_4_label',
-  'status', 'created_at', 'updated_at'];
-
-const CONFIG_KATROL_TARGET_SHEET_ = 'KATROL_TARGET_CONFIG';
-const CONFIG_KATROL_TARGET_HEADERS_ = ['config_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenjang', 'tingkat', 'mapel_id',
-  'target_min', 'target_max', 'pembulatan', 'status', 'updated_at', 'updated_by'];
+// MASTER_KKTP dan KATROL_TARGET_CONFIG (sheet central lama untuk config
+// KKTP/Katrol milik Superadmin) DIHAPUS dari sini — KKTP dan target Katrol
+// sekarang sepenuhnya kebijakan GURU sendiri, tersimpan di sheet PENGATURAN
+// pribadinya (lihat Kktp.gs/Katrol.gs). Sheet MASTER_KKTP/KATROL_TARGET_CONFIG
+// di spreadsheet central lama boleh masih ada berisi data lama — tidak
+// dibaca/ditulis kode manapun lagi, aman dihapus manual kalau mau bersih-bersih.
 
 // SEKOLAH_KOP: kop cetak sebagai GAMBAR utuh yang diunggah Superadmin
 // (bukan disusun dari field teks — lebih sederhana, sekolah tinggal pakai
@@ -127,7 +121,7 @@ const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
   NILAI: ['nilai_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'jenis_nilai', 'sumber_nilai', 'nilai_murni', 'nilai_katrol', 'asal_sekolah', 'tanggal_input', 'keterangan'],
   RIWAYAT_NILAI: ['riwayat_id', 'nilai_id', 'nilai_sebelum', 'nilai_sesudah', 'updated_by', 'updated_at'],
   JADWAL: ['jadwal_id', 'mapel_id', 'nama_mapel', 'kelas_id', 'nama_kelas', 'hari', 'jam_mulai', 'jam_selesai', 'ruangan', 'keterangan', 'tahun_ajaran_id', 'semester', 'status'],
-  PENGATURAN: ['kelas_id', 'mapel_id', 'tahun_ajaran_id', 'semester', 'kkm', 'nilai_min_target', 'nilai_max_target', 'sumber_nilai_rapor'],
+  PENGATURAN: ['kelas_id', 'mapel_id', 'tahun_ajaran_id', 'semester', 'kkm', 'nilai_min_target', 'nilai_max_target', 'sumber_nilai_rapor', 'nilai_kktp'],
   NILAI_AKHIR: ['nilai_akhir_id', 'siswa_id', 'guru_id', 'mapel_id', 'kelas_id', 'sekolah_id', 'tahun_ajaran_id', 'semester', 'rata_rata_harian', 'nilai_akhir_murni', 'nilai_akhir_katrol', 'status_nilai', 'nilai_kktp', 'kategori', 'status_ketercapaian', 'updated_at'],
   KATROL_HISTORY: ['katrol_id', 'guru_id', 'sekolah_id', 'mapel_id', 'kelas_id', 'tahun_ajaran_id', 'semester', 'source_min', 'source_max', 'target_min', 'target_max', 'jumlah_siswa', 'created_by', 'created_at'],
   LOG: ['timestamp', 'aksi', 'keterangan']

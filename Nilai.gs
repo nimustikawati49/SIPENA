@@ -62,7 +62,7 @@ function Nilai_ensureNilaiAkhirSheet_(ss) {
   }
 }
 
-const NILAI_SETTINGS_DEFAULT_ = { kkm: NILAI_DEFAULT_KKM_, nilai_min_target: NILAI_DEFAULT_MIN_TARGET_, nilai_max_target: NILAI_DEFAULT_MAX_TARGET_, sumber_nilai_rapor: 'MURNI' };
+const NILAI_SETTINGS_DEFAULT_ = { kkm: NILAI_DEFAULT_KKM_, nilai_min_target: NILAI_DEFAULT_MIN_TARGET_, nilai_max_target: NILAI_DEFAULT_MAX_TARGET_, sumber_nilai_rapor: 'MURNI', nilai_kktp: '' };
 
 /**
  * Nilai_getSettings_(ss, ...)
@@ -85,14 +85,15 @@ function Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester) {
       kkm: row && row.kkm !== '' ? Number(row.kkm) : NILAI_DEFAULT_KKM_,
       nilai_min_target: row && row.nilai_min_target !== '' ? Number(row.nilai_min_target) : NILAI_DEFAULT_MIN_TARGET_,
       nilai_max_target: row && row.nilai_max_target !== '' ? Number(row.nilai_max_target) : NILAI_DEFAULT_MAX_TARGET_,
-      sumber_nilai_rapor: row && row.sumber_nilai_rapor === 'KATROL' ? 'KATROL' : 'MURNI'
+      sumber_nilai_rapor: row && row.sumber_nilai_rapor === 'KATROL' ? 'KATROL' : 'MURNI',
+      nilai_kktp: row && row.nilai_kktp !== '' && row.nilai_kktp !== undefined ? Number(row.nilai_kktp) : ''
     };
   } catch (e) {
     return Object.assign({}, NILAI_SETTINGS_DEFAULT_);
   }
 }
 
-function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nilaiMinTarget, nilaiMaxTarget, sumberNilaiRapor) {
+function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nilaiMinTarget, nilaiMaxTarget, sumberNilaiRapor, nilaiKktp) {
   const auth = Security_requireRole_(['GURU']);
   Nilai_validateScope_(kelasId, mapelId, tahunAjaranId, semester);
   kkm = Number(kkm); nilaiMinTarget = Number(nilaiMinTarget); nilaiMaxTarget = Number(nilaiMaxTarget);
@@ -102,6 +103,15 @@ function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nil
   if (nilaiMinTarget >= nilaiMaxTarget) throw new Error('Nilai minimum target harus lebih kecil dari maksimum.');
   sumberNilaiRapor = sumberNilaiRapor === 'KATROL' ? 'KATROL' : 'MURNI';
 
+  // nilaiKktp kosong berarti guru memilih pakai default sistem (per
+  // jenjang+tingkat kelasnya) — bukan error, cuma tidak diisi angka
+  // sendiri. Kalau diisi, harus 0-100 seperti kolom nilai lainnya.
+  let kktpValue = '';
+  if (nilaiKktp !== '' && nilaiKktp !== null && nilaiKktp !== undefined) {
+    kktpValue = Number(nilaiKktp);
+    if (isNaN(kktpValue) || kktpValue < 0 || kktpValue > 100) throw new Error('Nilai KKTP harus angka 0–100 (atau kosongkan untuk pakai default sistem).');
+  }
+
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
   try {
     const sh = Config_ensureGuruSheetColumnsSafe_(ss.getSheetByName('PENGATURAN'), 'PENGATURAN');
@@ -109,7 +119,7 @@ function saveMyGradeSettings(kelasId, mapelId, tahunAjaranId, semester, kkm, nil
       return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
     })[0];
 
-    const patch = { kkm: kkm, nilai_min_target: nilaiMinTarget, nilai_max_target: nilaiMaxTarget, sumber_nilai_rapor: sumberNilaiRapor };
+    const patch = { kkm: kkm, nilai_min_target: nilaiMinTarget, nilai_max_target: nilaiMaxTarget, sumber_nilai_rapor: sumberNilaiRapor, nilai_kktp: kktpValue };
     if (existing) {
       Utils_updateRowByHeader_(sh, existing._row, patch);
     } else {
@@ -230,11 +240,14 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
     step = 'baca pengaturan KKM/katrol/sumber rapor (PENGATURAN)';
     var settings = Nilai_getSettings_(ss, kelasId, mapelId, tahunAjaranId, semester);
 
+    step = 'baca info kelas (jenjang/tingkat untuk default KKTP)';
+    var kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
+    var kktpDefaultValue = kelasInfo ? Kktp_defaultValueFor_(kelasInfo.jenjang, kelasInfo.tingkat) : 75;
+
     step = 'hitung KKTP live (mode rapor Katrol)';
     var liveKktpConfig = null;
-    if (settings.sumber_nilai_rapor === 'KATROL') {
-      var kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
-      if (kelasInfo) liveKktpConfig = Nilai_getKktpConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId);
+    if (settings.sumber_nilai_rapor === 'KATROL' && kelasInfo) {
+      liveKktpConfig = Nilai_getKktpConfig_(settings.nilai_kktp, kelasInfo.jenjang, kelasInfo.tingkat);
     }
 
     step = 'baca konfigurasi bobot nilai (PENGATURAN_BOBOT_NILAI)';
@@ -276,7 +289,8 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
     students: rows,
     settings: settings,
     bobotConfig: bobotConfig,
-    assessmentLabel: assessmentLabel
+    assessmentLabel: assessmentLabel,
+    kktpDefaultValue: kktpDefaultValue
   };
 }
 
@@ -412,7 +426,7 @@ function saveMyGradeSheetBatch(kelasId, mapelId, tahunAjaranId, semester, rows) 
   const bobotConfig = Nilai_getBobotConfig_(auth.sekolahId);
   const kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
   const kktpConfig = kelasInfo
-    ? Nilai_getKktpConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId)
+    ? Nilai_getKktpConfig_(settings.nilai_kktp, kelasInfo.jenjang, kelasInfo.tingkat)
     : null;
   const akhirSh = ss.getSheetByName('NILAI_AKHIR');
   const akhirHeader = akhirSh.getRange(1, 1, 1, akhirSh.getLastColumn()).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); });

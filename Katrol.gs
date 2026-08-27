@@ -6,17 +6,16 @@
 // aksi eksplisit guru (preview wajib sebelum simpan), bukan otomatis di
 // setiap simpan nilai seperti versi awal modul Nilai Akhir.
 //
-// KATROL_TARGET_CONFIG (central, dibuat lazy HANYA dari fungsi admin* di
-// sini) menyimpan target DEFAULT per jenjang+tingkat (bisa dipersempit ke
-// sekolah/tahun ajaran/semester/mapel) — cuma mengisi form awal panel
-// katrol guru, guru tetap harus lihat & konfirmasi angka aktual sebelum
-// simpan (lihat getMyKatrolPreview/saveMyKatrol).
+// Target katrol sepenuhnya kebijakan GURU sendiri, bukan Superadmin —
+// KATROL_DEFAULT_TABLE_ di bawah cuma mengisi form awal panel katrol guru
+// per jenjang+tingkat (guru tetap harus lihat & konfirmasi angka aktual
+// sebelum simpan, lihat getMyKatrolPreview/saveMyKatrol). Superadmin tidak
+// punya panel konfigurasi untuk ini sama sekali.
 
-const KATROL_MODE_PEMBULATAN_VALID_ = ['BILANGAN_BULAT', '1_DESIMAL', '2_DESIMAL'];
 const KATROL_PEMBULATAN_DEFAULT_ = 'BILANGAN_BULAT';
 
-// SATU tempat angka default target katrol ditulis (dipakai seed
-// KATROL_TARGET_CONFIG + fallback kode kalau sheet/baris belum ada).
+// SATU tempat angka default target katrol ditulis — dipakai sebagai nilai
+// pengisi awal form panel katrol guru per jenjang+tingkat.
 const KATROL_DEFAULT_TABLE_ = [
   { jenjang: 'SD', tingkat: '1', target_min: 70, target_max: 90 }, { jenjang: 'SD', tingkat: '2', target_min: 70, target_max: 90 }, { jenjang: 'SD', tingkat: '3', target_min: 70, target_max: 90 },
   { jenjang: 'SD', tingkat: '4', target_min: 75, target_max: 90 }, { jenjang: 'SD', tingkat: '5', target_min: 75, target_max: 90 }, { jenjang: 'SD', tingkat: '6', target_min: 75, target_max: 90 },
@@ -41,21 +40,12 @@ function Katrol_ensureHistorySheet_(ss) {
 }
 
 /**
- * Nilai_getKatrolTargetConfig_(sekolahId, tahunAjaranId, semester, jenjang, tingkat, mapelId)
- * Cuma getSheetByName langsung (BUKAN Config_ensureCentralSheet_) — kalau
- * sheet belum ada sama sekali, jatuh ke fallback kode KATROL_DEFAULT_TABLE_,
- * TIDAK PERNAH mencoba membuat sheet dari konteks guru.
+ * Nilai_getKatrolTargetConfig_(jenjang, tingkat)
+ * Default target katrol murni dari kode (KATROL_DEFAULT_TABLE_) — tidak
+ * ada lagi config Superadmin yang bisa mengubah ini, cuma titik awal
+ * pengisian form yang tetap 100% bisa diubah guru sebelum simpan.
  */
-function Nilai_getKatrolTargetConfig_(sekolahId, tahunAjaranId, semester, jenjang, tingkat, mapelId) {
-  const ss = Config_getCentralSpreadsheet_();
-  const sh = ss.getSheetByName(CONFIG_KATROL_TARGET_SHEET_);
-  const rows = sh ? Utils_sheetToObjects_(sh).filter(function (r) {
-    return r.jenjang === jenjang && String(r.tingkat) === String(tingkat) && String(r.status).toUpperCase() !== 'NONAKTIF';
-  }) : [];
-
-  const match = Utils_pickMostSpecificScopedRow_(rows, { sekolahId: sekolahId, tahunAjaranId: tahunAjaranId, semester: semester, mapelId: mapelId });
-  if (match) return match;
-
+function Nilai_getKatrolTargetConfig_(jenjang, tingkat) {
   const def = KATROL_DEFAULT_TABLE_.filter(function (d) { return d.jenjang === jenjang && String(d.tingkat) === String(tingkat); })[0];
   return def || { target_min: 75, target_max: 90, pembulatan: KATROL_PEMBULATAN_DEFAULT_ };
 }
@@ -127,7 +117,7 @@ function getMyKatrolTargetDefault(kelasId, mapelId, tahunAjaranId, semester) {
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
   const kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
   if (!kelasInfo) return { target_min: 75, target_max: 90, pembulatan: KATROL_PEMBULATAN_DEFAULT_ };
-  return Nilai_getKatrolTargetConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId);
+  return Nilai_getKatrolTargetConfig_(kelasInfo.jenjang, kelasInfo.tingkat);
 }
 
 /**
@@ -147,7 +137,7 @@ function getMyKatrolPreview(kelasId, mapelId, tahunAjaranId, semester, targetMin
 
   const kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
   const pembulatan = kelasInfo
-    ? Nilai_getKatrolTargetConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId).pembulatan || KATROL_PEMBULATAN_DEFAULT_
+    ? Nilai_getKatrolTargetConfig_(kelasInfo.jenjang, kelasInfo.tingkat).pembulatan || KATROL_PEMBULATAN_DEFAULT_
     : KATROL_PEMBULATAN_DEFAULT_;
 
   if (scope.sourceMin === scope.sourceMax) {
@@ -193,7 +183,7 @@ function saveMyKatrol(kelasId, mapelId, tahunAjaranId, semester, targetMin, targ
 
   const kelasInfo = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
   const pembulatan = kelasInfo
-    ? Nilai_getKatrolTargetConfig_(auth.sekolahId, tahunAjaranId, semester, kelasInfo.jenjang, kelasInfo.tingkat, mapelId).pembulatan || KATROL_PEMBULATAN_DEFAULT_
+    ? Nilai_getKatrolTargetConfig_(kelasInfo.jenjang, kelasInfo.tingkat).pembulatan || KATROL_PEMBULATAN_DEFAULT_
     : KATROL_PEMBULATAN_DEFAULT_;
 
   let katrolBySiswa;
@@ -279,77 +269,3 @@ function resetMyKatrol(kelasId, mapelId, tahunAjaranId, semester) {
   return { ok: true, reset: reset };
 }
 
-/* ================= Superadmin: KATROL_TARGET_CONFIG ================= */
-
-function Katrol_ensureSeeded_(sh) {
-  const existing = Utils_sheetToObjects_(sh);
-  const existingDefaults = {};
-  existing.forEach(function (r) {
-    if (!r.sekolah_id && !r.tahun_ajaran_id && !r.semester && !r.mapel_id) existingDefaults[r.jenjang + '|' + r.tingkat] = true;
-  });
-  const now = new Date();
-  let seeded = 0;
-  KATROL_DEFAULT_TABLE_.forEach(function (d) {
-    const key = d.jenjang + '|' + d.tingkat;
-    if (existingDefaults[key]) return;
-    Utils_appendRowByHeader_(sh, Object.assign({
-      config_id: Utils_newId_('KTC'), sekolah_id: '', tahun_ajaran_id: '', semester: '', mapel_id: '',
-      status: 'AKTIF', updated_at: now, updated_by: 'system'
-    }, d));
-    seeded++;
-  });
-  return seeded;
-}
-
-function adminGetKatrolTargetList(filters) {
-  Security_requireRole_(['SUPERADMIN']);
-  const sh = Config_ensureCentralSheet_(CONFIG_KATROL_TARGET_SHEET_, CONFIG_KATROL_TARGET_HEADERS_);
-  Katrol_ensureSeeded_(sh);
-
-  let rows = Utils_sheetToObjects_(sh).map(function (r) { delete r._row; return r; });
-  filters = filters || {};
-  if (filters.sekolah_id) rows = rows.filter(function (r) { return !r.sekolah_id || r.sekolah_id === filters.sekolah_id; });
-  if (filters.jenjang) rows = rows.filter(function (r) { return r.jenjang === filters.jenjang; });
-  if (filters.tingkat) rows = rows.filter(function (r) { return String(r.tingkat) === String(filters.tingkat); });
-  return rows;
-}
-
-function adminSaveKatrolTarget(data) {
-  const auth = Security_requireRole_(['SUPERADMIN']);
-  data = data || {};
-  if (!data.jenjang || !data.tingkat) throw new Error('Jenjang dan tingkat wajib diisi.');
-  const target = Katrol_validateTarget_(data.target_min, data.target_max);
-  const pembulatan = KATROL_MODE_PEMBULATAN_VALID_.indexOf(data.pembulatan) !== -1 ? data.pembulatan : KATROL_PEMBULATAN_DEFAULT_;
-
-  const sh = Config_ensureCentralSheet_(CONFIG_KATROL_TARGET_SHEET_, CONFIG_KATROL_TARGET_HEADERS_);
-  const patch = {
-    sekolah_id: data.sekolah_id || '', tahun_ajaran_id: data.tahun_ajaran_id || '', semester: data.semester || '',
-    jenjang: data.jenjang, tingkat: String(data.tingkat), mapel_id: data.mapel_id || '',
-    target_min: target.targetMin, target_max: target.targetMax, pembulatan: pembulatan,
-    updated_at: new Date(), updated_by: auth.email
-  };
-
-  if (data.config_id) {
-    const rowNum = Utils_findRowById_(sh, 'config_id', data.config_id);
-    if (rowNum === -1) throw new Error('Konfigurasi target katrol tidak ditemukan.');
-    Utils_updateRowByHeader_(sh, rowNum, patch);
-    AuditLog_write_(auth, 'UPDATE_KATROL_TARGET', 'Katrol', data.config_id, JSON.stringify(patch));
-    return { config_id: data.config_id };
-  }
-
-  const configId = Utils_newId_('KTC');
-  Utils_appendRowByHeader_(sh, Object.assign({ config_id: configId, status: 'AKTIF' }, patch));
-  AuditLog_write_(auth, 'CREATE_KATROL_TARGET', 'Katrol', configId, JSON.stringify(patch));
-  return { config_id: configId };
-}
-
-function adminToggleKatrolTargetStatus(configId) {
-  const auth = Security_requireRole_(['SUPERADMIN']);
-  const sh = Config_ensureCentralSheet_(CONFIG_KATROL_TARGET_SHEET_, CONFIG_KATROL_TARGET_HEADERS_);
-  const row = Utils_sheetToObjects_(sh).filter(function (r) { return r.config_id === configId; })[0];
-  if (!row) throw new Error('Konfigurasi target katrol tidak ditemukan.');
-  const newStatus = String(row.status).toUpperCase() === 'AKTIF' ? 'NONAKTIF' : 'AKTIF';
-  Utils_updateRowByHeader_(sh, row._row, { status: newStatus, updated_at: new Date(), updated_by: auth.email });
-  AuditLog_write_(auth, 'TOGGLE_KATROL_TARGET_STATUS', 'Katrol', configId, newStatus);
-  return { status: newStatus };
-}
