@@ -12,6 +12,11 @@ function GuruApp_init() {
   GuruApp_buildContent_();
   GuruApp_wireCorner_();
   GuruApp_load_();
+
+  SIPENA_startSidebarClock_('sp-sidebar-greeting-text-guru', 'sp-sidebar-clock-guru', function () {
+    var el = document.getElementById('sp-guru-name');
+    return el ? el.textContent : '';
+  });
 }
 
 function GuruApp_showTab_(tabId) {
@@ -123,7 +128,7 @@ function GuruApp_render_(dash) {
     GuruApp_detailItem_('Sekolah', dash.nama_sekolah) +
     '</div>';
 
-  var mapelNames = (dash.mapel || []).map(function (m) { return m.nama_mapel; }).join(', ');
+  var mapelNames = (dash.mapel || []).map(function (m) { return SIPENA_mapelIcon_(m.nama_mapel) + ' ' + m.nama_mapel; }).join(', ');
   var kelasNames = (dash.kelas || []).map(function (k) { return k.nama_kelas; }).join(', ');
 
   var totalLengkap = 0, totalSiswaCakupan = 0;

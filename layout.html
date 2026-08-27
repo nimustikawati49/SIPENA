@@ -1,6 +1,8 @@
 <div class="card" id="sp-auth-card">
   <div class="brand">
-    <div class="logo">SP</div>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M7 10.5V16c0 1.5 2.5 3 5 3s5-1.5 5-3v-5.5"/><path d="M21 8v6"/></svg>
+    </div>
     <div>
       <div class="title">SIPENA</div>
       <div class="subtitle">Sistem Informasi Penilaian dan Administrasi Guru</div>
@@ -26,7 +28,9 @@
 <div id="sp-admin-app" class="hidden">
   <div class="sp-sidebar" id="sp-sidebar-admin">
     <div class="sp-sidebar-brand">
-      <div class="logo">SP</div>
+      <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M7 10.5V16c0 1.5 2.5 3 5 3s5-1.5 5-3v-5.5"/><path d="M21 8v6"/></svg>
+    </div>
       <div class="sp-sidebar-brand-text">
         <div class="title">SIPENA</div>
         <div class="subtitle">Panel Superadmin</div>
@@ -34,6 +38,11 @@
       <button type="button" class="sp-sidebar-collapse-btn" onclick="SIPENA_toggleSidebar_(this)" title="Ciutkan menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
       </button>
+    </div>
+
+    <div class="sp-sidebar-greeting">
+      <div class="sp-sidebar-greeting-text" id="sp-sidebar-greeting-text-admin">Selamat datang</div>
+      <div class="sp-sidebar-clock" id="sp-sidebar-clock-admin">--:--:--</div>
     </div>
 
     <div class="sp-nav" id="sp-admin-tabs">
@@ -83,7 +92,9 @@
 <div id="sp-guru-app" class="hidden">
   <div class="sp-sidebar" id="sp-sidebar-guru">
     <div class="sp-sidebar-brand">
-      <div class="logo">SP</div>
+      <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M7 10.5V16c0 1.5 2.5 3 5 3s5-1.5 5-3v-5.5"/><path d="M21 8v6"/></svg>
+    </div>
       <div class="sp-sidebar-brand-text">
         <div class="title">SIPENA</div>
         <div class="subtitle">Dashboard Guru</div>
@@ -91,6 +102,11 @@
       <button type="button" class="sp-sidebar-collapse-btn" onclick="SIPENA_toggleSidebar_(this)" title="Ciutkan menu">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>
       </button>
+    </div>
+
+    <div class="sp-sidebar-greeting">
+      <div class="sp-sidebar-greeting-text" id="sp-sidebar-greeting-text-guru">Selamat datang</div>
+      <div class="sp-sidebar-clock" id="sp-sidebar-clock-guru">--:--:--</div>
     </div>
 
     <div class="sp-nav" id="sp-guru-tabs">

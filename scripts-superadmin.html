@@ -35,6 +35,11 @@ function SuperAdmin_init() {
   });
 
   SuperAdmin_wireCorner_();
+
+  SIPENA_startSidebarClock_('sp-sidebar-greeting-text-admin', 'sp-sidebar-clock-admin', function () {
+    var el = document.getElementById('sp-admin-name');
+    return el ? el.textContent : '';
+  });
 }
 
 /* ---------- Widget profil pojok kanan atas ---------- */
@@ -716,7 +721,8 @@ function SuperAdmin_editSubject_(mapelId) {
 }
 function SuperAdmin_renderMapel() {
   SIPENA_table_('sp-table-mapel', [
-    { key: 'mapel_id', label: 'ID' }, { key: 'kode_mapel', label: 'Kode' },
+    { label: '', render: function (r) { return '<span style="font-size:18px;">' + SIPENA_mapelIcon_(r.nama_mapel) + '</span>'; } },
+    { key: 'kode_mapel', label: 'Kode' },
     { key: 'nama_mapel', label: 'Nama' },
     { label: 'Jenjang', render: function (r) { return r.jenjang ? String(r.jenjang).split(',').join(', ') : 'Semua'; } },
     { key: 'status', label: 'Status' },
@@ -2040,12 +2046,48 @@ function SuperAdmin_loadAuditLog_() {
   runServer('getAuditLog', [300], { onSuccess: SuperAdmin_renderAuditLog_ });
 }
 
+var SP_BULAN_LABEL_ = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+/**
+ * SuperAdmin_renderAuditLog_(rows)
+ * Dikelompokkan per TAHUN (collapsible) lalu per BULAN (collapsible
+ * bersarang di dalamnya) — 300 entri terakhir tidak lagi satu tabel
+ * panjang datar, tahun & bulan terbaru otomatis terbuka.
+ */
 function SuperAdmin_renderAuditLog_(rows) {
-  SIPENA_table_('sp-auditlog-table', [
-    { label: 'Waktu', render: function (r) { return new Date(r.timestamp).toLocaleString('id-ID'); } },
-    { key: 'email', label: 'Email' }, { key: 'action', label: 'Aksi' }, { key: 'module', label: 'Modul' },
-    { key: 'record_id', label: 'Record' }, { key: 'description', label: 'Detail' }
-  ], rows, 'Belum ada aktivitas tercatat.');
+  var el = document.getElementById('sp-auditlog-table');
+  if (!rows.length) { el.innerHTML = '<div class="sp-empty">Belum ada aktivitas tercatat.</div>'; return; }
+
+  var byYear = {};
+  var yearOrder = [];
+  rows.forEach(function (r) {
+    var d = new Date(r.timestamp);
+    var year = d.getFullYear();
+    var month = d.getMonth();
+    if (!byYear[year]) { byYear[year] = {}; yearOrder.push(year); }
+    if (!byYear[year][month]) byYear[year][month] = [];
+    byYear[year][month].push(r);
+  });
+  yearOrder.sort(function (a, b) { return b - a; });
+
+  el.innerHTML = yearOrder.map(function (year, yi) {
+    var monthOrder = Object.keys(byYear[year]).map(Number).sort(function (a, b) { return b - a; });
+    var yearTotal = monthOrder.reduce(function (sum, m) { return sum + byYear[year][m].length; }, 0);
+
+    var monthBlocks = monthOrder.map(function (month, mi) {
+      var entries = byYear[year][month];
+      var body = entries.map(function (r) {
+        return '<tr><td>' + new Date(r.timestamp).toLocaleString('id-ID') + '</td><td>' + r.email + '</td>' +
+          '<td>' + r.action + '</td><td>' + r.module + '</td><td>' + (r.record_id || '-') + '</td><td>' + (r.description || '-') + '</td></tr>';
+      }).join('');
+      var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+        '<th>Waktu</th><th>Email</th><th>Aksi</th><th>Modul</th><th>Record</th><th>Detail</th>' +
+        '</tr></thead><tbody>' + body + '</tbody></table></div>';
+      return SIPENA_collapsibleHtml_(SP_BULAN_LABEL_[month] + ' <span class="msg" style="margin:0;">(' + entries.length + ' aktivitas)</span>', tableHtml, yi === 0 && mi === 0);
+    }).join('');
+
+    return SIPENA_collapsibleHtml_(year + ' <span class="msg" style="margin:0;">(' + yearTotal + ' aktivitas)</span>', monthBlocks, yi === 0);
+  }).join('');
 }
 
 </script>
