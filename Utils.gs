@@ -13,6 +13,24 @@ function Utils_newId_(prefix) {
 }
 
 /**
+ * Utils_normalizeNoHp_(v)
+ * No. HP Indonesia selalu diawali "0" ("08xxxxxxxxxx") — tapi kolom sel
+ * yang belum dipaksa format Plain text ("@") membuat Sheets otomatis
+ * membaca nilai seperti itu sebagai ANGKA, yang membuang nol di depan
+ * ("087861717617" -> 87861717617). Dipakai di setiap titik BACA (jaring
+ * pengaman untuk data yang sudah kadung tersimpan begitu, sama pola
+ * seperti Jadwal_normalizeJam_) dan titik TULIS (supaya input apa pun
+ * bentuknya tetap konsisten tersimpan berawalan 0) — sel yang sudah
+ * diformat '@' (lihat Config_applyTextFormat_) tidak akan korup lagi ke
+ * depannya begitu nilai yang benar ditulis ulang ke sana.
+ */
+function Utils_normalizeNoHp_(v) {
+  const s = String(v === null || v === undefined ? '' : v).trim();
+  if (!s) return '';
+  return /^8\d{7,12}$/.test(s) ? '0' + s : s;
+}
+
+/**
  * Utils_headerIndex_(headerRow)
  * Peta nama kolom (lowercase, trim) -> index. Selalu dipakai untuk akses
  * kolom sheet — tidak pernah magic number seperti row[12].

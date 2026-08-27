@@ -13,7 +13,7 @@ window.SIPENA = window.SIPENA || {};
  */
 function runServer(fnName, args, opts) {
   opts = opts || {};
-  SIPENA_pendingStart_();
+  SIPENA_pendingStart_(fnName);
 
   var originalBtnHtml = null;
   if (opts.loadingEl) {
@@ -60,6 +60,22 @@ function SIPENA_toast(message, kind) {
 var SIPENA_pendingCount_ = 0;
 var SIPENA_pendingTimer_ = null;
 var SIPENA_pendingStartedAt_ = null;
+var SIPENA_pendingLabelText_ = 'Menghubungi database pusat';
+
+/**
+ * SIPENA_pendingCallLabel_(fnName)
+ * Fungsi bergaya "getMyX/saveMyX/dst." (konvensi yang sudah dipakai
+ * konsisten di seluruh backend untuk data milik guru sendiri, tersimpan
+ * di spreadsheet pribadinya) ditampilkan sebagai "Menghubungi data Anda"
+ * — bukan "database pusat", supaya guru tidak bingung kenapa aksi yang
+ * cuma menyentuh datanya sendiri terkesan menghubungi server sekolah.
+ * Selain itu (getAuth, semua admin*) tetap "database pusat" karena
+ * memang membaca/menulis spreadsheet central.
+ */
+function SIPENA_pendingCallLabel_(fnName) {
+  return /^(get|save|update|upload|create|delete|reset)My[A-Z]/.test(fnName || '')
+    ? 'Menghubungi data Anda' : 'Menghubungi database pusat';
+}
 
 function SIPENA_pendingEl_() {
   var el = document.getElementById('sp-pending');
@@ -74,8 +90,9 @@ function SIPENA_pendingEl_() {
   return el;
 }
 
-function SIPENA_pendingStart_() {
+function SIPENA_pendingStart_(fnName) {
   SIPENA_pendingCount_++;
+  SIPENA_pendingLabelText_ = SIPENA_pendingCallLabel_(fnName);
   var el = SIPENA_pendingEl_();
   el.classList.add('visible');
   if (!SIPENA_pendingTimer_) {
@@ -83,7 +100,7 @@ function SIPENA_pendingStart_() {
     var tick = function () {
       var secs = Math.max(0, Math.floor((Date.now() - SIPENA_pendingStartedAt_) / 1000));
       var textEl = document.getElementById('sp-pending-text');
-      if (textEl) textEl.textContent = 'Menghubungi database pusat… ' + secs + ' detik';
+      if (textEl) textEl.textContent = SIPENA_pendingLabelText_ + '… ' + secs + ' detik';
     };
     tick();
     SIPENA_pendingTimer_ = setInterval(tick, 1000);

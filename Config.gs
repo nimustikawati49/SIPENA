@@ -131,7 +131,7 @@ const CONFIG_KOP_HEADERS_ = ['kop_id', 'sekolah_id', 'nama_kop', 'paper_hint', '
 // mencegah itu terulang. Lihat Config_ensureTextFormatColumns_.
 const CONFIG_TEXT_FORMAT_COLUMNS_ = {
   MASTER_SEKOLAH: ['npsn', 'kode_pos'],
-  MASTER_GURU: ['nip'],
+  MASTER_GURU: ['nip', 'no_hp'],
   MASTER_MAPEL: ['kode_mapel'],
   MASTER_KELAS: ['tingkat'],
   MASTER_SISWA: ['nis'],
@@ -330,17 +330,22 @@ function Config_ensureColumnsMigration_() {
  * menulis ulang nilai jam yang korup (lihat Config_repairJadwalJamValues_)
  * — satu-satunya kolom di CONFIG_TEXT_FORMAT_COLUMNS_ yang butuh perbaikan
  * NILAI, bukan cuma format tampilan.
+ *
+ * V5 menambah MASTER_GURU.no_hp — sama alasan seperti nip/nis (Sheets
+ * membaca "08xxxxxxxxxx" sebagai angka & membuang nol depannya), jadi
+ * V5 juga menulis ulang nilai no_hp yang sudah kadung kehilangan nol
+ * depannya (lihat Config_repairNoHpValues_, Utils_normalizeNoHp_).
  */
 var CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = false;
 function Config_ensureTextFormatColumns_() {
   if (CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_) return;
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('TEXT_FORMAT_APPLIED_V4')) { CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = true; return; }
+  if (props.getProperty('TEXT_FORMAT_APPLIED_V5')) { CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = true; return; }
 
   // Sama alasan seperti Config_ensureDriveUrlsFixed_: ini menulis banyak
-  // baris sekaligus (format kolom + isi ulang jam JADWAL_MENGAJAR) lintas
-  // banyak sheet, bukan cuma milik satu guru — dibungkus try/catch supaya
-  // tidak pernah menggagalkan aksi guru yang cuma kebetulan lewat
+  // baris sekaligus (format kolom + isi ulang jam JADWAL_MENGAJAR/no_hp)
+  // lintas banyak sheet, bukan cuma milik satu guru — dibungkus try/catch
+  // supaya tidak pernah menggagalkan aksi guru yang cuma kebetulan lewat
   // Config_getSheet_. Kalau gagal, flag tidak diset, dicoba lagi di
   // eksekusi berikutnya.
   try {
@@ -351,7 +356,8 @@ function Config_ensureTextFormatColumns_() {
       Config_applyTextFormat_(sh, CONFIG_TEXT_FORMAT_COLUMNS_[sheetName]);
     });
     Config_repairJadwalJamValues_(ss);
-    props.setProperty('TEXT_FORMAT_APPLIED_V4', '1');
+    Config_repairNoHpValues_(ss);
+    props.setProperty('TEXT_FORMAT_APPLIED_V5', '1');
   } catch (e) {
     Utils_logError_('TEXT_FORMAT_COLUMNS_FAILED', e);
   }
@@ -381,6 +387,30 @@ function Config_repairJadwalJamValues_(ss) {
     const fixed = range.getValues().map(function (row) { return [Jadwal_normalizeJam_(row[0])]; });
     range.setValues(fixed);
   });
+}
+
+/**
+ * Config_repairNoHpValues_(ss)
+ * Tulis ulang MASTER_GURU.no_hp yang sudah kadung kehilangan nol
+ * depannya (tersimpan sebagai angka murni sebelum kolomnya dipaksa
+ * format teks) — sama pola seperti Config_repairJadwalJamValues_. Ini
+ * hanya memperbaiki salinan CENTRAL; salinan di spreadsheet PRIBADI
+ * tiap guru (PROFIL.no_hp) diperbaiki di titik baca (Utils_normalizeNoHp_
+ * dipanggil di getMyDashboard) dan otomatis bersih permanen begitu guru
+ * menyimpan No. HP-nya lagi (lihat Dashboard_patchProfilField_).
+ */
+function Config_repairNoHpValues_(ss) {
+  const sh = ss.getSheetByName('MASTER_GURU');
+  if (!sh || sh.getLastRow() < 2) return;
+  const lastCol = sh.getLastColumn();
+  const header = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) { return String(h || '').toLowerCase().trim(); });
+  const idx = header.indexOf('no_hp');
+  if (idx === -1) return;
+
+  const lastRow = sh.getLastRow();
+  const range = sh.getRange(2, idx + 1, lastRow - 1, 1);
+  const fixed = range.getValues().map(function (row) { return [Utils_normalizeNoHp_(row[0])]; });
+  range.setValues(fixed);
 }
 
 /**

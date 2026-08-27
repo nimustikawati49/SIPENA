@@ -26,7 +26,7 @@
 function adminGetTeachers(sekolahId) {
   Security_requireRole_(['SUPERADMIN']);
   const sh = Config_getSheet_('MASTER_GURU');
-  const rows = Utils_sheetToObjects_(sh).map(function (r) { delete r._row; return r; });
+  const rows = Utils_sheetToObjects_(sh).map(function (r) { delete r._row; r.no_hp = Utils_normalizeNoHp_(r.no_hp); return r; });
   if (!sekolahId) return rows;
   return rows.filter(function (r) { return String(r.sekolah_id) === String(sekolahId); });
 }
@@ -52,7 +52,7 @@ function adminCreateTeacher(data) {
     sekolah_id: sekolahId,
     jabatan: data.jabatan || 'Guru',
     status: 'AKTIF',
-    no_hp: data.no_hp || '',
+    no_hp: Utils_normalizeNoHp_(data.no_hp),
     foto_url: '',
     ttd_url: '',
     created_at: new Date(),
@@ -81,6 +81,7 @@ function adminUpdateTeacher(guruId, data) {
   ['nama_lengkap', 'nip', 'jabatan', 'status', 'no_hp'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
+  if (patch.no_hp !== undefined) patch.no_hp = Utils_normalizeNoHp_(patch.no_hp);
   patch.updated_at = new Date();
   Utils_updateRowByHeader_(sh, guru._row, patch);
 
@@ -271,8 +272,12 @@ function Guru_provisionSpreadsheet_(email, guruId, namaLengkap, sekolahId, data)
     sh.getRange(1, 1, 1, headers.length).setFontWeight('bold');
   });
 
-  // Isi PROFIL awal.
+  // Isi PROFIL awal. nip/no_hp diformat teks ('@') DULU sebelum ditulis —
+  // No. HP Indonesia selalu berawalan 0 ("08xxxxxxxxxx"), yang tanpa ini
+  // otomatis dibaca Sheets sebagai angka & kehilangan nol depannya begitu
+  // baris ini ditulis (lihat Utils_normalizeNoHp_).
   const profilSheet = ss.getSheetByName('PROFIL');
+  Config_applyTextFormat_(profilSheet, ['nip', 'no_hp']);
   Utils_appendRowByHeader_(profilSheet, {
     guru_id: guruId,
     email: email,
@@ -280,7 +285,7 @@ function Guru_provisionSpreadsheet_(email, guruId, namaLengkap, sekolahId, data)
     nip: (data && data.nip) || '',
     sekolah_id: sekolahId,
     jabatan: (data && data.jabatan) || 'Guru',
-    no_hp: (data && data.no_hp) || '',
+    no_hp: Utils_normalizeNoHp_(data && data.no_hp),
     foto_url: '',
     ttd_url: '',
     updated_at: new Date()
@@ -358,6 +363,16 @@ function Guru_migrateToOwnAccount_(oldEntry, guru, email) {
     Object.keys(CONFIG_GURU_OPERATIONAL_SCHEMA_).forEach(function (name) {
       Guru_copySheetData_(oldSs, newSs, name);
     });
+    // Guru_copySheetData_ menyalin no_hp APA ADANYA — kalau di spreadsheet
+    // lama nilainya sudah kadung kehilangan nol depan (sebelum kolomnya
+    // diformat teks), salinannya ikut korup walau sel tujuannya sudah
+    // diformat teks (format cuma mencegah korup BARU, bukan memperbaiki
+    // nilai yang sudah korup). Ditulis ulang ternormalisasi di sini.
+    try {
+      const newProfilSheet = newSs.getSheetByName('PROFIL');
+      const newProfil = Utils_sheetToObjects_(newProfilSheet)[0];
+      if (newProfil) Utils_updateRowByHeader_(newProfilSheet, newProfil._row, { no_hp: Utils_normalizeNoHp_(newProfil.no_hp) });
+    } catch (eNoHp) { /* non-kritis, biarkan bersih lewat updateMyProfile berikutnya */ }
     // Jadwal mengajar guru ini sebelumnya tersimpan di sheet central
     // JADWAL_MENGAJAR (arsitektur lama), belum di sheet JADWAL pribadinya
     // — disalin terpisah karena strukturnya beda (lihat Jadwal.gs).

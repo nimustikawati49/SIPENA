@@ -25,6 +25,7 @@ function getMyDashboard() {
   const profilRows = Utils_sheetToObjects_(ss.getSheetByName('PROFIL'));
   const profil = profilRows[0] || {};
   delete profil._row;
+  profil.no_hp = Utils_normalizeNoHp_(profil.no_hp);
 
   const mapel = Utils_sheetToObjects_(ss.getSheetByName('MAPEL')).map(Dashboard_stripRow_);
   const kelas = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).map(Dashboard_stripRow_);
@@ -83,12 +84,19 @@ function updateMyProfile(data) {
   ['no_hp', 'foto_url', 'ttd_url'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
+  if (patch.no_hp !== undefined) patch.no_hp = Utils_normalizeNoHp_(patch.no_hp);
   patch.updated_at = new Date();
 
   try {
     const ss = Config_getGuruSpreadsheet_(auth.guruId);
     const sh = ss.getSheetByName('PROFIL');
     if (!sh || sh.getLastRow() < 2) throw new Error('Profil belum tersedia. Hubungi Superadmin.');
+    // no_hp diformat teks ('@') di sini, bukan cuma diandalkan dari
+    // Guru_provisionSpreadsheet_ — spreadsheet guru yang sudah lebih dulu
+    // ada (dibuat sebelum perbaikan ini) belum tentu kolomnya sudah
+    // diformat, jadi tanpa ini nilainya bisa kembali kehilangan nol
+    // depan tiap kali disimpan ulang. Lihat Utils_normalizeNoHp_.
+    if (patch.no_hp !== undefined) Config_applyTextFormat_(sh, ['no_hp']);
     Utils_updateRowByHeader_(sh, 2, patch);
   } catch (e) {
     throw new Error('Gagal menyimpan — akun Anda tampaknya belum punya akses penuh ke spreadsheet pribadi Anda. Coba keluar lalu login ulang (akses akan diperbaiki otomatis saat login), atau hubungi Superadmin kalau masih gagal.');
@@ -106,17 +114,34 @@ function updateMyProfile(data) {
  * URL-nya ditulis ke PROFIL. Dipisah dari updateMyProfile supaya upload
  * foto langsung tersimpan begitu dipilih, tanpa perlu klik "Simpan"
  * terpisah untuk field lain.
+ *
+ * Langkah UPLOAD (Utils_saveUploadedFile_, ke folder Drive guru sendiri)
+ * dulu TIDAK dibungkus try/catch di sini — bedanya dengan kegagalan di
+ * langkah TULIS PROFIL (sudah dilindungi Dashboard_patchProfilField_)
+ * jadi tidak kelihatan dari pesan errornya, padahal dua-duanya bisa
+ * memunculkan pesan Drive permission mentah yang sama. Sekarang dipisah
+ * jelas supaya kalau masih gagal, jelas tahap mana yang bermasalah.
  */
 function uploadMyPhoto(base64Data, mimeType, fileName) {
   const auth = Security_requireRole_(['GURU']);
-  const url = Utils_saveUploadedFile_('SIPENA_Foto_Profil', base64Data, mimeType, fileName);
+  let url;
+  try {
+    url = Utils_saveUploadedFile_('SIPENA_Foto_Profil', base64Data, mimeType, fileName);
+  } catch (e) {
+    throw new Error('Gagal mengunggah foto ke Drive Anda: ' + (e && e.message ? e.message : e));
+  }
   Dashboard_patchProfilField_(auth, 'foto_url', url);
   return { url: url };
 }
 
 function uploadMySignature(base64Data, mimeType, fileName) {
   const auth = Security_requireRole_(['GURU']);
-  const url = Utils_saveUploadedFile_('SIPENA_Tanda_Tangan', base64Data, mimeType, fileName);
+  let url;
+  try {
+    url = Utils_saveUploadedFile_('SIPENA_Tanda_Tangan', base64Data, mimeType, fileName);
+  } catch (e) {
+    throw new Error('Gagal mengunggah tanda tangan ke Drive Anda: ' + (e && e.message ? e.message : e));
+  }
   Dashboard_patchProfilField_(auth, 'ttd_url', url);
   return { url: url };
 }
