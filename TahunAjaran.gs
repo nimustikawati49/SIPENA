@@ -8,24 +8,39 @@ function adminGetAcademicYears() {
   return Utils_sheetToObjects_(sh).map(function (r) { delete r._row; return r; });
 }
 
+/**
+ * adminCreateAcademicYear(data)
+ * data: {label}. Superadmin cuma isi label tahun ajaran (mis. "2026/2027")
+ * SEKALI — baris GANJIL dan GENAP dibuat sekaligus dalam satu aksi (tidak
+ * ada lagi field Semester terpisah di form Tambah). Semester tetap
+ * kolom sendiri di setiap sheet operasional (NILAI/PENUGASAN_MENGAJAR/
+ * dst.) — cuma proses PEMBUATANNYA yang disederhanakan, dropdown
+ * pemilihan tahun ajaran di tempat lain tetap perlu tahu semester mana
+ * yang dimaksud (lihat SuperAdmin_currentTahunAjaranId_ untuk default
+ * pemilihan otomatis). Idempoten terhadap label yang sama: semester yang
+ * sudah ada untuk label itu dilewati, bukan diduplikasi.
+ */
 function adminCreateAcademicYear(data) {
   const auth = Security_requireRole_(['SUPERADMIN']);
   const label = String(data && data.label || '').trim();
-  const semester = String(data && data.semester || '').toUpperCase().trim();
   if (!label) throw new Error('Label tahun ajaran wajib diisi, mis. 2026/2027.');
-  if (['GANJIL', 'GENAP'].indexOf(semester) === -1) throw new Error('Semester harus GANJIL atau GENAP.');
 
   const sh = Config_getSheet_('MASTER_TAHUN_AJARAN');
-  const tahunAjaranId = Utils_newId_('TA');
-  Utils_appendRowByHeader_(sh, {
-    tahun_ajaran_id: tahunAjaranId,
-    label: label,
-    semester: semester,
-    status: 'AKTIF'
+  const existing = Utils_sheetToObjects_(sh).filter(function (r) { return r.label === label; });
+  const existingSemesters = existing.map(function (r) { return r.semester; });
+
+  const created = [];
+  ['GANJIL', 'GENAP'].forEach(function (semester) {
+    if (existingSemesters.indexOf(semester) !== -1) return;
+    const tahunAjaranId = Utils_newId_('TA');
+    Utils_appendRowByHeader_(sh, { tahun_ajaran_id: tahunAjaranId, label: label, semester: semester, status: 'AKTIF' });
+    created.push({ tahun_ajaran_id: tahunAjaranId, semester: semester });
   });
 
-  AuditLog_write_(auth, 'CREATE_ACADEMIC_YEAR', 'TahunAjaran', tahunAjaranId, label + ' ' + semester);
-  return { tahun_ajaran_id: tahunAjaranId };
+  if (!created.length) throw new Error('Tahun ajaran "' + label + '" (Ganjil & Genap) sudah ada.');
+
+  AuditLog_write_(auth, 'CREATE_ACADEMIC_YEAR', 'TahunAjaran', label, created.map(function (c) { return c.semester; }).join(', '));
+  return { created: created };
 }
 
 function adminUpdateAcademicYear(tahunAjaranId, data) {

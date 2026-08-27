@@ -171,8 +171,32 @@ function SuperAdmin_refreshSelects() {
   document.querySelectorAll('select[data-source="tahunajaran"]').forEach(function (sel) {
     var cur = sel.value;
     sel.innerHTML = SuperAdmin_options_(SuperAdmin.academicYears, 'tahun_ajaran_id', function (t) { return t.label + ' - ' + t.semester; }, 'Pilih tahun ajaran');
-    sel.value = cur;
+    // Kenaikan Kelas selalu butuh DUA periode berbeda (lama vs baru) —
+    // default otomatis di situ justru bisa menyesatkan (dua-duanya
+    // kepilih periode yang sama), jadi dilewati, tetap kosong seperti
+    // sebelumnya. Dropdown lain diisi otomatis ke tahun ajaran yang
+    // paling mungkin relevan sekarang (SuperAdmin_currentTahunAjaranId_)
+    // supaya admin tidak perlu membaca label "- GANJIL/GENAP" tiap kali.
+    var skipDefault = sel.id === 'sp-kk-ta-lama' || sel.id === 'sp-kk-ta-baru';
+    sel.value = cur || (skipDefault ? '' : SuperAdmin_currentTahunAjaranId_());
   });
+}
+
+/**
+ * SuperAdmin_currentTahunAjaranId_()
+ * Tebakan sederhana "tahun ajaran yang sedang berjalan" murni dari bulan
+ * kalender (Juli-Desember = Ganjil, Januari-Juni = Genap) — dipakai untuk
+ * mengisi default dropdown tahun ajaran supaya admin biasanya tidak perlu
+ * memilih manual, bukan sumber kebenaran untuk logika bisnis apa pun
+ * (itu tetap lewat SEKOLAH_PERIODE_AKTIF per sekolah).
+ */
+function SuperAdmin_currentTahunAjaranId_() {
+  var month = new Date().getMonth() + 1;
+  var semester = month >= 7 ? 'GANJIL' : 'GENAP';
+  var candidates = SuperAdmin.academicYears.filter(function (t) { return t.semester === semester && String(t.status).toUpperCase() === 'AKTIF'; });
+  if (!candidates.length) return '';
+  candidates.sort(function (a, b) { return String(b.label).localeCompare(String(a.label)); });
+  return candidates[0].tahun_ajaran_id;
 }
 
 function SuperAdmin_labelFromId_(list, idKey, id, labelKey) {
@@ -835,11 +859,12 @@ function SuperAdmin_panelTahunAjaran_() {
   return '' +
     '<div class="sp-panel" id="sp-panel-tahunajaran">' +
     '  <div class="sp-section-title">Tambah Tahun Ajaran</div>' +
+    '  <div class="msg" style="margin:-6px 0 10px;">Cukup isi labelnya (mis. "2026/2027") — baris Ganjil dan Genap dibuat otomatis sekaligus.</div>' +
     '  <form class="sp-form" id="sp-form-ta">' +
     '    <div class="sp-field"><label>Label</label><input name="label" placeholder="2026/2027" required></div>' +
-    '    <div class="sp-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
+    '    <div class="sp-field hidden" id="sp-ta-semester-field"><label>Semester</label><select name="semester" required><option value="">Pilih</option><option>GANJIL</option><option>GENAP</option></select></div>' +
     '    <button class="sp-btn" type="submit">Simpan</button>' +
-    SuperAdmin_cancelEditButton_() +
+    '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditTahunAjaran_(this.form)">Batal Edit</button>' +
     '  </form>' +
     '  <div class="sp-section-title">Daftar Tahun Ajaran</div>' +
     '  <div style="margin-bottom:10px;">' +
@@ -859,14 +884,14 @@ function SuperAdmin_wireTahunAjaran_() {
   document.getElementById('sp-form-ta').addEventListener('submit', function (e) {
     e.preventDefault();
     var f = e.target;
-    var data = { label: f.label.value, semester: f.semester.value };
-    var btn = f.querySelector('button[type="submit"]');
     var editId = f.dataset.editId;
+    var data = editId ? { label: f.label.value, semester: f.semester.value } : { label: f.label.value };
+    var btn = f.querySelector('button[type="submit"]');
     runServer(editId ? 'adminUpdateAcademicYear' : 'adminCreateAcademicYear', editId ? [editId, data] : [data], {
       loadingEl: btn,
       onSuccess: function () {
-        SIPENA_toast(editId ? 'Tahun ajaran diperbarui.' : 'Tahun ajaran tersimpan.');
-        SuperAdmin_clearFormEditMode_(f);
+        SIPENA_toast(editId ? 'Tahun ajaran diperbarui.' : 'Tahun ajaran (Ganjil & Genap) tersimpan.');
+        SuperAdmin_cancelEditTahunAjaran_(f);
         runServer('adminGetAcademicYears', [], { onSuccess: function (rows) { SuperAdmin.academicYears = rows; SuperAdmin_renderTahunAjaran(); SuperAdmin_refreshSelects(); } });
       }
     });
@@ -918,12 +943,17 @@ function SuperAdmin_toggleAcademicYearStatus_(tahunAjaranId) {
     }
   });
 }
+function SuperAdmin_cancelEditTahunAjaran_(form) {
+  document.getElementById('sp-ta-semester-field').classList.add('hidden');
+  SuperAdmin_clearFormEditMode_(form);
+}
 function SuperAdmin_editAcademicYear_(tahunAjaranId) {
   var t = SuperAdmin.academicYears.filter(function (r) { return r.tahun_ajaran_id === tahunAjaranId; })[0];
   if (!t) return;
   var f = document.getElementById('sp-form-ta');
   f.label.value = t.label || '';
   f.semester.value = t.semester || '';
+  document.getElementById('sp-ta-semester-field').classList.remove('hidden');
   SuperAdmin_setFormEditMode_(f, tahunAjaranId);
   f.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }

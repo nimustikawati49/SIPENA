@@ -72,6 +72,10 @@ function NilaiApp_markup_() {
     '        <button type="button" class="sp-btn hidden" id="sp-katrol-save-btn" onclick="KatrolApp_save_()">Simpan Nilai Katrol</button>' +
     '        <button type="button" class="sp-btn secondary hidden" id="sp-katrol-reset-btn" onclick="KatrolApp_reset_()" style="margin-left:auto;">Reset Katrol</button>' +
     '      </div>' +
+    '      <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;">' +
+    '        <button type="button" class="sp-btn secondary" onclick="KatrolApp_toggleHistory_()">Riwayat Katrol</button>' +
+    '        <div id="sp-katrol-history-box" class="hidden" style="margin-top:12px;"></div>' +
+    '      </div>' +
     '    </div>' +
     '  </div>' +
     '</div>' +
@@ -557,6 +561,8 @@ function KatrolApp_open_() {
   document.getElementById('sp-katrol-empty').classList.add('hidden');
   document.getElementById('sp-katrol-body').classList.remove('hidden');
   document.getElementById('sp-katrol-reset-btn').classList.remove('hidden');
+  document.getElementById('sp-katrol-history-box').classList.add('hidden');
+  document.getElementById('sp-katrol-history-box').innerHTML = '';
   KatrolApp.lastPreview = null;
 
   runServer('getMyKatrolTargetDefault', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester], {
@@ -659,5 +665,46 @@ function KatrolApp_reset_() {
       NilaiApp_loadGrades_();
     }
   });
+}
+
+/**
+ * KatrolApp_toggleHistory_() / KatrolApp_renderHistory_(rows)
+ * Riwayat SEMUA run katrol guru ini (lintas kelas/mapel/tahun ajaran,
+ * bukan cuma konteks yang sedang dibuka) — dikelompokkan per tahun
+ * ajaran, terbaru dulu, tahun ajaran paling baru langsung terbuka
+ * supaya guru bisa cek riwayat pemberian nilai tahun ajaran terakhir
+ * tanpa klik tambahan.
+ */
+function KatrolApp_toggleHistory_() {
+  var box = document.getElementById('sp-katrol-history-box');
+  var willOpen = box.classList.contains('hidden');
+  box.classList.toggle('hidden');
+  if (!willOpen) return;
+  box.innerHTML = '<div class="msg">Memuat riwayat…</div>';
+  runServer('getMyKatrolHistory', [], { onSuccess: KatrolApp_renderHistory_ });
+}
+
+function KatrolApp_renderHistory_(rows) {
+  var box = document.getElementById('sp-katrol-history-box');
+  if (!rows.length) { box.innerHTML = '<div class="sp-empty">Belum ada riwayat katrol.</div>'; return; }
+
+  var byTahun = {};
+  var order = [];
+  rows.forEach(function (r) {
+    if (!byTahun[r.tahun_ajaran_label]) { byTahun[r.tahun_ajaran_label] = []; order.push(r.tahun_ajaran_label); }
+    byTahun[r.tahun_ajaran_label].push(r);
+  });
+
+  box.innerHTML = order.map(function (label, i) {
+    var body = byTahun[label].map(function (r) {
+      return '<tr><td>' + r.semester + '</td><td>' + r.nama_mapel + '</td><td>' + r.nama_kelas + '</td>' +
+        '<td>' + r.source_min + '–' + r.source_max + '</td><td>' + r.target_min + '–' + r.target_max + '</td>' +
+        '<td>' + r.jumlah_siswa + '</td><td>' + new Date(r.created_at).toLocaleDateString('id-ID') + '</td></tr>';
+    }).join('');
+    var tableHtml = '<div class="sp-table-wrap"><table class="sp-table"><thead><tr>' +
+      '<th>Semester</th><th>Mapel</th><th>Kelas</th><th>Rentang Murni</th><th>Target</th><th>Jml Siswa</th><th>Tanggal</th>' +
+      '</tr></thead><tbody>' + body + '</tbody></table></div>';
+    return SIPENA_collapsibleHtml_(label + ' <span class="msg" style="margin:0;">(' + byTahun[label].length + ' run)</span>', tableHtml, i === 0);
+  }).join('');
 }
 </script>

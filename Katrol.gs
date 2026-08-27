@@ -269,3 +269,36 @@ function resetMyKatrol(kelasId, mapelId, tahunAjaranId, semester) {
   return { ok: true, reset: reset };
 }
 
+/**
+ * getMyKatrolHistory()
+ * Semua baris KATROL_HISTORY milik guru sendiri (satu baris per RUN
+ * katrol, bukan per siswa — lihat saveMyKatrol), dilengkapi nama mapel/
+ * kelas (dari sheet MAPEL/KELAS pribadi guru) dan label tahun ajaran
+ * (dari MASTER_TAHUN_AJARAN central, sheet lama & selalu ada sejak
+ * Phase 2 — aman dibaca dari konteks guru). Diurutkan terbaru dulu,
+ * dipakai panel "Riwayat Katrol" di modal Katrol Nilai Akhir supaya guru
+ * bisa cek bagaimana nilai katrol tahun ajaran lalu didapat.
+ */
+function getMyKatrolHistory() {
+  const auth = Security_requireRole_(['GURU']);
+  const ss = Config_getGuruSpreadsheet_(auth.guruId);
+  const sh = Katrol_ensureHistorySheet_(ss);
+  const rows = Utils_sheetToObjects_(sh).map(function (r) { delete r._row; return r; });
+  if (!rows.length) return [];
+
+  const mapelById = {};
+  Utils_sheetToObjects_(ss.getSheetByName('MAPEL')).forEach(function (r) { mapelById[r.mapel_id] = r.nama_mapel; });
+  const kelasById = {};
+  Utils_sheetToObjects_(ss.getSheetByName('KELAS')).forEach(function (r) { kelasById[r.kelas_id] = r.nama_kelas; });
+  const taById = {};
+  Utils_sheetToObjects_(Config_getSheet_('MASTER_TAHUN_AJARAN')).forEach(function (r) { taById[r.tahun_ajaran_id] = r.label; });
+
+  return rows.map(function (r) {
+    return Object.assign({}, r, {
+      nama_mapel: mapelById[r.mapel_id] || r.mapel_id,
+      nama_kelas: kelasById[r.kelas_id] || r.kelas_id,
+      tahun_ajaran_label: taById[r.tahun_ajaran_id] || r.tahun_ajaran_id
+    });
+  }).sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+}
+
