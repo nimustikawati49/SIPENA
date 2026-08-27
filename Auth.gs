@@ -128,7 +128,7 @@ function Auth_findSekolahNama_(sekolahId) {
  * updateMySuperadminProfile(nama) / uploadSuperadminPhoto(...)
  * SUPERADMIN mengedit profilnya SENDIRI (dicari by email dari sesi,
  * tidak pernah dari parameter client) — nama tampilan & foto. Superadmin
- * tidak punya NIP/NUPTK/No.HP di skema (itu properti guru), jadi
+ * tidak punya NIP/No.HP di skema (itu properti guru), jadi
  * memang tidak ada field itu untuk role ini.
  */
 function updateMySuperadminProfile(nama) {

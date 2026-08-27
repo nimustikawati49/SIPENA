@@ -318,19 +318,31 @@
   .sp-jadwal-card-jam{ font-size: 11.5px; color: var(--text-muted); }
   @media (max-width: 900px){ .sp-jadwal-week{ grid-template-columns: repeat(3, 1fr); } }
 
-  /* ===== Indikator "sedang memproses" global ===== */
+  /* ===== Indikator "sedang memproses" global — pojok kanan bawah ===== */
   .sp-pending{
-    position: fixed; top: 14px; left: 50%; transform: translateX(-50%) translateY(-8px);
+    position: fixed; bottom: 20px; right: 20px; transform: translateY(12px);
     background: var(--card); border: 1px solid var(--border); color: var(--text);
-    padding: 8px 16px; border-radius: 999px; font-size: 12px; font-weight: 600;
-    display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.15);
+    padding: 10px 16px 12px; border-radius: 12px; font-size: 12px; font-weight: 600;
+    min-width: 220px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
     z-index: 1000; opacity: 0; pointer-events: none; transition: opacity .15s ease, transform .15s ease;
   }
-  .sp-pending.visible{ opacity: 1; transform: translateX(-50%) translateY(0); }
+  .sp-pending.visible{ opacity: 1; transform: translateY(0); }
+  .sp-pending-row{ display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .sp-pending-spinner{
     width: 13px; height: 13px; flex-shrink: 0;
     border: 2px solid rgba(79,70,229,.25); border-top-color: var(--brand);
     border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  .sp-pending-track{ width: 100%; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; }
+  .sp-pending-fill{
+    width: 40%; height: 100%; border-radius: 999px;
+    background: var(--brand);
+    background: linear-gradient(90deg, var(--brand), color-mix(in srgb, var(--brand) 60%, #fff 20%));
+    animation: sp-pending-slide 1.1s ease-in-out infinite;
+  }
+  @keyframes sp-pending-slide{
+    0%{ transform: translateX(-100%); }
+    100%{ transform: translateX(250%); }
   }
   .sp-btn-spinner{
     display: inline-block; width: 11px; height: 11px; margin-right: 6px; vertical-align: -1px;

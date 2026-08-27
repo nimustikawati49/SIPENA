@@ -28,7 +28,6 @@ function adminCreateTeacher(data) {
     email: email,
     nama_lengkap: namaLengkap,
     nip: data.nip || '',
-    nuptk: data.nuptk || '',
     sekolah_id: sekolahId,
     jabatan: data.jabatan || 'Guru',
     status: 'AKTIF',
@@ -62,10 +61,10 @@ function adminUpdateTeacher(guruId, data) {
   // guru_id, email, sekolah_id TIDAK boleh diubah lewat sini (walau oleh
   // Superadmin) demi konsistensi RESOURCE_MAP/PENUGASAN yang sudah
   // mereferensikannya — pindah sekolah/ganti email butuh alur mutasi
-  // tersendiri, bukan edit biasa. NIP/NUPTK/jabatan boleh diubah karena
+  // tersendiri, bukan edit biasa. NIP/jabatan boleh diubah karena
   // itu memang data administrasi yang dikelola Superadmin (spec §11).
   const patch = {};
-  ['nama_lengkap', 'nip', 'nuptk', 'jabatan', 'status', 'no_hp'].forEach(function (k) {
+  ['nama_lengkap', 'nip', 'jabatan', 'status', 'no_hp'].forEach(function (k) {
     if (data[k] !== undefined) patch[k] = data[k];
   });
   patch.updated_at = new Date();
@@ -170,7 +169,6 @@ function Guru_provisionSpreadsheet_(email, guruId, namaLengkap, sekolahId, data)
     email: email,
     nama_lengkap: namaLengkap,
     nip: (data && data.nip) || '',
-    nuptk: (data && data.nuptk) || '',
     sekolah_id: sekolahId,
     jabatan: (data && data.jabatan) || 'Guru',
     no_hp: (data && data.no_hp) || '',

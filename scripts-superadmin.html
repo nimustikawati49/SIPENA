@@ -529,9 +529,8 @@ function SuperAdmin_panelGuru_() {
     '    <div class="sp-field"><label>Email</label><input name="email" type="email" required></div>' +
     '    <div class="sp-field"><label>Nama Lengkap</label><input name="nama_lengkap" required></div>' +
     '    <div class="sp-field"><label>NIP</label><input name="nip"></div>' +
-    '    <div class="sp-field"><label>NUPTK</label><input name="nuptk"></div>' +
     '    <div class="sp-field"><label>Jabatan</label><input name="jabatan" value="Guru"></div>' +
-    '    <div class="sp-field"><label>No. HP</label><input name="no_hp"></div>' +
+    '    <div class="sp-field"><label>No. HP</label><input name="no_hp" type="tel" placeholder="08xxxxxxxxxx" pattern="08[0-9]{8,12}" title="Format: diawali 08, diikuti 8-12 digit angka."></div>' +
     '    <button class="sp-btn" type="submit">Simpan &amp; Provisi Spreadsheet</button>' +
     '    <button type="button" class="sp-btn secondary sp-btn-cancel-edit hidden" onclick="SuperAdmin_cancelEditGuru_(this.form)">Batal Edit</button>' +
     '    <div class="msg hidden" id="sp-guru-edit-note" style="flex-basis:100%;margin:0;">Mode edit: sekolah &amp; email tidak bisa diubah di sini.</div>' +
@@ -569,7 +568,7 @@ function SuperAdmin_wireGuru_() {
     var btn = f.querySelector('button[type="submit"]');
 
     if (editId) {
-      var patch = { nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, nuptk: f.nuptk.value, jabatan: f.jabatan.value, no_hp: f.no_hp.value };
+      var patch = { nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, jabatan: f.jabatan.value, no_hp: f.no_hp.value };
       runServer('adminUpdateTeacher', [editId, patch], {
         loadingEl: btn,
         onSuccess: function () {
@@ -583,7 +582,7 @@ function SuperAdmin_wireGuru_() {
       return;
     }
 
-    var data = { sekolah_id: f.sekolah_id.value, email: f.email.value, nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, nuptk: f.nuptk.value, jabatan: f.jabatan.value, no_hp: f.no_hp.value };
+    var data = { sekolah_id: f.sekolah_id.value, email: f.email.value, nama_lengkap: f.nama_lengkap.value, nip: f.nip.value, jabatan: f.jabatan.value, no_hp: f.no_hp.value };
     runServer('adminCreateTeacher', [data], {
       loadingEl: btn,
       onSuccess: function (res) {
@@ -608,7 +607,6 @@ function SuperAdmin_editTeacher_(guruId) {
   f.email.value = g.email || ''; f.email.disabled = true;
   f.nama_lengkap.value = g.nama_lengkap || '';
   f.nip.value = g.nip || '';
-  f.nuptk.value = g.nuptk || '';
   f.jabatan.value = g.jabatan || '';
   f.no_hp.value = g.no_hp || '';
   document.getElementById('sp-guru-edit-note').classList.remove('hidden');

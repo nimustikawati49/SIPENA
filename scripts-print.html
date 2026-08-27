@@ -299,7 +299,7 @@ function PrintApp_renderPage_(data, config) {
     : PrintApp_formatDate_(new Date().toISOString().slice(0, 10));
   var kotaCetak = data.sekolah.tempat_cetak || data.sekolah.kecamatan || data.sekolah.kabupaten || '';
   var g = data.guru;
-  var nipLabel = g.nip ? 'NIP. ' + g.nip : (g.nuptk ? 'NUPTK. ' + g.nuptk : 'NIP/NUPTK. -');
+  var nipLabel = g.nip ? 'NIP. ' + g.nip : 'NIP. -';
 
   var signatureHtml = '<div class="sp-print-signature">' +
     '<div>' + (kotaCetak ? kotaCetak + ', ' : '') + tanggal + '</div>' +

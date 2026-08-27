@@ -53,7 +53,7 @@ function GuruApp_buildContent_() {
 /**
  * GuruApp_toggleCorner_() / GuruApp_wireCorner_()
  * Widget profil pojok kanan atas — menggantikan form "Edit Profil" lama
- * di body dashboard. Nama/NIP/NUPTK tetap read-only (dikelola Superadmin,
+ * di body dashboard. Nama/NIP tetap read-only (dikelola Superadmin,
  * aturan integritas data dari awal sesi ini) — hanya foto, tanda tangan,
  * dan No. HP yang bisa diubah guru sendiri di sini.
  */
@@ -123,7 +123,6 @@ function GuruApp_render_(dash) {
   document.getElementById('sp-guru-profil-grid').innerHTML =
     '<div class="sp-detail-grid">' +
     GuruApp_detailItem_('NIP', p.nip) +
-    GuruApp_detailItem_('NUPTK', p.nuptk) +
     GuruApp_detailItem_('No. HP', p.no_hp) +
     GuruApp_detailItem_('Sekolah', dash.nama_sekolah) +
     '</div>';
@@ -144,8 +143,7 @@ function GuruApp_render_(dash) {
   var avatarHtml = SIPENA_avatarHtml_(p.foto_url, p.nama_lengkap);
   document.getElementById('sp-corner-guru-avatar').innerHTML = avatarHtml;
   document.getElementById('sp-corner-guru-avatar-big').innerHTML = avatarHtml;
-  document.getElementById('sp-corner-guru-readonly').innerHTML =
-    GuruApp_detailItem_('NIP', p.nip) + GuruApp_detailItem_('NUPTK', p.nuptk);
+  document.getElementById('sp-corner-guru-readonly').innerHTML = GuruApp_detailItem_('NIP', p.nip);
   document.getElementById('sp-form-corner-guru').no_hp.value = p.no_hp || '';
 }
 

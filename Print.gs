@@ -47,7 +47,7 @@ function getMyPrintData(kelasId, mapelId, tahunAjaranId, semester) {
       kecamatan: sekolahRow.kecamatan || '', tempat_cetak: sekolahRow.tempat_cetak || ''
     },
     guru: {
-      nama_lengkap: profil.nama_lengkap || auth.namaLengkap || '', nip: profil.nip || '', nuptk: profil.nuptk || '',
+      nama_lengkap: profil.nama_lengkap || auth.namaLengkap || '', nip: profil.nip || '',
       jabatan: profil.jabatan || '', ttd_url: profil.ttd_url || ''
     },
     mapel: { nama_mapel: mapelRow ? mapelRow.nama_mapel : '' },

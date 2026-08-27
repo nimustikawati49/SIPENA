@@ -31,8 +31,19 @@ function Config_getCentralSpreadsheetId_() {
   }
 }
 
+/**
+ * Config_getCentralSpreadsheet_()
+ * Cache di variabel modul (bukan CacheService — cukup untuk SATU
+ * eksekusi, direset otomatis tiap request baru) — SpreadsheetApp.openById
+ * dipanggil banyak fungsi lewat Config_getSheet_, kadang berkali-kali
+ * dalam satu request (mis. Jadwal_enrichWithNames_ minta 4 sheet
+ * berbeda). ID spreadsheet-nya tidak mungkin berubah di tengah satu
+ * eksekusi, jadi aman disimpan sekali dan dipakai ulang.
+ */
+var CONFIG_CENTRAL_SS_CACHE_ = null;
 function Config_getCentralSpreadsheet_() {
-  return SpreadsheetApp.openById(Config_getCentralSpreadsheetId_());
+  if (!CONFIG_CENTRAL_SS_CACHE_) CONFIG_CENTRAL_SS_CACHE_ = SpreadsheetApp.openById(Config_getCentralSpreadsheetId_());
+  return CONFIG_CENTRAL_SS_CACHE_;
 }
 
 // Fallback superadmin pertama — sama filosofinya dengan SAG
@@ -45,7 +56,10 @@ const CONFIG_SUPERADMIN_BOOTSTRAP_EMAIL = 'nimustikawati49@guru.smp.belajar.id';
 
 const CONFIG_CENTRAL_SCHEMA_ = {
   MASTER_SUPERADMIN: ['email', 'nama', 'status', 'foto_url', 'created_at'],
-  MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
+  // Kolom nuptk dulu ada di sini, dihapus dari skema — NIP saja sudah
+  // cukup. Sheet lama boleh masih punya kolom nuptk dengan data
+  // historis, tidak dibaca/ditulis kode manapun lagi.
+  MASTER_GURU: ['guru_id', 'email', 'nama_lengkap', 'nip', 'sekolah_id', 'jabatan', 'status', 'no_hp', 'foto_url', 'ttd_url', 'created_at', 'updated_at'],
   RESOURCE_MAP: ['id', 'guru_id', 'email', 'sekolah_id', 'spreadsheet_id', 'status', 'created_at'],
   MASTER_SEKOLAH: ['sekolah_id', 'npsn', 'nama_sekolah', 'jenjang', 'alamat', 'desa', 'kecamatan', 'kabupaten', 'provinsi', 'kode_pos', 'email', 'telepon', 'website', 'tempat_cetak', 'status', 'created_at', 'updated_at'],
   MASTER_MAPEL: ['mapel_id', 'kode_mapel', 'nama_mapel', 'jenjang', 'status'],
@@ -102,7 +116,7 @@ const CONFIG_KOP_HEADERS_ = ['kop_id', 'sekolah_id', 'nama_kop', 'paper_hint', '
 // Kolom "kode" yang HARUS selalu tersimpan sebagai teks, bukan angka —
 // Google Sheets otomatis membuang nol di depan (mis. "001" jadi 1) untuk
 // sel berformat default begitu isinya terlihat seperti angka. NPSN, NIP,
-// NUPTK, dan kode mapel di Indonesia lazim berawalan nol, jadi ini bukan
+// dan kode mapel di Indonesia lazim berawalan nol, jadi ini bukan
 // isu kosmetik. jam_mulai/jam_selesai JADWAL_MENGAJAR juga di sini dengan
 // alasan berbeda: begitu SATU sel di kolom itu pernah ke-format Time oleh
 // Sheets, setValues() berikutnya dengan string "HH:MM" ikut dikonversi
@@ -110,7 +124,7 @@ const CONFIG_KOP_HEADERS_ = ['kop_id', 'sekolah_id', 'nama_kop', 'paper_hint', '
 // mencegah itu terulang. Lihat Config_ensureTextFormatColumns_.
 const CONFIG_TEXT_FORMAT_COLUMNS_ = {
   MASTER_SEKOLAH: ['npsn', 'kode_pos'],
-  MASTER_GURU: ['nip', 'nuptk'],
+  MASTER_GURU: ['nip'],
   MASTER_MAPEL: ['kode_mapel'],
   MASTER_KELAS: ['tingkat'],
   MASTER_SISWA: ['nis'],
@@ -120,7 +134,7 @@ const CONFIG_TEXT_FORMAT_COLUMNS_ = {
 // Sheet yang dibuat di spreadsheet PRIBADI tiap guru saat provisioning
 // (bukan sheet central). Lihat Guru.gs: Guru_provisionSpreadsheet_.
 const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
-  PROFIL: ['guru_id', 'email', 'nama_lengkap', 'nip', 'nuptk', 'sekolah_id', 'jabatan', 'no_hp', 'foto_url', 'ttd_url', 'updated_at'],
+  PROFIL: ['guru_id', 'email', 'nama_lengkap', 'nip', 'sekolah_id', 'jabatan', 'no_hp', 'foto_url', 'ttd_url', 'updated_at'],
   MAPEL: ['guru_mapel_id', 'mapel_id', 'kode_mapel', 'nama_mapel', 'tahun_ajaran_id', 'status'],
   KELAS: ['kelas_id', 'nama_kelas', 'tingkat', 'jenjang', 'status'],
   PENUGASAN: ['assignment_id', 'mapel_id', 'nama_mapel', 'kelas_id', 'nama_kelas', 'tahun_ajaran_id', 'semester', 'status'],
@@ -154,13 +168,25 @@ const CONFIG_GURU_OPERATIONAL_SCHEMA_ = {
  * Lock singkat di sini jauh lebih murah daripada request pemanggil
  * (adminGetSchools dkk.) gagal secara acak. getSheetByName() untuk sheet
  * yang SUDAH ada tetap murah dan tidak butuh lock (fast path).
+ *
+ * CONFIG_SCHEMA_VERIFIED_THIS_EXEC_ di bawah BEDA dari "cache flag
+ * persisten" yang sengaja dihindari di atas — ini cuma variabel modul,
+ * otomatis reset tiap eksekusi baru (cold start), jadi TIDAK BISA
+ * membuat sheet baru dari deploy berikutnya "tertahan". Yang dicegah
+ * cuma pemanggilan getSheetByName() 15× berulang dalam SATU request
+ * yang sama begitu satu fungsi memanggil Config_getSheet_() banyak kali
+ * (mis. Jadwal_enrichWithNames_) — dalam satu eksekusi, schema tidak
+ * mungkin berubah di tengah jalan, jadi verifikasi kedua dst. aman
+ * dilewati.
  */
+var CONFIG_SCHEMA_VERIFIED_THIS_EXEC_ = false;
 function Config_ensureCentralSchema_() {
+  if (CONFIG_SCHEMA_VERIFIED_THIS_EXEC_) return;
   const ss = Config_getCentralSpreadsheet_();
   const missing = Object.keys(CONFIG_CENTRAL_SCHEMA_).filter(function (name) {
     return !ss.getSheetByName(name);
   });
-  if (missing.length === 0) return;
+  if (missing.length === 0) { CONFIG_SCHEMA_VERIFIED_THIS_EXEC_ = true; return; }
 
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -183,6 +209,7 @@ function Config_ensureCentralSchema_() {
         if (def && ss.getSheets().length > 1) ss.deleteSheet(def);
       } catch (e) {}
     }
+    CONFIG_SCHEMA_VERIFIED_THIS_EXEC_ = true;
   } finally {
     lock.releaseLock();
   }
@@ -206,13 +233,16 @@ function Config_getSheet_(name) {
  * header), dan guru memang sudah biasa menulis MASTER_GURU.foto_url/
  * ttd_url miliknya sendiri lewat uploadMyPhoto/uploadMySignature.
  */
+var CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_ = false;
 function Config_ensureDriveUrlsFixed_() {
+  if (CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_) return;
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('DRIVE_VIEW_URLS_FIXED_V1')) return;
+  if (props.getProperty('DRIVE_VIEW_URLS_FIXED_V1')) { CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_ = true; return; }
   const ss = Config_getCentralSpreadsheet_();
   Utils_fixDriveViewUrls_(ss, 'SEKOLAH_KOP', ['image_url']);
   Utils_fixDriveViewUrls_(ss, 'MASTER_GURU', ['foto_url', 'ttd_url']);
   props.setProperty('DRIVE_VIEW_URLS_FIXED_V1', '1');
+  CONFIG_DRIVE_URLS_CHECKED_THIS_EXEC_ = true;
 }
 
 /**
@@ -238,9 +268,11 @@ function Config_ensureDriveUrlsFixed_() {
  * Ini murni TULIS SEL header (bukan insertSheet), aman dipanggil dari
  * eksekusi siapa pun termasuk guru.
  */
+var CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = false;
 function Config_ensureColumnsMigration_() {
+  if (CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_) return;
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('COLUMNS_MIGRATION_V3')) return;
+  if (props.getProperty('COLUMNS_MIGRATION_V3')) { CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true; return; }
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_CENTRAL_SCHEMA_).forEach(function (sheetName) {
@@ -256,6 +288,7 @@ function Config_ensureColumnsMigration_() {
   });
 
   props.setProperty('COLUMNS_MIGRATION_V3', '1');
+  CONFIG_COLUMNS_MIGRATION_CHECKED_THIS_EXEC_ = true;
 }
 
 /**
@@ -275,9 +308,11 @@ function Config_ensureColumnsMigration_() {
  * — satu-satunya kolom di CONFIG_TEXT_FORMAT_COLUMNS_ yang butuh perbaikan
  * NILAI, bukan cuma format tampilan.
  */
+var CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = false;
 function Config_ensureTextFormatColumns_() {
+  if (CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_) return;
   const props = PropertiesService.getScriptProperties();
-  if (props.getProperty('TEXT_FORMAT_APPLIED_V4')) return;
+  if (props.getProperty('TEXT_FORMAT_APPLIED_V4')) { CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = true; return; }
 
   const ss = Config_getCentralSpreadsheet_();
   Object.keys(CONFIG_TEXT_FORMAT_COLUMNS_).forEach(function (sheetName) {
@@ -288,6 +323,7 @@ function Config_ensureTextFormatColumns_() {
   Config_repairJadwalJamValues_(ss);
 
   props.setProperty('TEXT_FORMAT_APPLIED_V4', '1');
+  CONFIG_TEXT_FORMAT_CHECKED_THIS_EXEC_ = true;
 }
 
 /**

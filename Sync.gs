@@ -92,7 +92,7 @@ function Sync_findGuru_(guruId) {
 
 /**
  * Sync_updateProfil_
- * Hanya menimpa field read-only (nama/nip/nuptk/sekolah/jabatan/email) —
+ * Hanya menimpa field read-only (nama/nip/sekolah/jabatan/email) —
  * foto_url/ttd_url/no_hp SENGAJA tidak disentuh di sini kalau baris sudah
  * ada, karena field itu akan jadi milik guru untuk diubah sendiri
  * (updateMyProfile, Phase 3). Sync yang menimpanya di sini akan
@@ -106,7 +106,6 @@ function Sync_updateProfil_(ss, guru) {
     email: guru.email,
     nama_lengkap: guru.nama_lengkap,
     nip: guru.nip,
-    nuptk: guru.nuptk,
     sekolah_id: guru.sekolah_id,
     jabatan: guru.jabatan
   };

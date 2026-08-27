@@ -67,7 +67,8 @@ function SIPENA_pendingEl_() {
     el = document.createElement('div');
     el.id = 'sp-pending';
     el.className = 'sp-pending';
-    el.innerHTML = '<span class="sp-pending-spinner"></span><span id="sp-pending-text"></span>';
+    el.innerHTML = '<div class="sp-pending-row"><span class="sp-pending-spinner"></span><span id="sp-pending-text"></span></div>' +
+      '<div class="sp-pending-track"><div class="sp-pending-fill"></div></div>';
     document.body.appendChild(el);
   }
   return el;

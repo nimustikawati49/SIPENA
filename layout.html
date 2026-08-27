@@ -130,10 +130,10 @@
         <div class="sp-avatar" id="sp-corner-guru-avatar-big">-</div>
         <label class="sp-upload-label">Ganti Foto<input type="file" accept="image/*" id="sp-corner-guru-foto" class="hidden"></label>
       </div>
-      <div class="msg" style="margin:0 0 10px;">Nama/NIP/NUPTK dikelola Superadmin.</div>
+      <div class="msg" style="margin:0 0 10px;">Nama/NIP dikelola Superadmin.</div>
       <div class="sp-detail-grid" id="sp-corner-guru-readonly" style="grid-template-columns:1fr 1fr;padding:12px;margin-bottom:12px;gap:10px;"></div>
       <form id="sp-form-corner-guru">
-        <div class="sp-field" style="width:100%;margin-bottom:10px;"><label>No. HP</label><input name="no_hp" style="width:100%;"></div>
+        <div class="sp-field" style="width:100%;margin-bottom:10px;"><label>No. HP</label><input name="no_hp" type="tel" placeholder="08xxxxxxxxxx" pattern="08[0-9]{8,12}" title="Format: diawali 08, diikuti 8-12 digit angka." style="width:100%;"></div>
         <label class="sp-upload-label" style="display:block;text-align:center;margin-bottom:10px;">Unggah Tanda Tangan<input type="file" accept="image/*" id="sp-corner-guru-ttd" class="hidden"></label>
         <button class="sp-btn" type="submit" style="width:100%;">Simpan No. HP</button>
       </form>
