@@ -21,6 +21,12 @@ var PRINT_VALUE_COLUMNS_ = [
 ];
 var PRINT_DEFAULT_COLUMNS_ = ['ptsMurni', 'asasAsatMurni', 'nilaiAkhirMurni'];
 
+// Label "(Asli)"/"(Katrol)" cuma untuk PEMILIHAN (PRINT_VALUE_COLUMNS_ di
+// atas) — supaya guru tahu kotak mana yang mana. Di HASIL CETAK, header
+// kolom dibuat polos ("PTS"/"ASAS"/"Nilai Akhir" saja) karena murni/
+// katrol sudah cukup jelas dari isinya, tidak perlu diulang di header.
+var PRINT_HEADER_LABEL_ = { ptsMurni: 'PTS', ptsKatrol: 'PTS', nilaiAkhirMurni: 'Nilai Akhir', nilaiAkhirKatrol: 'Nilai Akhir' };
+
 function PrintApp_markup_() {
   var colsHtml = PRINT_VALUE_COLUMNS_.map(function (c) {
     var checked = PRINT_DEFAULT_COLUMNS_.indexOf(c.key) !== -1 ? ' checked' : '';
@@ -272,14 +278,10 @@ function PrintApp_renderPage_(data, config) {
     '<div><span>KELAS</span> : ' + (data.kelas.nama_kelas || '-') + '</div>' +
     '</div>';
 
-  var colDefs = {};
-  PRINT_VALUE_COLUMNS_.forEach(function (c) { colDefs[c.key] = c; });
   var assessmentLabel = data.assessment_label;
   var fixedCols = [{ key: 'no', label: 'No' }, { key: 'nis', label: 'NIS' }, { key: 'nama', label: 'Nama Siswa' }];
   var valueCols = config.selectedColumns.map(function (key) {
-    var label = key === 'asasAsatMurni' ? assessmentLabel + ' (Asli)'
-      : key === 'asasAsatKatrol' ? assessmentLabel + ' (Katrol)'
-      : (colDefs[key] ? colDefs[key].label : key);
+    var label = (key === 'asasAsatMurni' || key === 'asasAsatKatrol') ? assessmentLabel : (PRINT_HEADER_LABEL_[key] || key);
     return { key: key, label: label };
   });
   var cols = fixedCols.concat(valueCols);
