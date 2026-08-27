@@ -1,4 +1,4 @@
-// SIPENA — Sistem Informasi Penilaian dan Administrasi Guru
+// SIPENA — Sistem Pencatatan Penilaian Guru
 // Phase 1: skeleton web app + auth/role resolution end-to-end.
 // Arsitektur: single Apps Script Web App (HtmlService + google.script.run),
 // tidak ada frontend terpisah / CORS. Lihat blueprint di repo untuk detail.
@@ -7,7 +7,7 @@
 function doGet(e) {
   const tmpl = HtmlService.createTemplateFromFile('index');
   return tmpl.evaluate()
-    .setTitle('SIPENA — Sistem Informasi Penilaian dan Administrasi Guru')
+    .setTitle('SIPENA — Sistem Pencatatan Penilaian Guru')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .setSandboxMode(HtmlService.SandboxMode.IFRAME);
 }

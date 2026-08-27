@@ -1,6 +1,6 @@
 # SIPENA
 
-**Sistem Informasi Penilaian dan Administrasi Guru**
+**Sistem Pencatatan Penilaian Guru**
 
 Aplikasi web untuk membantu guru mengelola dashboard, profil, mata
 pelajaran, penugasan, jadwal, kelas, siswa, penilaian (nilai murni &

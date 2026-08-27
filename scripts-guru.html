@@ -96,7 +96,14 @@ function GuruApp_wireCorner_() {
     var btn = f.querySelector('button[type="submit"]');
     runServer('updateMyProfile', [{ no_hp: f.no_hp.value }], {
       loadingEl: btn,
-      onSuccess: function () { SIPENA_toast('No. HP diperbarui.'); }
+      onSuccess: function () {
+        SIPENA_toast('No. HP diperbarui.');
+        // Refresh dashboard supaya kartu profil di body (No. HP dkk.)
+        // ikut menampilkan nilai terbaru — sebelumnya cuma panel pojok
+        // yang ter-update, kartu di body tetap menampilkan data lama
+        // dari load pertama sampai halaman di-reload manual.
+        GuruApp_load_();
+      }
     });
   });
 }
