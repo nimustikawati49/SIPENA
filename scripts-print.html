@@ -14,8 +14,12 @@ var PrintApp = { data: null, penugasan: null, kopOptions: [], selectedKopId: '' 
 var PRINT_VALUE_COLUMNS_ = [
   { key: 'ptsMurni', label: 'PTS (Asli)' },
   { key: 'ptsKatrol', label: 'PTS (Katrol)' },
-  { key: 'asasAsatMurni', label: null }, // label diisi dinamis (ASAS/ASAT Asli)
-  { key: 'asasAsatKatrol', label: null }, // label diisi dinamis (ASAS/ASAT Katrol)
+  // Label statis di sini cuma tampil sebelum guru memilih penugasan
+  // (PrintApp_onPenugasanChange_ langsung menggantinya jadi label yang
+  // sesuai semester/kelas — ASAS/ASAT/US) — sebelumnya null, jatuh balik
+  // ke nama key mentah ("asasAsatMurni") yang membingungkan guru.
+  { key: 'asasAsatMurni', label: 'ASAS/ASAT (Asli)' },
+  { key: 'asasAsatKatrol', label: 'ASAS/ASAT (Katrol)' },
   { key: 'nilaiAkhirMurni', label: 'Nilai Akhir (Asli)' },
   { key: 'nilaiAkhirKatrol', label: 'Nilai Akhir (Katrol)' }
 ];
