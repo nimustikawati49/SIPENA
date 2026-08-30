@@ -12,23 +12,24 @@ var PrintApp = { data: null, penugasan: null, kopOptions: [], selectedKopId: '' 
 // bikin guru bingung harus centang yang mana untuk kebutuhan cetak
 // sehari-hari. No/NIS/Nama SELALU ikut tercetak (tidak perlu dicentang).
 var PRINT_VALUE_COLUMNS_ = [
-  { key: 'ptsMurni', label: 'PTS (Asli)' },
+  { key: 'ptsMurni', label: 'PTS (Murni)' },
   { key: 'ptsKatrol', label: 'PTS (Katrol)' },
   // Label statis di sini cuma tampil sebelum guru memilih penugasan
   // (PrintApp_onPenugasanChange_ langsung menggantinya jadi label yang
   // sesuai semester/kelas — ASAS/ASAT/US) — sebelumnya null, jatuh balik
   // ke nama key mentah ("asasAsatMurni") yang membingungkan guru.
-  { key: 'asasAsatMurni', label: 'ASAS/ASAT (Asli)' },
+  { key: 'asasAsatMurni', label: 'ASAS/ASAT (Murni)' },
   { key: 'asasAsatKatrol', label: 'ASAS/ASAT (Katrol)' },
-  { key: 'nilaiAkhirMurni', label: 'Nilai Akhir (Asli)' },
+  { key: 'nilaiAkhirMurni', label: 'Nilai Akhir (Murni)' },
   { key: 'nilaiAkhirKatrol', label: 'Nilai Akhir (Katrol)' }
 ];
 var PRINT_DEFAULT_COLUMNS_ = ['ptsMurni', 'asasAsatMurni', 'nilaiAkhirMurni'];
 
-// Label "(Asli)"/"(Katrol)" cuma untuk PEMILIHAN (PRINT_VALUE_COLUMNS_ di
-// atas) — supaya guru tahu kotak mana yang mana. Di HASIL CETAK, header
-// kolom dibuat polos ("PTS"/"ASAS"/"Nilai Akhir" saja) karena murni/
-// katrol sudah cukup jelas dari isinya, tidak perlu diulang di header.
+// Label "(Murni)"/"(Katrol)" cuma untuk PEMILIHAN (PRINT_VALUE_COLUMNS_ di
+// atas) — konsisten dengan istilah "Nilai Akhir (Murni)" yang sudah dipakai
+// di tabel Input Nilai — supaya guru tahu kotak mana yang mana. Di HASIL
+// CETAK, header kolom dibuat polos ("PTS"/"ASAS"/"Nilai Akhir" saja) karena
+// murni/katrol sudah cukup jelas dari isinya, tidak perlu diulang di header.
 var PRINT_HEADER_LABEL_ = { ptsMurni: 'PTS', ptsKatrol: 'PTS', nilaiAkhirMurni: 'Nilai Akhir', nilaiAkhirKatrol: 'Nilai Akhir' };
 
 function PrintApp_markup_() {
@@ -134,8 +135,15 @@ function PrintApp_onPenugasanChange_() {
   var idx = document.getElementById('sp-print-penugasan').value;
   var p = idx === '' ? null : NilaiApp.penugasan[Number(idx)];
   PrintApp.penugasan = p;
-  var label = p ? NilaiApp_assessmentLabel_(p.semester) : 'ASAS/ASAT';
-  document.querySelector('[data-col-label="asasAsatMurni"]').textContent = label + ' (Asli)';
+  // Label checklist mengikuti semester penugasan yang dipilih (ASAS untuk
+  // GANJIL, ASAT untuk GENAP), kecuali kelas ini kelas besar jenjangnya
+  // (6 SD/9 SMP/12 SMA-SMK) di semester GENAP -> "US". Sama persis aturan
+  // Nilai_getAssessmentDisplayLabel_ di server (Nilai.gs), disalin di
+  // klien lewat NilaiApp_assessmentDisplayLabel_ supaya checklist ini
+  // langsung benar begitu dipilih, tidak nunggu data cetak lengkap dimuat.
+  var kelas = p ? NilaiApp_classById_(p.kelas_id) : null;
+  var label = p ? NilaiApp_assessmentDisplayLabel_(p.semester, kelas && kelas.jenjang, kelas && kelas.tingkat) : 'ASAS/ASAT';
+  document.querySelector('[data-col-label="asasAsatMurni"]').textContent = label + ' (Murni)';
   document.querySelector('[data-col-label="asasAsatKatrol"]').textContent = label + ' (Katrol)';
   var titleField = document.getElementById('sp-print-title');
   if (p && !titleField.dataset.userEdited) {

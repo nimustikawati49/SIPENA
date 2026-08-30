@@ -1,5 +1,5 @@
 <script>
-var NilaiApp = { initialized: false, penugasan: [], currentContext: null, students: [], original: {}, dirty: {}, focusCol: '' };
+var NilaiApp = { initialized: false, penugasan: [], classes: [], currentContext: null, students: [], original: {}, dirty: {}, focusCol: '' };
 
 var NILAI_HARIAN_JENIS = ['tgs1', 'tgs2', 'tgs3', 'uh1', 'uh2', 'uh3'];
 
@@ -18,6 +18,30 @@ function NilaiApp_init() {
  */
 function NilaiApp_assessmentLabel_(semester) {
   return semester === 'GENAP' ? 'ASAT' : 'ASAS';
+}
+
+/**
+ * NilaiApp_isKelasBesarUS_/NilaiApp_assessmentDisplayLabel_
+ * Salinan identik Nilai_isKelasBesarUS_/Nilai_getAssessmentDisplayLabel_
+ * di Nilai.gs — dipakai PrintApp (scripts-print.html) untuk preview label
+ * checklist cetak langsung saat penugasan dipilih, sebelum data lengkap
+ * dari server datang. jenjang/tingkat diambil dari NilaiApp.classes
+ * (lihat NilaiApp_loadPenugasan_).
+ */
+function NilaiApp_isKelasBesarUS_(jenjang, tingkat) {
+  var j = String(jenjang || '').toUpperCase().trim();
+  var t = String(tingkat || '').trim();
+  if (j === 'SD' && t === '6') return true;
+  if (j === 'SMP' && t === '9') return true;
+  if ((j === 'SMA' || j === 'SMK') && t === '12') return true;
+  return false;
+}
+function NilaiApp_assessmentDisplayLabel_(semester, jenjang, tingkat) {
+  if (semester === 'GENAP' && NilaiApp_isKelasBesarUS_(jenjang, tingkat)) return 'US';
+  return NilaiApp_assessmentLabel_(semester);
+}
+function NilaiApp_classById_(kelasId) {
+  return (NilaiApp.classes || []).filter(function (k) { return k.kelas_id === kelasId; })[0] || null;
 }
 
 function NilaiApp_markup_() {
@@ -135,6 +159,7 @@ function NilaiApp_toggleSettings_() {
 function NilaiApp_loadPenugasan_() {
   runServer('getMyDashboard', [], {
     onSuccess: function (dash) {
+      NilaiApp.classes = dash.kelas || [];
       NilaiApp.penugasan = (dash.penugasan || []).filter(function (p) { return String(p.status).toUpperCase() === 'AKTIF'; });
       var options = '<option value="">Pilih...</option>' + NilaiApp.penugasan.map(function (p, i) {
         return '<option value="' + i + '">' + p.nama_mapel + ' — ' + p.nama_kelas + ' — ' + p.semester + '</option>';
