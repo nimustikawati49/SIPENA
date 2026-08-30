@@ -278,10 +278,15 @@ function PrintApp_renderPage_(data, config) {
     '<div><span>KELAS</span> : ' + (data.kelas.nama_kelas || '-') + '</div>' +
     '</div>';
 
+  // assessmentLabel TETAP kunci internal (ASAS/ASAT — nama field
+  // s.asat/s.asas dari server, dipakai PrintApp_renderCell_ di bawah) —
+  // assessmentDisplayLabel yang ditampilkan di header ("US" untuk kelas
+  // besar semester genap, lihat Nilai_getAssessmentDisplayLabel_).
   var assessmentLabel = data.assessment_label;
+  var assessmentDisplayLabel = data.assessment_display_label || assessmentLabel;
   var fixedCols = [{ key: 'no', label: 'No' }, { key: 'nis', label: 'NIS' }, { key: 'nama', label: 'Nama Siswa' }];
   var valueCols = config.selectedColumns.map(function (key) {
-    var label = (key === 'asasAsatMurni' || key === 'asasAsatKatrol') ? assessmentLabel : (PRINT_HEADER_LABEL_[key] || key);
+    var label = (key === 'asasAsatMurni' || key === 'asasAsatKatrol') ? assessmentDisplayLabel : (PRINT_HEADER_LABEL_[key] || key);
     return { key: key, label: label };
   });
   var cols = fixedCols.concat(valueCols);

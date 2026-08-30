@@ -55,6 +55,7 @@ function getMyPrintData(kelasId, mapelId, tahunAjaranId, semester) {
     tahun_ajaran: { label: tahunAjaranRow ? tahunAjaranRow.label : '' },
     semester: semester,
     assessment_label: grades.assessmentLabel,
+    assessment_display_label: grades.assessmentDisplayLabel,
     students: grades.students
   };
 }

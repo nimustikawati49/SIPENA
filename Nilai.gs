@@ -34,9 +34,42 @@ function Nilai_validateScope_(kelasId, mapelId, tahunAjaranId, semester) {
  * backend (sini) dan disalin identik di NilaiApp_assessmentLabel_
  * (scripts-nilai.html) untuk preview klien, supaya label kolom tabel
  * tidak pernah hardcode di dua tempat berbeda.
+ *
+ * INI TETAP DIPAKAI SEBAGAI KUNCI INTERNAL (jenis_nilai di sheet NILAI,
+ * nama field wide.asat/wide.asas, dst.) — TIDAK PERNAH berubah jadi "US",
+ * supaya data yang sudah tersimpan & payload klien tetap konsisten. Yang
+ * berubah untuk kelas besar (lihat Nilai_getAssessmentDisplayLabel_) HANYA
+ * teks yang DITAMPILKAN ke guru, bukan kuncinya.
  */
 function Nilai_getAssessmentLabel_(semester) {
   return semester === 'GENAP' ? 'ASAT' : 'ASAS';
+}
+
+/**
+ * Nilai_isKelasBesarUS_(jenjang, tingkat)
+ * Kelas akhir tiap jenjang (6 SD, 9 SMP, 12 SMA/SMK) semester genap cuma
+ * ikut US (Ujian Sekolah), bukan ASAT seperti kelas lain — spesifik
+ * kebijakan jenjang pendidikan Indonesia, bukan aturan SIPENA sendiri.
+ */
+function Nilai_isKelasBesarUS_(jenjang, tingkat) {
+  const j = String(jenjang || '').toUpperCase().trim();
+  const t = String(tingkat || '').trim();
+  if (j === 'SD' && t === '6') return true;
+  if (j === 'SMP' && t === '9') return true;
+  if ((j === 'SMA' || j === 'SMK') && t === '12') return true;
+  return false;
+}
+
+/**
+ * Nilai_getAssessmentDisplayLabel_(semester, jenjang, tingkat)
+ * Label yang DITAMPILKAN ke guru (header tabel, cetak) — "US" untuk kelas
+ * besar (lihat Nilai_isKelasBesarUS_) di semester genap, selain itu sama
+ * dengan Nilai_getAssessmentLabel_. Kunci internal (jenis_nilai/nama
+ * field) TETAP pakai Nilai_getAssessmentLabel_, tidak pernah ini.
+ */
+function Nilai_getAssessmentDisplayLabel_(semester, jenjang, tingkat) {
+  if (semester === 'GENAP' && Nilai_isKelasBesarUS_(jenjang, tingkat)) return 'US';
+  return Nilai_getAssessmentLabel_(semester);
 }
 
 /**
@@ -252,6 +285,8 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
 
     step = 'baca konfigurasi bobot nilai (PENGATURAN_BOBOT_NILAI)';
     var bobotConfig = Nilai_getBobotConfig_(auth.sekolahId);
+
+    var assessmentDisplayLabel = Nilai_getAssessmentDisplayLabel_(semester, kelasInfo && kelasInfo.jenjang, kelasInfo && kelasInfo.tingkat);
   } catch (e) {
     throw new Error('Gagal pada langkah "' + step + '": ' + (e && e.message ? e.message : e));
   }
@@ -291,6 +326,7 @@ function getMyGradeSheetWide(kelasId, mapelId, tahunAjaranId, semester) {
     settings: settings,
     bobotConfig: bobotConfig,
     assessmentLabel: assessmentLabel,
+    assessmentDisplayLabel: assessmentDisplayLabel,
     kktpDefaultValue: kktpDefaultValue
   };
 }
@@ -573,12 +609,21 @@ function getMyGradeRecap(kelasId, mapelId, tahunAjaranId, semester) {
     return r.kelas_id === kelasId && String(r.status).toUpperCase() !== 'NONAKTIF';
   });
 
+  // Kelas besar (6 SD/9 SMP/12 SMA-SMK) semester genap ditampilkan "US"
+  // bukan "ASAT" — cuma mengganti TEKS jenis_nilai di respons ini (dipakai
+  // langsung sebagai header kolom rekap di klien), sheet NILAI sendiri
+  // tetap menyimpan 'ASAT' apa adanya. Lihat Nilai_getAssessmentDisplayLabel_.
+  const kelasInfoRekap = Utils_sheetToObjects_(ss.getSheetByName('KELAS')).filter(function (r) { return r.kelas_id === kelasId; })[0];
+  const internalLabel = Nilai_getAssessmentLabel_(semester);
+  const displayLabel = Nilai_getAssessmentDisplayLabel_(semester, kelasInfoRekap && kelasInfoRekap.jenjang, kelasInfoRekap && kelasInfoRekap.tingkat);
+
   const bySiswa = {};
   Utils_sheetToObjects_(ss.getSheetByName('NILAI')).filter(function (r) {
     return r.kelas_id === kelasId && r.mapel_id === mapelId && r.tahun_ajaran_id === tahunAjaranId && r.semester === semester;
   }).forEach(function (r) {
     if (!bySiswa[r.siswa_id]) bySiswa[r.siswa_id] = [];
-    bySiswa[r.siswa_id].push({ jenis_nilai: r.jenis_nilai, nilai_murni: r.nilai_murni, nilai_katrol: r.nilai_katrol, sumber_nilai: r.sumber_nilai });
+    const jenisNilai = r.jenis_nilai === internalLabel ? displayLabel : r.jenis_nilai;
+    bySiswa[r.siswa_id].push({ jenis_nilai: jenisNilai, nilai_murni: r.nilai_murni, nilai_katrol: r.nilai_katrol, sumber_nilai: r.sumber_nilai });
   });
 
   const akhirBySiswa = {};

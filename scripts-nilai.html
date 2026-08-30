@@ -171,6 +171,7 @@ function NilaiApp_loadGrades_() {
 
       NilaiApp.currentContext.bobotConfig = res.bobotConfig;
       NilaiApp.currentContext.assessmentLabel = res.assessmentLabel;
+      NilaiApp.currentContext.assessmentDisplayLabel = res.assessmentDisplayLabel;
       NilaiApp.students = res.students;
       NilaiApp.original = {};
       res.students.forEach(function (s) { NilaiApp.original[s.siswa_id] = Object.assign({}, s); });
@@ -182,11 +183,15 @@ function NilaiApp_loadGrades_() {
 }
 
 function NilaiApp_gradeColumns_() {
-  var label = NilaiApp.currentContext.assessmentLabel;
+  // key TETAP dari assessmentLabel (ASAS/ASAT — nama field wide.asat/
+  // wide.asas dari server, lihat Nilai_getAssessmentLabel_) — cuma label
+  // yang ditampilkan boleh beda ("US" untuk kelas besar semester genap).
+  var key = NilaiApp.currentContext.assessmentLabel;
+  var displayLabel = NilaiApp.currentContext.assessmentDisplayLabel || key;
   return [
     { key: 'tgs1', label: 'TGS 1' }, { key: 'tgs2', label: 'TGS 2' }, { key: 'tgs3', label: 'TGS 3' },
     { key: 'uh1', label: 'UH 1' }, { key: 'uh2', label: 'UH 2' }, { key: 'uh3', label: 'UH 3' },
-    { key: 'pts', label: 'PTS' }, { key: label.toLowerCase(), label: label }
+    { key: 'pts', label: 'PTS' }, { key: key.toLowerCase(), label: displayLabel }
   ];
 }
 
