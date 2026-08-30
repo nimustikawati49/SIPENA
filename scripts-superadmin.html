@@ -1003,7 +1003,8 @@ function SuperAdmin_panelPenugasan_() {
     '  <div id="sp-table-penugasan"></div>' +
 
     '  <div id="sp-penugasan-detail-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">' +
-    '    <div style="background:var(--card);border-radius:14px;padding:24px;max-width:720px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+    '    <div style="position:relative;background:var(--card);border-radius:14px;padding:24px;max-width:720px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+    '      <button type="button" class="sp-modal-close" onclick="SuperAdmin_closePenugasanDetail_()" aria-label="Tutup">&times;</button>' +
     '      <div class="sp-section-title" id="sp-penugasan-detail-title">Detail Penugasan</div>' +
     '      <div id="sp-penugasan-detail-table"></div>' +
     '      <button type="button" class="sp-btn secondary" style="margin-top:16px;" onclick="SuperAdmin_closePenugasanDetail_()">Tutup</button>' +

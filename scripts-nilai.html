@@ -78,7 +78,8 @@ function NilaiApp_markup_() {
     '  <button type="button" class="sp-btn hidden" id="sp-nilai-save-btn" style="margin-top:14px;" onclick="NilaiApp_saveGrades_()">Simpan Perubahan</button>' +
 
     '  <div id="sp-katrol-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">' +
-    '    <div style="background:var(--card);border-radius:14px;padding:24px;max-width:640px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+    '    <div style="position:relative;background:var(--card);border-radius:14px;padding:24px;max-width:640px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,.3);">' +
+    '      <button type="button" class="sp-modal-close" onclick="KatrolApp_close_()" aria-label="Tutup">&times;</button>' +
     '      <div class="sp-section-title">Katrol Nilai Akhir</div>' +
     '      <div id="sp-katrol-context" class="msg" style="margin:-6px 0 14px;"></div>' +
     '      <div id="sp-katrol-empty" class="hidden msg" style="margin-bottom:14px;"></div>' +
