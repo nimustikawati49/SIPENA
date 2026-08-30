@@ -36,6 +36,11 @@ function getMyDashboard() {
   const sekolah = Utils_sheetToObjects_(Config_getSheet_('MASTER_SEKOLAH'))
     .filter(function (r) { return r.sekolah_id === profil.sekolah_id; })[0];
 
+  // Periode aktif sekolah (diset Superadmin) — dipakai klien untuk
+  // menebak label ASAS/ASAT default di panel Cetak SEBELUM guru memilih
+  // penugasan tertentu (lihat PrintApp_onShow_ di scripts-print.html).
+  const periodeAktif = TahunAjaran_getActivePeriod_(auth.sekolahId);
+
   const todayHari = Dashboard_todayHari_();
   const jadwalMinggu = Utils_sheetToObjects_(ss.getSheetByName('JADWAL'))
     .filter(function (r) { return String(r.status).toUpperCase() === 'AKTIF'; })
@@ -56,7 +61,8 @@ function getMyDashboard() {
     penugasan: penugasan,
     hari_ini: todayHari,
     jadwal_minggu: jadwalMinggu,
-    nilai_completion: Dashboard_computeGradeCompletion_(ss)
+    nilai_completion: Dashboard_computeGradeCompletion_(ss),
+    semester_aktif: periodeAktif ? periodeAktif.semester : ''
   };
 
   try { cache.put(cacheKey, JSON.stringify(result), 300); } catch (e) { /* > 100KB, lewati cache */ }

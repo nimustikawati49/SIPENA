@@ -589,7 +589,7 @@ function exportMyGradeRecapUrl(kelasId, mapelId, tahunAjaranId, semester) {
   });
 
   const ss = Config_getGuruSpreadsheet_(auth.guruId);
-  const url = Utils_writeExportSheetAndGetUrl_(ss, '_EXPORT_REKAP', ['NIS', 'Nama'].concat(jenisList, ['Rata-rata Harian', 'Nilai Akhir', 'Status', 'KKTP', 'Kategori', 'Ketercapaian']), dataRows);
+  const url = Utils_writeExportSheetAndGetUrl_(ss, '_EXPORT_REKAP', ['NIS', 'Nama'].concat(jenisList, ['Rata-rata Harian', 'Nilai Rapor', 'Status', 'KKTP', 'Kategori', 'Ketercapaian']), dataRows);
   return { export_url: url };
 }
 

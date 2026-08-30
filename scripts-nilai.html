@@ -66,7 +66,7 @@ function NilaiApp_markup_() {
     '      <div class="sp-field"><label>Nilai KKTP</label><input name="nilai_kktp" type="number" min="0" max="100" placeholder="Default sistem"></div>' +
     '      <div class="sp-field"><label>Nilai Min Katrol Komponen</label><input name="nilai_min_target" type="number" min="0" max="100" required></div>' +
     '      <div class="sp-field"><label>Nilai Max Katrol Komponen</label><input name="nilai_max_target" type="number" min="0" max="100" required></div>' +
-    '      <div class="sp-field"><label>Sumber Nilai Rapor</label><select name="sumber_nilai_rapor"><option value="MURNI">Nilai Akhir Murni</option><option value="KATROL">Nilai Akhir Katrol</option></select></div>' +
+    '      <div class="sp-field"><label>Sumber Nilai Rapor</label><select name="sumber_nilai_rapor"><option value="MURNI">Nilai Rapor Murni</option><option value="KATROL">Nilai Rapor Katrol</option></select></div>' +
     '      <div class="msg" style="flex-basis:100%;margin:-2px 0 0;">Nilai KKTP menentukan kategori & status ketercapaian siswa (kebijakan Anda sendiri, bukan diatur Superadmin) — kosongkan untuk pakai default sistem sesuai jenjang/tingkat kelas ini.</div>' +
     '      <button class="sp-btn" type="submit">Simpan Pengaturan</button>' +
     '    </form>' +
@@ -160,6 +160,7 @@ function NilaiApp_loadPenugasan_() {
   runServer('getMyDashboard', [], {
     onSuccess: function (dash) {
       NilaiApp.classes = dash.kelas || [];
+      NilaiApp.activeSemester = dash.semester_aktif || '';
       NilaiApp.penugasan = (dash.penugasan || []).filter(function (p) { return String(p.status).toUpperCase() === 'AKTIF'; });
       var options = '<option value="">Pilih...</option>' + NilaiApp.penugasan.map(function (p, i) {
         return '<option value="' + i + '">' + p.nama_mapel + ' — ' + p.nama_kelas + ' — ' + p.semester + '</option>';
@@ -258,8 +259,8 @@ function NilaiApp_renderGradeTable_() {
   var thead = '<tr><th class="sp-sticky-col sp-sticky-col-1">No</th><th class="sp-sticky-col sp-sticky-col-2">NIS</th><th class="sp-sticky-col sp-sticky-col-3">Nama</th>' +
     cols.map(function (c) { return '<th>' + c.label + '</th>'; }).join('') +
     (focused
-      ? '<th>Nilai Akhir</th>'
-      : '<th>Rata-rata Harian</th><th>Nilai Akhir (Murni)</th><th>Nilai Akhir (Katrol)</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th>') +
+      ? '<th>Nilai Rapor</th>'
+      : '<th>Rata-rata Harian</th><th>Nilai Rapor (Murni)</th><th>Nilai Rapor (Katrol)</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th>') +
     '</tr>';
 
   var rows = students.map(function (s, i) {
@@ -291,7 +292,7 @@ function NilaiApp_renderGradeTable_() {
   }).join('');
 
   el.innerHTML = '<div class="sp-table-wrap"><table class="sp-table"><thead>' + thead + '</thead><tbody>' + rows + '</tbody></table></div>' +
-    '<div class="msg">Kosongkan sel untuk siswa yang belum memiliki nilai jenis itu — jangan diisi 0. Rata-rata Harian &amp; Nilai Akhir dihitung otomatis saat mengetik. Tempel (paste) sekumpulan nilai dari Excel ke satu sel untuk mengisi ke bawah otomatis. Baris kuning = status ketercapaian di bawah KKTP. Klik "Simpan Perubahan" untuk menyimpan ke database.</div>';
+    '<div class="msg">Kosongkan sel untuk siswa yang belum memiliki nilai jenis itu — jangan diisi 0. Rata-rata Harian &amp; Nilai Rapor dihitung otomatis saat mengetik. Tempel (paste) sekumpulan nilai dari Excel ke satu sel untuk mengisi ke bawah otomatis. Baris kuning = status ketercapaian di bawah KKTP. Klik "Simpan Perubahan" untuk menyimpan ke database.</div>';
 
   NilaiApp_updateCompleteness_();
 
@@ -519,7 +520,7 @@ function NilaiApp_renderRecap_(rows) {
     '<div style="margin:0 0 16px;color:#555;">Kelas ' + p.nama_kelas + ' &middot; ' + p.semester + '</div>';
 
   var thead = '<tr><th>NIS</th><th>Nama</th>' + jenisList.map(function (j) { return '<th>' + j + '</th>'; }).join('') +
-    '<th>Rata-rata Harian</th><th>Nilai Akhir</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th></tr>';
+    '<th>Rata-rata Harian</th><th>Nilai Rapor</th><th>Status</th><th>KKTP</th><th>Kategori</th><th>Ketercapaian</th></tr>';
   var tbody = rows.map(function (r) {
     var byJenis = {};
     r.nilai.forEach(function (n) { byJenis[n.jenis_nilai] = n; });
@@ -687,7 +688,7 @@ function KatrolApp_save_() {
 function KatrolApp_reset_() {
   var ctx = NilaiApp.currentContext;
   if (!ctx) return;
-  if (!confirm('Reset nilai katrol untuk kelas/mapel/periode ini? Nilai Akhir Murni tidak akan berubah.')) return;
+  if (!confirm('Reset nilai katrol untuk kelas/mapel/periode ini? Nilai Rapor Murni tidak akan berubah.')) return;
   runServer('resetMyKatrol', [ctx.kelasId, ctx.mapelId, ctx.tahunAjaranId, ctx.semester], {
     onSuccess: function (res) {
       SIPENA_toast(res.reset + ' nilai katrol direset.');

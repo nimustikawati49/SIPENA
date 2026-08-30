@@ -20,17 +20,17 @@ var PRINT_VALUE_COLUMNS_ = [
   // ke nama key mentah ("asasAsatMurni") yang membingungkan guru.
   { key: 'asasAsatMurni', label: 'ASAS/ASAT (Murni)' },
   { key: 'asasAsatKatrol', label: 'ASAS/ASAT (Katrol)' },
-  { key: 'nilaiAkhirMurni', label: 'Nilai Akhir (Murni)' },
-  { key: 'nilaiAkhirKatrol', label: 'Nilai Akhir (Katrol)' }
+  { key: 'nilaiAkhirMurni', label: 'Nilai Rapor (Murni)' },
+  { key: 'nilaiAkhirKatrol', label: 'Nilai Rapor (Katrol)' }
 ];
 var PRINT_DEFAULT_COLUMNS_ = ['ptsMurni', 'asasAsatMurni', 'nilaiAkhirMurni'];
 
 // Label "(Murni)"/"(Katrol)" cuma untuk PEMILIHAN (PRINT_VALUE_COLUMNS_ di
-// atas) — konsisten dengan istilah "Nilai Akhir (Murni)" yang sudah dipakai
+// atas) — konsisten dengan istilah "Nilai Rapor (Murni)" yang sudah dipakai
 // di tabel Input Nilai — supaya guru tahu kotak mana yang mana. Di HASIL
-// CETAK, header kolom dibuat polos ("PTS"/"ASAS"/"Nilai Akhir" saja) karena
+// CETAK, header kolom dibuat polos ("PTS"/"ASAS"/"Nilai Rapor" saja) karena
 // murni/katrol sudah cukup jelas dari isinya, tidak perlu diulang di header.
-var PRINT_HEADER_LABEL_ = { ptsMurni: 'PTS', ptsKatrol: 'PTS', nilaiAkhirMurni: 'Nilai Akhir', nilaiAkhirKatrol: 'Nilai Akhir' };
+var PRINT_HEADER_LABEL_ = { ptsMurni: 'PTS', ptsKatrol: 'PTS', nilaiAkhirMurni: 'Nilai Rapor', nilaiAkhirKatrol: 'Nilai Rapor' };
 
 function PrintApp_markup_() {
   var colsHtml = PRINT_VALUE_COLUMNS_.map(function (c) {
@@ -93,6 +93,18 @@ function PrintApp_onShow_() {
   sel.innerHTML = options;
   sel.addEventListener('change', PrintApp_onPenugasanChange_);
   PrintApp_loadLastPrefs_();
+
+  // Sebelum guru memilih penugasan tertentu, label checklist ASAS/ASAT
+  // sudah ditebak dari semester periode AKTIF sekolah (diset Superadmin,
+  // lihat semester_aktif di getMyDashboard) — supaya tidak lagi tampil
+  // teks ambigu "ASAS/ASAT" begitu panel Cetak dibuka. "US" untuk kelas
+  // besar baru bisa dipastikan setelah kelasnya diketahui, lihat
+  // PrintApp_onPenugasanChange_.
+  if (!PrintApp.penugasan && NilaiApp.activeSemester) {
+    var defaultLabel = NilaiApp_assessmentLabel_(NilaiApp.activeSemester);
+    document.querySelector('[data-col-label="asasAsatMurni"]').textContent = defaultLabel + ' (Murni)';
+    document.querySelector('[data-col-label="asasAsatKatrol"]').textContent = defaultLabel + ' (Katrol)';
+  }
 
   if (!PrintApp._kopLoaded) {
     PrintApp._kopLoaded = true;
