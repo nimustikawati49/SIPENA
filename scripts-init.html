@@ -367,7 +367,7 @@ function SIPENA_toggleSidebar_(btn) {
   function renderAuth(auth) {
     if (!auth || !auth.role) {
       document.getElementById('sp-unregistered-msg').textContent =
-        (auth && auth.message) || 'Akun belum terdaftar. Hubungi Superadmin.';
+        (auth && auth.message) || 'Akun Anda belum terdaftar dalam sistem SIPENA. Silakan hubungi administrator: nimustikawati49@guru.smp.belajar.id';
       show('sp-unregistered');
       return;
     }
@@ -400,12 +400,26 @@ function SIPENA_toggleSidebar_(btn) {
     }
   }
 
+  /**
+   * SIPENA_ADMIN_CONTACT_ — ditampilkan setiap kali getAuth() gagal total
+   * (bukan cuma "role: null" biasa, tapi google.script.run sendiri yang
+   * gagal — paling sering terjadi untuk akun yang belum pernah dikenal
+   * sistem sama sekali, kadang muncul sebagai pesan error Drive/Sheets
+   * mentah berbahasa Inggris yang membingungkan pengguna awam). Pesan
+   * mentah dari server tetap disertakan (detail teknis), tapi didahului
+   * penjelasan yang jelas + kontak administrator supaya guru/pengguna
+   * baru tahu harus berbuat apa.
+   */
+  var SIPENA_ADMIN_CONTACT_ = 'nimustikawati49@guru.smp.belajar.id';
+
   function bootApp() {
     show('sp-loading');
     runServer('getAuth', [], {
       onSuccess: renderAuth,
       onError: function (msg) {
-        document.getElementById('sp-error-msg').textContent = msg;
+        document.getElementById('sp-error-msg').textContent =
+          'Akun Anda tampaknya belum terdaftar di sistem SIPENA, atau belum diberi akses. ' +
+          'Silakan hubungi administrator: ' + SIPENA_ADMIN_CONTACT_ + '. (Detail teknis: ' + msg + ')';
         show('sp-error');
       }
     });

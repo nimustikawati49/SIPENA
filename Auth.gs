@@ -95,7 +95,7 @@ function Auth_resolve_(email) {
     authenticated: true,
     email: email,
     role: null,
-    message: 'Akun belum terdaftar. Hubungi Superadmin.'
+    message: 'Akun Anda (' + email + ') belum terdaftar dalam sistem SIPENA. Silakan hubungi administrator: nimustikawati49@guru.smp.belajar.id'
   };
 }
 
